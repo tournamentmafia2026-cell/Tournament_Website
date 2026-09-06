@@ -67,6 +67,20 @@ export const SupabaseService = {
   },
 
   // --- Draws & Fixtures ---
+  async getAllTournamentDraws() {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('tournament_draws')
+        .select('*');
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.warn('Supabase All Draws fetch status:', err.message);
+      return null;
+    }
+  },
+
   async getTournamentDraws(tournamentId) {
     if (!supabase) return null;
     try {
@@ -160,13 +174,13 @@ export const SupabaseService = {
       const { data, error } = await supabase
         .from('credentials')
         .upsert({
-          id: cred.id,
+          id: String(cred.id || cred.username),
           username: cred.username,
           password: cred.password,
-          name: cred.name,
-          assigned_match_id: cred.assignedMatchId || cred.assigned_match_id,
-          assigned_match_name: cred.assignedMatchName || cred.assigned_match_name,
-          court_name: cred.courtName || cred.court_name,
+          name: cred.name || cred.authName || cred.username,
+          assigned_match_id: cred.assignedMatchId || cred.assigned_match_id || null,
+          assigned_match_name: cred.assignedMatchName || cred.assigned_match_name || '',
+          court_name: cred.courtName || cred.court_name || cred.assignedCourt || '',
           scope: cred.scope || 'umpire',
           expiry: cred.expiry || '24 Hours',
           role: cred.role || 'umpire',
@@ -178,6 +192,21 @@ export const SupabaseService = {
     } catch (err) {
       console.warn('Supabase Credential upsert status:', err.message);
       return null;
+    }
+  },
+
+  async deleteCredential(idOrUsername) {
+    if (!supabase) return false;
+    try {
+      const { error } = await supabase
+        .from('credentials')
+        .delete()
+        .or(`id.eq.${idOrUsername},username.eq.${idOrUsername}`);
+      if (error) throw error;
+      return true;
+    } catch (err) {
+      console.warn('Supabase Credential delete status:', err.message);
+      return false;
     }
   }
 };

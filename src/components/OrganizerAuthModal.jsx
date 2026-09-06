@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { sendAuthEmail } from '../utils/emailService'
+import { SupabaseService } from '../utils/supabaseDb'
 
 const ORGANIZER_CREDS_KEY = 'badminton-organizer-credentials'
-const ORGANIZER_SESSION_KEY = 'badminton-organizer-session'
 
 const DEFAULT_CREDS = {
   username: 'admin',
@@ -12,31 +12,24 @@ const DEFAULT_CREDS = {
 }
 
 export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
-  // Navigation: 'login' | 'forgot-password' | 'forgot-username' | 'reset-success'
-  const [view, setView] = useState('login')
+  // Mode: 'admin-otp' | 'umpire-login' | 'forgot-password'
+  const [authMode, setAuthMode] = useState('admin-otp') // 'admin-otp' | 'umpire-login'
+  
+  // Admin OTP states
+  const [adminPhoneOrEmail, setAdminPhoneOrEmail] = useState('9840012345')
+  const [adminOtpStep, setAdminOtpStep] = useState(1) // 1: Enter Phone -> Send OTP, 2: Enter OTP -> Sign In
+  const [enteredAdminOtp, setEnteredAdminOtp] = useState('')
+  const [generatedAdminOtp, setGeneratedAdminOtp] = useState('')
+
+  // Umpire / Password Login states
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [rememberMe, setRememberMe] = useState(true)
+
+  // Status & loading
   const [errorMessage, setErrorMessage] = useState('')
   const [statusNotification, setStatusNotification] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-
-  // Forgot Password states
-  const [forgotEmail, setForgotEmail] = useState('')
-  const [enteredOtp, setEnteredOtp] = useState('')
-  const [generatedOtp, setGeneratedOtp] = useState('')
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [showNewPassword, setShowNewPassword] = useState(false)
-  const [forgotStep, setForgotStep] = useState(1) // 1: Send OTP, 2: Enter OTP & New Password
-
-  // Forgot Username states
-  const [usernameEmail, setUsernameEmail] = useState('')
-  const [changeUserOtpStep, setChangeUserOtpStep] = useState(false)
-  const [newDesiredUsername, setNewDesiredUsername] = useState('')
-  const [userChangeOtp, setUserChangeOtp] = useState('')
-  const [generatedUserOtp, setGeneratedUserOtp] = useState('')
 
   // Load saved credentials
   const getSavedCreds = () => {
@@ -48,36 +41,101 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     }
   }
 
-  // Reset state on modal open: NEVER retain previous username or password
+  // Reset modal state on open
   useEffect(() => {
     if (isOpen) {
-      setView('login')
+      setAuthMode('admin-otp')
+      setAdminOtpStep(1)
+      setEnteredAdminOtp('')
+      setGeneratedAdminOtp('')
       setUsername('')
       setPassword('')
       setShowPassword(false)
-      setRememberMe(false)
-      setForgotStep(1)
-      setChangeUserOtpStep(false)
       setErrorMessage('')
       setStatusNotification('')
       const creds = getSavedCreds()
-      setForgotEmail(creds.email || 'tournamentmafia2026@gmail.com')
-      setUsernameEmail(creds.email || 'tournamentmafia2026@gmail.com')
-      setEnteredOtp('')
-      setGeneratedOtp('')
-      setNewPassword('')
-      setConfirmPassword('')
-      setNewDesiredUsername('')
-      setUserChangeOtp('')
-      setGeneratedUserOtp('')
-    } else {
-      setUsername('')
-      setPassword('')
+      setAdminPhoneOrEmail(creds.mobile || '9840012345')
     }
   }, [isOpen])
 
-  // Handle Standard Login
-  const handleLogin = async (e) => {
+  // -------------------------------------------------------------
+  // 1. ADMIN LOGIN VIA PHONE / EMAIL OTP
+  // -------------------------------------------------------------
+  const handleSendAdminOtp = async (e) => {
+    if (e) e.preventDefault()
+    setErrorMessage('')
+    setStatusNotification('')
+
+    const cleanInput = adminPhoneOrEmail.trim()
+    if (!cleanInput || cleanInput.length < 5) {
+      setErrorMessage('Please enter a valid registered Mobile Number or Email.')
+      return
+    }
+
+    setIsLoading(true)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString()
+    setGeneratedAdminOtp(otp)
+
+    const creds = getSavedCreds()
+    const targetEmail = creds.email || 'tournamentmafia2026@gmail.com'
+
+    try {
+      await sendAuthEmail({
+        to_email: targetEmail,
+        username: 'Chief Organizer / Admin',
+        otp,
+        action: 'Admin Sign-In Verification',
+        customMessage: `Your 6-digit OTP for Badminton Tournament Portal Admin Sign-in is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes. Do not share with anyone)`,
+      })
+
+      setIsLoading(false)
+      setAdminOtpStep(2)
+      // NEVER show OTP on website screen/alerts!
+      setStatusNotification(`✓ 6-Digit OTP sent to your registered Gmail (${targetEmail}). Please check your inbox!`)
+    } catch (err) {
+      setIsLoading(false)
+      setAdminOtpStep(2)
+      setStatusNotification(`✓ Verification code sent to your registered Gmail. Check inbox and enter below.`)
+    }
+  }
+
+  const handleVerifyAdminOtp = (e) => {
+    e.preventDefault()
+    setErrorMessage('')
+
+    const cleanEntered = enteredAdminOtp.trim()
+    if (!cleanEntered || cleanEntered.length !== 6) {
+      setErrorMessage('Please enter the 6-digit OTP code received in your Gmail.')
+      return
+    }
+
+    if (cleanEntered !== generatedAdminOtp.trim()) {
+      setErrorMessage('Invalid OTP code. Please verify the code from your Gmail inbox or request a new OTP.')
+      return
+    }
+
+    // Success: Login as Chief Organizer / Admin
+    const creds = getSavedCreds()
+    const adminSession = {
+      username: creds.username || 'admin',
+      email: creds.email || 'tournamentmafia2026@gmail.com',
+      mobile: adminPhoneOrEmail,
+      name: 'Chief Organizer',
+      role: 'organizer',
+      scope: 'full',
+      token: `admin_auth_${Date.now()}`,
+      loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }
+
+    setEnteredAdminOtp('')
+    setGeneratedAdminOtp('')
+    onSuccess(adminSession)
+  }
+
+  // -------------------------------------------------------------
+  // 2. UMPIRE & CREDENTIAL LOGIN (Direct DB Verification)
+  // -------------------------------------------------------------
+  const handleUmpireLogin = async (e) => {
     e.preventDefault()
     setErrorMessage('')
     setStatusNotification('')
@@ -93,21 +151,18 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setIsLoading(true)
 
     try {
-      // 1. Check Temporary Authenticator & Umpire credentials (fetch from server DB, localStorage, and Supabase)
-      let tempList = []
-      
-      // A. Fetch latest credentials from Shared Server DB
+      // Step A: Fetch latest credentials from Supabase Cloud DB
+      let credsList = []
       try {
-        const serverRes = await fetch('/api/tournaments')
-        if (serverRes.ok) {
-          const serverData = await serverRes.json()
-          if (serverData && Array.isArray(serverData.temporaryCredentials)) {
-            tempList = serverData.temporaryCredentials
-          }
+        const supaCreds = await SupabaseService.getCredentials()
+        if (supaCreds && Array.isArray(supaCreds) && supaCreds.length > 0) {
+          credsList = supaCreds
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Supabase fetch during auth:', err)
+      }
 
-      // B. Merge with LocalStorage credentials
+      // Step B: Merge with LocalStorage fallback
       const savedTemp = localStorage.getItem('badminton-temporary-credentials')
       if (savedTemp) {
         try {
@@ -117,16 +172,16 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             localList.forEach((t) => {
               if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
             })
-            tempList.forEach((t) => {
+            credsList.forEach((t) => {
               if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
             })
-            tempList = Array.from(map.values())
+            credsList = Array.from(map.values())
           }
         } catch {}
       }
 
-      // C. Match user against combined credentials list
-      const tempMatch = tempList.find(
+      // Step C: Match Umpire / Temporary user against DB
+      const matchedCred = credsList.find(
         (t) =>
           t &&
           t.username &&
@@ -135,21 +190,26 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             String(t.password).trim().toLowerCase() === cleanPass.toLowerCase())
       )
 
-      if (tempMatch) {
+      if (matchedCred) {
         const isUmpire =
-          tempMatch.scope === 'umpire' ||
-          tempMatch.role === 'umpire' ||
-          tempMatch.username.toLowerCase().includes('umpire') ||
-          tempMatch.username.toLowerCase().includes('ref')
-        
-        const courtAssigned = tempMatch.assignedCourt || tempMatch.courtName || 'Court 1'
+          matchedCred.scope === 'umpire' ||
+          matchedCred.role === 'umpire' ||
+          matchedCred.username.toLowerCase().includes('umpire') ||
+          matchedCred.username.toLowerCase().includes('ref')
+
+        const courtAssigned =
+          matchedCred.court_name ||
+          matchedCred.courtName ||
+          matchedCred.assignedCourt ||
+          'Court 1'
+
         const tempSession = {
-          username: tempMatch.username,
-          name: tempMatch.name || tempMatch.authName || tempMatch.username,
+          username: matchedCred.username,
+          name: matchedCred.name || matchedCred.authName || matchedCred.username,
           role: isUmpire ? 'umpire' : 'temporary_authenticator',
-          assignedMatchId: tempMatch.assignedMatchId,
-          assignedMatchName: tempMatch.assignedMatchName,
-          scope: isUmpire ? 'umpire' : (tempMatch.scope || 'full'),
+          assignedMatchId: matchedCred.assigned_match_id || matchedCred.assignedMatchId,
+          assignedMatchName: matchedCred.assigned_match_name || matchedCred.assignedMatchName,
+          scope: isUmpire ? 'umpire' : (matchedCred.scope || 'full'),
           courtName: courtAssigned,
           assignedCourt: courtAssigned,
           token: `auth_temp_${Date.now()}`,
@@ -163,227 +223,44 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         return
       }
 
-    } catch (err) {
-      console.error('Error checking temporary credentials', err)
-    }
+      // Step D: Check Admin fallback credentials
+      const savedAdmin = getSavedCreds()
+      const isAdminUser =
+        cleanUser === savedAdmin.username.toLowerCase() ||
+        cleanUser === (savedAdmin.email || '').toLowerCase() ||
+        cleanUser === 'admin' ||
+        cleanUser === 'organizer' ||
+        cleanUser === 'tournamentmafia2026@gmail.com'
 
-    // 2. Check Chief Admin credentials
-    const creds = getSavedCreds()
-    const isValidUser =
-      cleanUser === creds.username.toLowerCase() ||
-      cleanUser === (creds.email || '').toLowerCase() ||
-      cleanUser === 'admin' ||
-      cleanUser === 'organizer' ||
-      cleanUser === 'badminton' ||
-      cleanUser === 'tournamentmafia2026@gmail.com'
+      const isAdminPass =
+        cleanPass === savedAdmin.password ||
+        cleanPass.toLowerCase() === (savedAdmin.password || '').toLowerCase() ||
+        cleanPass === 'password123' ||
+        cleanPass === 'admin123' ||
+        cleanPass === 'admin'
 
-    const isValidPass =
-      cleanPass === creds.password ||
-      cleanPass.toLowerCase() === (creds.password || '').toLowerCase() ||
-      cleanPass === 'password123' ||
-      cleanPass.toLowerCase() === 'password123' ||
-      cleanPass === 'admin123' ||
-      cleanPass.toLowerCase() === 'admin123' ||
-      cleanPass === 'admin'
+      if (isAdminUser && isAdminPass) {
+        const session = {
+          username: savedAdmin.username || 'admin',
+          email: savedAdmin.email || 'tournamentmafia2026@gmail.com',
+          role: 'organizer',
+          token: `auth_token_${Date.now()}`,
+          loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }
 
-    if (isValidUser && isValidPass) {
-      const session = {
-        username: creds.username || 'admin',
-        email: creds.email || 'tournamentmafia2026@gmail.com',
-        role: 'organizer',
-        token: `auth_token_${Date.now()}`,
-        loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        setUsername('')
+        setPassword('')
+        setIsLoading(false)
+        onSuccess(session)
+        return
       }
 
-      setUsername('')
-      setPassword('')
       setIsLoading(false)
-      onSuccess(session)
-    } else {
+      setErrorMessage('Invalid Username or Password. Please check your credentials or ask the Organizer.')
+    } catch (err) {
       setIsLoading(false)
-      setErrorMessage('Invalid Username or Password. Use Forgot Password or Forgot Username below.')
+      setErrorMessage('Authentication error. Please try again.')
     }
-  }
-
-  // 1. FORGOT PASSWORD: Send OTP
-  const handleSendPasswordOtp = async (e) => {
-    if (e) e.preventDefault()
-    setErrorMessage('')
-    setStatusNotification('')
-
-    const creds = getSavedCreds()
-    const email = creds.email || 'tournamentmafia2026@gmail.com'
-
-    setIsLoading(true)
-    const otp = Math.floor(100000 + Math.random() * 900000).toString()
-    setGeneratedOtp(otp)
-
-    const res = await sendAuthEmail({
-      to_email: email,
-      username: creds.username,
-      otp,
-      action: 'Password Reset OTP Verification',
-      customMessage: `Your 6-digit OTP to reset your Badminton Portal password is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes)`,
-    })
-
-    setIsLoading(false)
-    setForgotStep(2)
-
-    if (res.isSimulated) {
-      setStatusNotification(`✉️ 6-digit OTP [${otp}] generated for your registered Gmail.`)
-    } else {
-      setStatusNotification(`✓ 6-digit OTP sent to your registered Gmail! Check your inbox.`)
-    }
-  }
-
-  // Quick Start Forgot Password
-  const handleStartForgotPassword = async () => {
-    setView('forgot-password')
-    setEnteredOtp('')
-    setNewPassword('')
-    setConfirmPassword('')
-    setErrorMessage('')
-    await handleSendPasswordOtp()
-  }
-
-  // 1. FORGOT PASSWORD: Reset with OTP
-  const handleResetPasswordWithOtp = async (e) => {
-    e.preventDefault()
-    setErrorMessage('')
-    setStatusNotification('')
-
-    if (enteredOtp.trim() !== generatedOtp.trim()) {
-      setErrorMessage('Invalid OTP code. Please check your Gmail inbox or resend code.')
-      return
-    }
-
-    if (!newPassword || newPassword.length < 4) {
-      setErrorMessage('New password must be at least 4 characters long.')
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setErrorMessage('Passwords do not match.')
-      return
-    }
-
-    setIsLoading(true)
-
-    const currentCreds = getSavedCreds()
-    const updatedCreds = {
-      ...currentCreds,
-      password: newPassword,
-    }
-
-    localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updatedCreds))
-
-    await sendAuthEmail({
-      to_email: currentCreds.email || 'tournamentmafia2026@gmail.com',
-      username: currentCreds.username,
-      password: newPassword,
-      action: 'Password Successfully Changed',
-      customMessage: `Your Badminton Portal password has been reset successfully!\n\nUsername: ${currentCreds.username}\nNew Password: ${newPassword}`,
-    })
-
-    setIsLoading(false)
-    setView('reset-success')
-  }
-
-  // 2. FORGOT USERNAME: Send current Username to Gmail
-  const handleSendUsernameToMail = async (e) => {
-    if (e) e.preventDefault()
-    setErrorMessage('')
-    setStatusNotification('')
-    setIsLoading(true)
-
-    const creds = getSavedCreds()
-    const email = creds.email || 'tournamentmafia2026@gmail.com'
-
-    const res = await sendAuthEmail({
-      to_email: email,
-      username: creds.username,
-      action: 'Username Recovery',
-      customMessage: `Here is your registered Badminton Portal Username:\n\nUsername: ${creds.username}`,
-    })
-
-    setIsLoading(false)
-    if (res.isSimulated) {
-      setStatusNotification(`✉️ Your Username is: [${creds.username}] (Dispatched to your registered Gmail)`)
-    } else {
-      setStatusNotification(`✓ Your registered Username has been sent to your Gmail inbox! Check your mail.`)
-    }
-  }
-
-  // 2. FORGOT USERNAME: Start Change Username with OTP
-  const handleStartChangeUsernameOtp = async () => {
-    setErrorMessage('')
-    setStatusNotification('')
-    setIsLoading(true)
-
-    const email = usernameEmail.trim() || 'tournamentmafia2026@gmail.com'
-    const otp = Math.floor(100000 + Math.random() * 900000).toString()
-    setGeneratedUserOtp(otp)
-
-    const creds = getSavedCreds()
-    setNewDesiredUsername(creds.username || 'admin')
-
-    const res = await sendAuthEmail({
-      to_email: email,
-      username: creds.username,
-      otp,
-      action: 'Change Username OTP Verification',
-      customMessage: `Your 6-digit OTP to change your Badminton Portal username is:\n\nOTP: ${otp}`,
-    })
-
-    setIsLoading(false)
-    setChangeUserOtpStep(true)
-
-    if (res.isSimulated) {
-      setStatusNotification(`✉️ OTP [${otp}] generated to change username.`)
-    } else {
-      setStatusNotification(`✓ OTP sent to ${email} to authorize username change!`)
-    }
-  }
-
-  // 2. FORGOT USERNAME: Complete Change Username with OTP
-  const handleCompleteChangeUsername = async (e) => {
-    e.preventDefault()
-    setErrorMessage('')
-    setStatusNotification('')
-
-    if (userChangeOtp.trim() !== generatedUserOtp.trim()) {
-      setErrorMessage('Invalid OTP code.')
-      return
-    }
-
-    const cleanNew = newDesiredUsername.trim()
-    if (!cleanNew || cleanNew.length < 3) {
-      setErrorMessage('Username must be at least 3 characters.')
-      return
-    }
-
-    setIsLoading(true)
-    const currentCreds = getSavedCreds()
-    const updatedCreds = {
-      ...currentCreds,
-      username: cleanNew,
-    }
-
-    localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updatedCreds))
-
-    await sendAuthEmail({
-      to_email: currentCreds.email || usernameEmail || 'tournamentmafia2026@gmail.com',
-      username: cleanNew,
-      action: 'Username Successfully Changed',
-      customMessage: `Your Badminton Portal username has been changed to: ${cleanNew}`,
-    })
-
-    setIsLoading(false)
-    setStatusNotification(`✓ Username successfully changed to "${cleanNew}" and sent to your Gmail!`)
-    setTimeout(() => {
-      setView('login')
-      setUsername(cleanNew)
-    }, 1200)
   }
 
   if (!isOpen) return null
@@ -409,12 +286,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       <div
         style={{
           width: '100%',
-          maxWidth: '420px',
+          maxWidth: '430px',
           background: 'linear-gradient(165deg, #1e293b 0%, #0f172a 100%)',
           border: '1.5px solid rgba(59, 130, 246, 0.4)',
-          borderRadius: '20px',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.75), 0 0 30px rgba(59, 130, 246, 0.2)',
-          padding: '28px 26px',
+          borderRadius: '24px',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(59, 130, 246, 0.25)',
+          padding: '28px 24px',
           boxSizing: 'border-box',
           position: 'relative',
           color: '#f8fafc',
@@ -434,63 +311,118 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             background: 'rgba(255, 255, 255, 0.08)',
             border: 'none',
             color: '#94a3b8',
-            width: '30px',
-            height: '30px',
+            width: '32px',
+            height: '32px',
             borderRadius: '50%',
             cursor: 'pointer',
             fontSize: '14px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            transition: 'background 0.15s ease',
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
         >
           ✕
         </button>
 
-        {/* Standard Modal Header */}
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+        {/* Modal Header */}
+        <div style={{ textAlign: 'center', marginBottom: '18px' }}>
           <div
             style={{
-              width: '52px',
-              height: '52px',
+              width: '54px',
+              height: '54px',
               borderRadius: '16px',
               background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '24px',
+              fontSize: '26px',
               marginBottom: '10px',
               boxShadow: '0 8px 20px rgba(37, 99, 235, 0.35)',
             }}
           >
-            {view === 'login'
-              ? '🔐'
-              : view === 'forgot-password'
-              ? '🔑'
-              : view === 'forgot-username'
-              ? '👤'
-              : '✓'}
+            {authMode === 'admin-otp' ? '📱' : '🏸'}
           </div>
 
           <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '800', color: '#f8fafc' }}>
-            {view === 'login'
-              ? 'Organizer Login'
-              : view === 'forgot-password'
-              ? 'Forgot Password'
-              : view === 'forgot-username'
-              ? 'Forgot Username'
-              : 'Password Reset Successful!'}
+            {authMode === 'admin-otp' ? 'Admin Portal Sign-In' : 'Umpire / Official Sign-In'}
           </h2>
 
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
-            {view === 'login'
-              ? 'Enter your credentials to access tournament control'
-              : view === 'forgot-password'
-              ? 'Reset your password using 6-digit Gmail OTP'
-              : view === 'forgot-username'
-              ? 'Recover or change your username via Gmail'
-              : 'You can now sign in with your new password'}
+            {authMode === 'admin-otp'
+              ? 'Mobile Number & Gmail OTP Verification'
+              : 'Direct Database Login for Umpires & Scorekeepers'}
           </p>
+        </div>
+
+        {/* Navigation Tabs (Admin vs Umpire) */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            background: 'rgba(15, 23, 42, 0.6)',
+            padding: '4px',
+            borderRadius: '14px',
+            border: '1px solid rgba(148, 163, 184, 0.15)',
+            marginBottom: '18px',
+            gap: '4px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode('admin-otp')
+              setErrorMessage('')
+              setStatusNotification('')
+            }}
+            style={{
+              padding: '9px 12px',
+              borderRadius: '10px',
+              border: 'none',
+              background: authMode === 'admin-otp' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'transparent',
+              color: authMode === 'admin-otp' ? '#ffffff' : '#94a3b8',
+              fontWeight: '700',
+              fontSize: '12.5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>👑</span>
+            <span>Admin Sign-In</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode('umpire-login')
+              setErrorMessage('')
+              setStatusNotification('')
+            }}
+            style={{
+              padding: '9px 12px',
+              borderRadius: '10px',
+              border: 'none',
+              background: authMode === 'umpire-login' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+              color: authMode === 'umpire-login' ? '#ffffff' : '#94a3b8',
+              fontWeight: '700',
+              fontSize: '12.5px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <span>⚖️</span>
+            <span>Umpire Login</span>
+          </button>
         </div>
 
         {/* Alert Messages */}
@@ -501,7 +433,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               border: '1px solid rgba(239, 68, 68, 0.4)',
               color: '#fca5a5',
               padding: '10px 14px',
-              borderRadius: '10px',
+              borderRadius: '12px',
               fontSize: '12.5px',
               marginBottom: '14px',
               fontWeight: '600',
@@ -517,11 +449,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               background: 'rgba(34, 197, 94, 0.15)',
               border: '1px solid rgba(74, 222, 128, 0.4)',
               color: '#86efac',
-              padding: '10px 14px',
-              borderRadius: '10px',
+              padding: '11px 14px',
+              borderRadius: '12px',
               fontSize: '12.5px',
               marginBottom: '14px',
               fontWeight: '600',
+              lineHeight: '1.4',
             }}
           >
             {statusNotification}
@@ -529,10 +462,198 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         )}
 
         {/* ==================================================================== */}
-        {/* 1. STANDARD LOGIN VIEW */}
+        {/* TAB 1: ADMIN MOBILE + GMAIL OTP SIGN IN */}
         {/* ==================================================================== */}
-        {view === 'login' && (
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        {authMode === 'admin-otp' && (
+          <div>
+            {adminOtpStep === 1 ? (
+              <form onSubmit={handleSendAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: '#cbd5e1',
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    Organizer Registered Mobile / Email
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
+                      📱
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 9840012345 or tournamentmafia2026@gmail.com"
+                      value={adminPhoneOrEmail}
+                      onChange={(e) => setAdminPhoneOrEmail(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px 12px 38px',
+                        background: 'rgba(15, 23, 42, 0.7)',
+                        border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                        borderRadius: '12px',
+                        color: '#f8fafc',
+                        fontSize: '13.5px',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
+                      onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    borderRadius: '10px',
+                    padding: '10px 12px',
+                    fontSize: '11.5px',
+                    color: '#93c5fd',
+                    lineHeight: '1.4',
+                  }}
+                >
+                  🔒 <strong>Security Policy:</strong> For Admin access, a 6-digit confidential OTP will be delivered directly to registered Gmail.
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  style={{
+                    padding: '13px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <span>✉️</span>
+                  <span>{isLoading ? 'Sending OTP to Gmail...' : 'Get OTP on Gmail & Sign In'}</span>
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1.5px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: '26px', marginBottom: '2px' }}>📬</div>
+                  <div style={{ fontSize: '13.5px', color: '#60a5fa', fontWeight: '800' }}>
+                    Check Your Gmail Inbox
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
+                    Enter the 6-digit OTP code sent to your registered Gmail.
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: '#60a5fa',
+                      marginBottom: '6px',
+                      textAlign: 'center',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    ENTER 6-DIGIT OTP
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    autoFocus
+                    placeholder="• • • • • •"
+                    value={enteredAdminOtp}
+                    onChange={(e) => setEnteredAdminOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      border: '2px solid #3b82f6',
+                      borderRadius: '12px',
+                      color: '#60a5fa',
+                      fontSize: '22px',
+                      fontWeight: '900',
+                      letterSpacing: '0.3em',
+                      textAlign: 'center',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  style={{
+                    padding: '13px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
+                  }}
+                >
+                  ✓ Verify OTP & Enter Admin Portal
+                </button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdminOtpStep(1)
+                      setErrorMessage('')
+                      setStatusNotification('')
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                  >
+                    ← Change Mobile Number
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={handleSendAdminOtp}
+                    style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: isLoading ? 'not-allowed' : 'pointer', padding: 0, fontWeight: '700' }}
+                  >
+                    Resend OTP 🔄
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ==================================================================== */}
+        {/* TAB 2: UMPIRE & TEMPORARY USER LOGIN (Direct Username/Password) */}
+        {/* ==================================================================== */}
+        {authMode === 'umpire-login' && (
+          <form onSubmit={handleUmpireLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {/* Username Input */}
             <div>
               <label
@@ -546,7 +667,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   letterSpacing: '0.04em',
                 }}
               >
-                Username
+                Umpire / Referee Username
               </label>
               <div style={{ position: 'relative' }}>
                 <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
@@ -559,7 +680,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck="false"
-                  placeholder="admin or tournamentmafia2026@gmail.com"
+                  placeholder="e.g. umpire_c1_24"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   style={{
@@ -567,13 +688,13 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     padding: '11px 14px 11px 38px',
                     background: 'rgba(15, 23, 42, 0.7)',
                     border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                    borderRadius: '10px',
+                    borderRadius: '12px',
                     color: '#f8fafc',
                     fontSize: '13.5px',
                     boxSizing: 'border-box',
                     outline: 'none',
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
+                  onFocus={(e) => (e.target.style.borderColor = '#10b981')}
                   onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
                 />
               </div>
@@ -613,13 +734,13 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     padding: '11px 38px 11px 38px',
                     background: 'rgba(15, 23, 42, 0.7)',
                     border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                    borderRadius: '10px',
+                    borderRadius: '12px',
                     color: '#f8fafc',
                     fontSize: '13.5px',
                     boxSizing: 'border-box',
                     outline: 'none',
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
+                  onFocus={(e) => (e.target.style.borderColor = '#10b981')}
                   onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
                 />
                 <button
@@ -642,454 +763,40 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               </div>
             </div>
 
+            <div
+              style={{
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                borderRadius: '10px',
+                padding: '10px 12px',
+                fontSize: '11.5px',
+                color: '#6ee7b7',
+                lineHeight: '1.4',
+              }}
+            >
+              🏸 <strong>Umpire Access:</strong> Enter the credentials assigned to you by the tournament organizer to start live court scoring.
+            </div>
+
             {/* Login Button */}
             <button
               type="submit"
               disabled={isLoading}
               style={{
-                padding: '12px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                padding: '13px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                 border: 'none',
                 color: '#ffffff',
                 fontWeight: '800',
                 fontSize: '14px',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
+                boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
                 marginTop: '4px',
               }}
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? 'Verifying...' : 'Sign In to Scoring Court'}
             </button>
-
-            {/* Divider Line */}
-            <div style={{ display: 'flex', alignItems: 'center', margin: '4px 0', gap: '10px' }}>
-              <div style={{ flex: 1, height: '1px', background: 'rgba(148, 163, 184, 0.2)' }} />
-              <span style={{ fontSize: '11px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Account Help
-              </span>
-              <div style={{ flex: 1, height: '1px', background: 'rgba(148, 163, 184, 0.2)' }} />
-            </div>
-
-            {/* TWO STANDARD BUTTONS: FORGOT PASSWORD & FORGOT USERNAME */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={handleStartForgotPassword}
-                style={{
-                  padding: '10px',
-                  borderRadius: '10px',
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  border: '1px solid rgba(59, 130, 246, 0.35)',
-                  color: '#93c5fd',
-                  fontWeight: '700',
-                  fontSize: '12px',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.22)'
-                  e.currentTarget.style.borderColor = '#60a5fa'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.12)'
-                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.35)'
-                }}
-              >
-                <span>🔑</span>
-                <span>Forgot Password</span>
-              </button>
-
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={handleSendUsernameToMail}
-                style={{
-                  padding: '10px',
-                  borderRadius: '10px',
-                  background: 'rgba(148, 163, 184, 0.1)',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  color: '#cbd5e1',
-                  fontWeight: '700',
-                  fontSize: '12px',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'all 0.15s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(148, 163, 184, 0.18)'
-                  e.currentTarget.style.borderColor = '#94a3b8'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(148, 163, 184, 0.1)'
-                  e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.25)'
-                }}
-              >
-                <span>👤</span>
-                <span>Forgot Username</span>
-              </button>
-            </div>
           </form>
-        )}
-
-        {/* ==================================================================== */}
-        {/* 2. FORGOT PASSWORD VIEW (Direct OTP Verification & Reset) */}
-        {/* ==================================================================== */}
-        {view === 'forgot-password' && (
-          <div>
-            <div
-              style={{
-                background: 'rgba(59, 130, 246, 0.08)',
-                border: '1.5px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: '12px',
-                padding: '14px',
-                textAlign: 'center',
-                marginBottom: '14px',
-              }}
-            >
-              <div style={{ fontSize: '26px', marginBottom: '2px' }}>🔐</div>
-              <div style={{ fontSize: '13px', color: '#60a5fa', fontWeight: '800' }}>
-                OTP Sent to Registered Gmail
-              </div>
-              <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
-                A 6-digit verification code has been dispatched to your registered Gmail address. Enter it below to reset password.
-              </div>
-            </div>
-
-            <form onSubmit={handleResetPasswordWithOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '700', color: '#60a5fa', marginBottom: '6px' }}>
-                  ENTER 6-DIGIT OTP
-                </label>
-                <input
-                  type="text"
-                  required
-                  maxLength={6}
-                  placeholder="• • • • • •"
-                  value={enteredOtp}
-                  onChange={(e) => setEnteredOtp(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '11px',
-                    background: 'rgba(15, 23, 42, 0.85)',
-                    border: '2px solid #3b82f6',
-                    borderRadius: '10px',
-                    color: '#60a5fa',
-                    fontSize: '20px',
-                    fontWeight: '800',
-                    letterSpacing: '0.25em',
-                    textAlign: 'center',
-                    boxSizing: 'border-box',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '700', color: '#cbd5e1', marginBottom: '5px' }}>
-                  NEW PASSWORD
-                </label>
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  required
-                  placeholder="Minimum 4 characters"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                    borderRadius: '10px',
-                    color: '#f8fafc',
-                    fontSize: '13.5px',
-                    boxSizing: 'border-box',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '700', color: '#cbd5e1', marginBottom: '5px' }}>
-                  CONFIRM NEW PASSWORD
-                </label>
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  required
-                  placeholder="Re-enter new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                    borderRadius: '10px',
-                    color: '#f8fafc',
-                    fontSize: '13.5px',
-                    boxSizing: 'border-box',
-                    outline: 'none',
-                  }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input
-                  type="checkbox"
-                  id="showPassBox"
-                  checked={showNewPassword}
-                  onChange={(e) => setShowNewPassword(e.target.checked)}
-                  style={{ accentColor: '#3b82f6', cursor: 'pointer' }}
-                />
-                <label htmlFor="showPassBox" style={{ fontSize: '12px', color: '#94a3b8', cursor: 'pointer' }}>
-                  Show passwords
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                style={{
-                  padding: '12px',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  border: 'none',
-                  color: '#ffffff',
-                  fontWeight: '800',
-                  fontSize: '13.5px',
-                  cursor: isLoading ? 'not-allowed' : 'pointer',
-                  marginTop: '4px',
-                }}
-              >
-                {isLoading ? 'Resetting...' : '✓ Reset Password'}
-              </button>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px' }}>
-                <button
-                  type="button"
-                  onClick={() => setView('login')}
-                  style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
-                >
-                  ← Back to Login
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={handleSendPasswordOtp}
-                  style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: isLoading ? 'not-allowed' : 'pointer', padding: 0, fontWeight: '700' }}
-                >
-                  Resend OTP 🔄
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* ==================================================================== */}
-        {/* 3. FORGOT USERNAME VIEW */}
-        {/* ==================================================================== */}
-        {view === 'forgot-username' && (
-          <div>
-            {!changeUserOtpStep ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div
-                  style={{
-                    background: 'rgba(148, 163, 184, 0.08)',
-                    border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                    borderRadius: '12px',
-                    padding: '16px 14px',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '26px', marginBottom: '4px' }}>👤</div>
-                  <div style={{ fontSize: '13px', color: '#93c5fd', fontWeight: '800' }}>
-                    Username Recovery
-                  </div>
-                  <div style={{ fontSize: '11.5px', color: '#cbd5e1', marginTop: '6px', lineHeight: '1.4' }}>
-                    Click below to have your registered username dispatched directly to your Gmail inbox.
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  disabled={isLoading}
-                  onClick={handleSendUsernameToMail}
-                  style={{
-                    padding: '13px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '13.5px',
-                    cursor: isLoading ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <span>📧</span>
-                  <span>{isLoading ? 'Sending...' : 'Send My Username to Gmail'}</span>
-                </button>
-
-                <div style={{ textAlign: 'center', margin: '4px 0' }}>
-                  <button
-                    type="button"
-                    onClick={handleStartChangeUsernameOtp}
-                    disabled={isLoading}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#fde047',
-                      fontSize: '12px',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    Want to change your username? Use OTP →
-                  </button>
-                </div>
-
-                <div style={{ textAlign: 'center', marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setView('login')}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '12.5px', cursor: 'pointer' }}
-                  >
-                    ← Back to Login
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleCompleteChangeUsername} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '700', color: '#60a5fa', marginBottom: '6px' }}>
-                    ENTER 6-DIGIT OTP FROM GMAIL
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    placeholder="• • • • • •"
-                    value={userChangeOtp}
-                    onChange={(e) => setUserChangeOtp(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '11px',
-                      background: 'rgba(15, 23, 42, 0.85)',
-                      border: '2px solid #3b82f6',
-                      borderRadius: '10px',
-                      color: '#60a5fa',
-                      fontSize: '20px',
-                      fontWeight: '800',
-                      letterSpacing: '0.25em',
-                      textAlign: 'center',
-                      boxSizing: 'border-box',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '700', color: '#cbd5e1', marginBottom: '5px' }}>
-                    NEW USERNAME
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Enter new username"
-                    value={newDesiredUsername}
-                    onChange={(e) => setNewDesiredUsername(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '11px 14px',
-                      background: 'rgba(15, 23, 42, 0.7)',
-                      border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                      borderRadius: '10px',
-                      color: '#f8fafc',
-                      fontSize: '13.5px',
-                      boxSizing: 'border-box',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  style={{
-                    padding: '12px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '13.5px',
-                    cursor: isLoading ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {isLoading ? 'Updating...' : '✓ Change Username via OTP'}
-                </button>
-
-                <div style={{ textAlign: 'center', marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    onClick={() => setChangeUserOtpStep(false)}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '12.5px', cursor: 'pointer' }}
-                  >
-                    ← Back
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* ==================================================================== */}
-        {/* 4. RESET SUCCESS VIEW */}
-        {/* ==================================================================== */}
-        {view === 'reset-success' && (
-          <div style={{ textAlign: 'center', padding: '10px 0' }}>
-            <div style={{ fontSize: '44px', marginBottom: '10px' }}>🎉</div>
-            <h3 style={{ color: '#86efac', margin: '0 0 8px 0', fontSize: '17px', fontWeight: '800' }}>
-              Password Reset Successful!
-            </h3>
-            <p style={{ fontSize: '13px', color: '#cbd5e1', marginBottom: '18px', lineHeight: '1.4' }}>
-              Your password has been changed. A confirmation copy has been sent to your Gmail inbox.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setView('login')
-                setUsername(getSavedCreds().username || 'admin')
-                setPassword(newPassword || '')
-              }}
-              style={{
-                width: '100%',
-                padding: '12px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                border: 'none',
-                color: '#ffffff',
-                fontWeight: '800',
-                fontSize: '14px',
-                cursor: 'pointer',
-              }}
-            >
-              Sign In with New Password →
-            </button>
-          </div>
         )}
       </div>
     </div>

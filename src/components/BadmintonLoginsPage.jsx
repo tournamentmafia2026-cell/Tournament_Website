@@ -40,17 +40,45 @@ export function BadmintonLoginsPage({
   const [toastMessage, setToastMessage] = useState(null)
   const [deleteCredConfirm, setDeleteCredConfirm] = useState(null)
 
-  // Fetch from server DB on mount
+  // Fetch from Supabase and server DB on mount
   useEffect(() => {
-    fetch('/api/tournaments')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && Array.isArray(data.temporaryCredentials)) {
-          setTempCredsList(data.temporaryCredentials)
-          localStorage.setItem(TEMP_CREDS_STORAGE_KEY, JSON.stringify(data.temporaryCredentials))
+    const loadCreds = async () => {
+      try {
+        const supaCreds = await SupabaseService.getCredentials()
+        if (supaCreds && Array.isArray(supaCreds) && supaCreds.length > 0) {
+          const mapped = supaCreds.map((c) => ({
+            id: c.id,
+            username: c.username,
+            password: c.password,
+            name: c.name,
+            assignedMatchId: c.assigned_match_id,
+            assignedMatchName: c.assigned_match_name,
+            courtName: c.court_name,
+            assignedCourt: c.court_name,
+            scope: c.scope || 'umpire',
+            expiry: c.expiry || '24 Hours',
+            role: c.role || 'umpire',
+            status: c.status || 'active',
+          }))
+          setTempCredsList(mapped)
+          try {
+            localStorage.setItem(TEMP_CREDS_STORAGE_KEY, JSON.stringify(mapped))
+          } catch (e) {}
+          return
         }
-      })
-      .catch(() => {})
+      } catch (err) {}
+
+      fetch('/api/tournaments')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && Array.isArray(data.temporaryCredentials)) {
+            setTempCredsList(data.temporaryCredentials)
+            localStorage.setItem(TEMP_CREDS_STORAGE_KEY, JSON.stringify(data.temporaryCredentials))
+          }
+        })
+        .catch(() => {})
+    }
+    loadCreds()
   }, [])
 
   // Save to localStorage, server DB, and Supabase when list changes
@@ -152,8 +180,12 @@ export function BadmintonLoginsPage({
 
   // Delete / Revoke Credential
   const handleDeleteCred = (id) => {
+    const toDelete = tempCredsList.find((c) => c.id === id)
     const updated = tempCredsList.filter((c) => c.id !== id)
     saveTempCreds(updated)
+    if (toDelete) {
+      SupabaseService.deleteCredential(toDelete.id || toDelete.username).catch(() => {})
+    }
     setToastMessage('Temporary login revoked.')
   }
 

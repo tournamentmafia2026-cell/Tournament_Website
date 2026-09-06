@@ -439,6 +439,43 @@ function App() {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
           } catch (e) {}
         }
+
+        // Sync Tournament Draws from Supabase
+        const supaDraws = await SupabaseService.getAllTournamentDraws()
+        if (supaDraws && Array.isArray(supaDraws) && supaDraws.length > 0) {
+          try {
+            const existingDraws = JSON.parse(localStorage.getItem('badminton-tournament-draws') || '{}')
+            const mergedDraws = { ...existingDraws }
+            supaDraws.forEach((row) => {
+              if (row.id && row.draw_data) {
+                mergedDraws[row.id] = row.draw_data
+              }
+            })
+            localStorage.setItem('badminton-tournament-draws', JSON.stringify(mergedDraws))
+          } catch (e) {}
+        }
+
+        // Sync Credentials from Supabase
+        const supaCreds = await SupabaseService.getCredentials()
+        if (supaCreds && Array.isArray(supaCreds) && supaCreds.length > 0) {
+          try {
+            const mappedCreds = supaCreds.map((c) => ({
+              id: c.id,
+              username: c.username,
+              password: c.password,
+              name: c.name,
+              assignedMatchId: c.assigned_match_id,
+              assignedMatchName: c.assigned_match_name,
+              courtName: c.court_name,
+              assignedCourt: c.court_name,
+              scope: c.scope || 'umpire',
+              expiry: c.expiry || '24 Hours',
+              role: c.role || 'umpire',
+              status: c.status || 'active',
+            }))
+            localStorage.setItem('badminton-temporary-credentials', JSON.stringify(mappedCreds))
+          } catch (e) {}
+        }
       } catch (err) {}
     }
 
