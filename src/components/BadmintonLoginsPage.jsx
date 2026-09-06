@@ -6,9 +6,11 @@ import {
 } from '../utils/textFormatters'
 import { SupabaseService } from '../utils/supabaseDb'
 import { ConfirmDeleteModal } from './ConfirmDeleteModal'
+import { OrganizerAuthModal } from './OrganizerAuthModal'
 
 const TEMP_CREDS_STORAGE_KEY = 'badminton-temporary-credentials'
 const ORGANIZER_SESSION_KEY = 'badminton-organizer-session'
+const ORGANIZER_CREDS_KEY = 'badminton-organizer-credentials'
 
 export function BadmintonLoginsPage({
   publishedMatches = [],
@@ -19,6 +21,18 @@ export function BadmintonLoginsPage({
   onNavigateToMatchManagement,
   onBackToPublic,
 }) {
+  // Master Admin credentials state
+  const [adminCreds, setAdminCreds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ORGANIZER_CREDS_KEY)
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  })
+  const [showAdminPass, setShowAdminPass] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+
   // Saved temporary credentials list
   const [tempCredsList, setTempCredsList] = useState(() => {
     try {
@@ -41,12 +55,31 @@ export function BadmintonLoginsPage({
   const [deleteCredConfirm, setDeleteCredConfirm] = useState(null)
 
   // Fetch from Supabase and server DB on mount
-  useEffect(() => {
-    const loadCreds = async () => {
-      try {
-        const supaCreds = await SupabaseService.getCredentials()
-        if (supaCreds && Array.isArray(supaCreds) && supaCreds.length > 0) {
-          const mapped = supaCreds.map((c) => ({
+  const loadAllCreds = async () => {
+    try {
+      const supaCreds = await SupabaseService.getCredentials()
+      if (supaCreds && Array.isArray(supaCreds)) {
+        // Extract Admin Credential
+        const adminFound = supaCreds.find((c) => c && (c.role === 'organizer' || String(c.id).startsWith('admin_')))
+        if (adminFound) {
+          const aObj = {
+            username: adminFound.username,
+            mobile: adminFound.username,
+            password: adminFound.password,
+            email: 'tournamentmafia2026@gmail.com',
+            role: 'organizer',
+            name: adminFound.name || 'Chief Organizer',
+            createdAt: adminFound.created_at ? new Date(adminFound.created_at).toLocaleDateString('en-GB') : null,
+          }
+          setAdminCreds(aObj)
+          try {
+            localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(aObj))
+          } catch (e) {}
+        }
+
+        const umpires = supaCreds
+          .filter((c) => c && c.role !== 'organizer' && !String(c.id).startsWith('admin_'))
+          .map((c) => ({
             id: c.id,
             username: c.username,
             password: c.password,
@@ -60,25 +93,35 @@ export function BadmintonLoginsPage({
             role: c.role || 'umpire',
             status: c.status || 'active',
           }))
-          setTempCredsList(mapped)
-          try {
-            localStorage.setItem(TEMP_CREDS_STORAGE_KEY, JSON.stringify(mapped))
-          } catch (e) {}
-          return
-        }
-      } catch (err) {}
+        setTempCredsList(umpires)
+        try {
+          localStorage.setItem(TEMP_CREDS_STORAGE_KEY, JSON.stringify(umpires))
+        } catch (e) {}
+        return
+      }
+    } catch (err) {}
 
-      fetch('/api/tournaments')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data && Array.isArray(data.temporaryCredentials)) {
+    fetch('/api/credentials')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data) {
+          if (data.organizerCredentials) {
+            setAdminCreds(data.organizerCredentials)
+            try {
+              localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(data.organizerCredentials))
+            } catch (e) {}
+          }
+          if (Array.isArray(data.temporaryCredentials)) {
             setTempCredsList(data.temporaryCredentials)
             localStorage.setItem(TEMP_CREDS_STORAGE_KEY, JSON.stringify(data.temporaryCredentials))
           }
-        })
-        .catch(() => {})
-    }
-    loadCreds()
+        }
+      })
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    loadAllCreds()
   }, [])
 
   // Save to localStorage, server DB, and Supabase when list changes
@@ -705,7 +748,7 @@ Login Portal: ${window.location.origin}/`
           </form>
         </div>
 
-        {/* Right Column: Active Temporary Credentials List */}
+        {/* Right Column: Active Logins (Master Admin + Temporary Logins) */}
         <div
           style={{
             background: 'linear-gradient(160deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
@@ -715,12 +758,150 @@ Login Portal: ${window.location.origin}/`
             boxShadow: '0 10px 32px rgba(0, 0, 0, 0.45)',
             display: 'flex',
             flexDirection: 'column',
-            gap: '16px',
+            gap: '18px',
           }}
         >
+          {/* Master Admin Card */}
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.14) 0%, rgba(15, 23, 42, 0.95) 100%)',
+              border: '1.5px solid rgba(234, 179, 8, 0.45)',
+              borderRadius: '16px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              boxShadow: '0 6px 20px rgba(234, 179, 8, 0.1)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px' }}>👑</span>
+                <div>
+                  <strong style={{ color: '#facc15', fontSize: '14px', display: 'block' }}>
+                    Chief Organizer (Master Admin)
+                  </strong>
+                  <span style={{ color: '#94a3b8', fontSize: '11px' }}>
+                    {adminCreds?.email || 'tournamentmafia2026@gmail.com'}
+                  </span>
+                </div>
+              </div>
+              <span
+                style={{
+                  background: 'rgba(34, 197, 94, 0.15)',
+                  color: '#4ade80',
+                  fontSize: '10.5px',
+                  fontWeight: '800',
+                  padding: '2px 8px',
+                  borderRadius: '6px',
+                  border: '1px solid rgba(34, 197, 94, 0.35)',
+                }}
+              >
+                ✓ Supabase Synced
+              </span>
+            </div>
+
+            {/* Admin Credentials Row */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'rgba(15, 23, 42, 0.95)',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                border: '1px dashed rgba(234, 179, 8, 0.35)',
+                fontSize: '12.5px',
+                flexWrap: 'wrap',
+                gap: '8px',
+              }}
+            >
+              <div>
+                <span style={{ color: '#94a3b8' }}>Phone / User: </span>
+                <strong style={{ color: '#fef08a' }}>
+                  {adminCreds?.mobile || adminCreds?.username || 'Not set'}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ color: '#94a3b8' }}>Pass: </span>
+                <strong style={{ color: '#facc15', fontFamily: 'monospace' }}>
+                  {showAdminPass ? (adminCreds?.password || '••••••') : '••••••••'}
+                </strong>
+                <button
+                  type="button"
+                  onClick={() => setShowAdminPass(!showAdminPass)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    padding: '2px 4px',
+                  }}
+                  title={showAdminPass ? 'Hide password' : 'Show password'}
+                >
+                  {showAdminPass ? '🙈' : '👁️'}
+                </button>
+              </div>
+            </div>
+
+            {/* Admin Action Row */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const copyText = `🏸 BADMINTON MAFIA - MASTER ADMIN LOGIN\nLogin Phone / User: ${adminCreds?.mobile || adminCreds?.username}\nPassword: ${adminCreds?.password}\nEmail: tournamentmafia2026@gmail.com\nRole: Chief Organizer (Full Access)`
+                  if (navigator.clipboard) {
+                    navigator.clipboard.writeText(copyText)
+                    setToastMessage('📋 Master Admin login details copied!')
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(234, 179, 8, 0.4)',
+                  background: 'rgba(234, 179, 8, 0.15)',
+                  color: '#fef08a',
+                  fontSize: '11.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                }}
+              >
+                📋 Copy Admin Info
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                style={{
+                  flex: 1.2,
+                  padding: '7px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(59, 130, 246, 0.5)',
+                  background: 'rgba(59, 130, 246, 0.2)',
+                  color: '#93c5fd',
+                  fontSize: '11.5px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                }}
+              >
+                🔐 Change Phone / Pass (OTP)
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, fontSize: '16.5px', fontWeight: '800', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>📋</span> Active Temporary Logins ({tempCredsList.length})
+            <h3 style={{ margin: 0, fontSize: '15.5px', fontWeight: '800', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>🏸</span> Scoped Umpire Logins ({tempCredsList.length})
             </h3>
             <span
               style={{
@@ -733,11 +914,11 @@ Login Portal: ${window.location.origin}/`
                 border: '1px solid rgba(56, 189, 248, 0.3)',
               }}
             >
-              Scoped Delegations
+              Delegated Umpires
             </span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '460px', overflowY: 'auto', paddingRight: '4px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '380px', overflowY: 'auto', paddingRight: '4px' }}>
             {tempCredsList.length > 0 ? (
               tempCredsList.map((cred) => (
                 <div
@@ -887,9 +1068,9 @@ Login Portal: ${window.location.origin}/`
                 </div>
               ))
             ) : (
-              <div style={{ padding: '36px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
-                <span style={{ fontSize: '30px', display: 'block', marginBottom: '8px' }}>🏸</span>
-                No temporary logins created yet. Use the form on the left to create one.
+              <div style={{ padding: '24px 20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                <span style={{ fontSize: '26px', display: 'block', marginBottom: '6px' }}>🏸</span>
+                No temporary umpire logins active. Use the form on the left to generate one.
               </div>
             )}
           </div>
@@ -911,6 +1092,18 @@ Login Portal: ${window.location.origin}/`
           }
         }}
         onClose={() => setDeleteCredConfirm(null)}
+      />
+
+      {/* Organizer Auth Modal for changing phone/password via OTP */}
+      <OrganizerAuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={(session) => {
+          setIsAuthModalOpen(false)
+          loadAllCreds()
+          if (onSessionChange) onSessionChange(session)
+          setToastMessage('✓ Master Admin Phone & Password updated and synced with database!')
+        }}
       />
     </div>
   )

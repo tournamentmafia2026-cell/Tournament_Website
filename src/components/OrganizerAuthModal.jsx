@@ -404,20 +404,20 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     }
     localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updated))
 
-    // 2. Save directly into Netlify Cloud DB endpoints so all devices sync instantly!
+    // 2. Save directly into Netlify / Vercel Cloud DB endpoints so all devices sync instantly!
     try {
       await fetch('/api/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           organizerCredentials: {
-            username: 'admin',
+            username: cleanPhone,
             mobile: cleanPhone,
             password: cleanPass,
             email: 'tournamentmafia2026@gmail.com',
           },
           credential: {
-            id: 'admin_' + cleanPhone.replace(/[^0-9]/g, ''),
+            id: 'admin_master',
             username: cleanPhone,
             password: cleanPass,
             name: 'Chief Organizer',
@@ -433,7 +433,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           organizerCredentials: {
-            username: 'admin',
+            username: cleanPhone,
             mobile: cleanPhone,
             password: cleanPass,
             email: 'tournamentmafia2026@gmail.com',
@@ -444,22 +444,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       console.warn('Error saving to /api/credentials:', apiErr)
     }
 
-    // 3. Save to Supabase Cloud DB as well
+    // 3. Save to Supabase Cloud DB directly
     try {
-      await SupabaseService.upsertCredential({
-        id: 'admin_' + cleanPhone.replace(/[^0-9]/g, ''),
-        username: cleanPhone,
-        password: cleanPass,
-        name: 'Chief Organizer',
-        scope: 'full',
-        role: 'organizer',
-        status: 'active',
-        courtName: 'All Courts',
-        assignedMatchName: 'All Tournaments',
-      })
+      // Upsert master admin
       await SupabaseService.upsertCredential({
         id: 'admin_master',
-        username: 'admin',
+        username: cleanPhone,
         password: cleanPass,
         name: 'Chief Organizer',
         scope: 'full',
