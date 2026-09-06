@@ -30,7 +30,6 @@
   font-weight: 400;
   color: var(--text);
   background: var(--bg);
-  font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -40,17 +39,16 @@
   box-sizing: border-box;
 }
 
-/* Hide up/down arrows (spinners) in number inputs globally across all browsers */
+/* Hide up/down arrows in number inputs across browsers */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none !important;
-  appearance: none !important;
-  margin: 0 !important;
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 input[type="number"] {
-  -moz-appearance: textfield !important;
-  appearance: textfield !important;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 html, body, #root {
