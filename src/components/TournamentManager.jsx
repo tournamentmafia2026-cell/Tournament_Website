@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { useTournament } from '../../contexts/TournamentContext'
+import { useTournament } from '../contexts/TournamentContext'
 import {
   generateSingleEliminationBracket,
   generateDoubleEliminationBracket,
   generateRoundRobinFixture,
   generateLeagueFixture,
-} from '../../utils/bracketUtils'
+} from '../utils/bracketUtils'
 import {
   formatTournamentName,
   formatPersonName,

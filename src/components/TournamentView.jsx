@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useTournament } from '../../contexts/TournamentContext'
+import { useTournament } from '../contexts/TournamentContext'
 import { SingleEliminationBracket } from './brackets/SingleEliminationBracket'
 import { DoubleEliminationBracket } from './brackets/DoubleEliminationBracket'
 import { RoundRobinFormat } from './brackets/RoundRobinFormat'
