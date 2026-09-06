@@ -1,5 +1,41 @@
 import { supabase } from './supabaseClient';
 
+const sanitizeDate = (d) => {
+  if (!d) return null;
+  if (typeof d === 'string') {
+    const trimmed = d.trim();
+    if (!trimmed) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+    return null;
+  }
+  if (typeof d === 'number') {
+    const parsed = new Date(d);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+  }
+  return null;
+};
+
+const sanitizeTimestamp = (ts) => {
+  if (!ts) return null;
+  if (typeof ts === 'number') {
+    const parsed = new Date(ts);
+    return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  if (typeof ts === 'string') {
+    const trimmed = ts.trim();
+    if (!trimmed) return null;
+    const parsed = new Date(trimmed);
+    return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  }
+  return null;
+};
+
 /**
  * Service for syncing Badminton Tournament Data with Supabase
  */
@@ -21,29 +57,38 @@ export const SupabaseService = {
   },
 
   async upsertTournament(tournament) {
-    if (!supabase) return null;
+    if (!supabase || !tournament) return null;
     try {
+      const numId = Number(tournament.id) || tournament.id;
+      const startDate = sanitizeDate(tournament.startDate || tournament.start_date);
+      const endDate = sanitizeDate(tournament.endDate || tournament.end_date);
+      const totalDays = Number(tournament.totalDays || tournament.total_days) || 1;
+      const completedAt = sanitizeTimestamp(tournament.completedAt || tournament.completed_at);
+
       const { data, error } = await supabase
         .from('tournaments')
         .upsert({
-          id: tournament.id,
-          match_name: tournament.matchName || tournament.match_name,
-          match_address: tournament.matchAddress || tournament.match_address,
-          court_name: tournament.courtName || tournament.court_name,
-          categories: tournament.categories || [],
-          start_date: tournament.startDate || tournament.start_date,
-          end_date: tournament.endDate || tournament.end_date,
-          total_days: tournament.totalDays || tournament.total_days || 1,
-          organizer_name: tournament.organizerName || tournament.organizer_name,
-          organizer_mobile: tournament.organizerMobile || tournament.organizer_mobile,
+          id: numId,
+          match_name: tournament.matchName || tournament.match_name || 'Badminton Championship',
+          match_address: tournament.matchAddress || tournament.match_address || '',
+          court_name: tournament.courtName || tournament.court_name || '',
+          categories: Array.isArray(tournament.categories) ? tournament.categories : ['Men Singles'],
+          start_date: startDate,
+          end_date: endDate,
+          total_days: totalDays,
+          organizer_name: tournament.organizerName || tournament.organizer_name || '',
+          organizer_mobile: tournament.organizerMobile || tournament.organizer_mobile || '',
           image: tournament.image || '',
           winner: tournament.winner || '',
           category_winners: tournament.categoryWinners || tournament.category_winners || {},
-          completed_at: tournament.completedAt || tournament.completed_at || null,
+          completed_at: completedAt,
           updated_at: new Date().toISOString()
         })
         .select();
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase Tournaments sync error:', error);
+        throw error;
+      }
       return data;
     } catch (err) {
       console.warn('Supabase Tournaments sync status:', err.message);
@@ -64,6 +109,38 @@ export const SupabaseService = {
       console.warn('Supabase Delete sync status:', err.message);
       return false;
     }
+  },
+
+  subscribeToTournaments(onUpdate) {
+    if (!supabase) {
+      return { unsubscribe: () => {} };
+    }
+    return supabase
+      .channel('tournaments_realtime_channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournaments' },
+        (payload) => {
+          onUpdate(payload);
+        }
+      )
+      .subscribe();
+  },
+
+  subscribeToTournamentDraws(onUpdate) {
+    if (!supabase) {
+      return { unsubscribe: () => {} };
+    }
+    return supabase
+      .channel('draws_realtime_channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament_draws' },
+        (payload) => {
+          onUpdate(payload);
+        }
+      )
+      .subscribe();
   },
 
   // --- Draws & Fixtures ---

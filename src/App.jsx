@@ -481,9 +481,20 @@ function App() {
 
     syncAllData()
     const pollTimer = setInterval(syncAllData, 2000)
+
+    // Realtime Push Sync across all devices
+    const tourSub = SupabaseService.subscribeToTournaments(() => {
+      syncAllData()
+    })
+    const drawSub = SupabaseService.subscribeToTournamentDraws(() => {
+      syncAllData()
+    })
+
     return () => {
       isMounted = false
       clearInterval(pollTimer)
+      if (tourSub?.unsubscribe) tourSub.unsubscribe()
+      if (drawSub?.unsubscribe) drawSub.unsubscribe()
     }
   }, [])
 
@@ -505,48 +516,50 @@ function App() {
         const savedMatches = localStorage.getItem(STORAGE_KEY)
         if (savedMatches) {
           const parsed = JSON.parse(savedMatches)
-          if (Array.isArray(parsed)) {
+          if (Array.isArray(parsed) && parsed.length > 0) {
             setPublishedMatches(parsed.map(sanitizeTournament))
           }
         }
       } catch (e) {}
     }
+
+    refreshPubStatus()
     window.addEventListener('storage', refreshPubStatus)
     return () => window.removeEventListener('storage', refreshPubStatus)
   }, [])
 
-  const handleSaveTournamentWinner = (matchId, newCategoryMap) => {
-    const targetMatch = publishedMatches.find((m) => m.id === matchId) || selectedMatch
+  const handleSaveCategoryWinners = (matchId, catWinnersMap) => {
+    const targetMatch = publishedMatches.find((m) => m.id === matchId)
+    if (!targetMatch) return
+
     const cats = getMatchCategories(targetMatch)
-
     const cleanCatMap = {}
-    if (typeof newCategoryMap === 'object' && newCategoryMap !== null) {
-      Object.entries(newCategoryMap).forEach(([cat, val]) => {
-        if (val && typeof val === 'string' && val.trim().length > 0) {
-          cleanCatMap[cat] = formatPersonName(val)
-        }
-      })
-    } else if (typeof newCategoryMap === 'string' && newCategoryMap.trim().length > 0 && cats.length === 1) {
-      cleanCatMap[cats[0]] = formatPersonName(newCategoryMap)
-    }
+    let filledCount = 0
 
-    const filledCount = cats.filter((cat) => Boolean(cleanCatMap[cat])).length
+    cats.forEach((cat) => {
+      const val = (catWinnersMap[cat] || '').trim()
+      cleanCatMap[cat] = val
+      if (val) filledCount++
+    })
+
     const totalCount = cats.length
     const areAllDone = totalCount > 0 && filledCount === totalCount
 
     let winnerSummary = ''
     if (areAllDone) {
-      if (totalCount === 1) {
+      if (cats.length === 1) {
         winnerSummary = cleanCatMap[cats[0]] || ''
       } else {
         winnerSummary = cats.map((cat) => `${cat}: ${cleanCatMap[cat]}`).join(' | ')
       }
     }
 
+    let updatedTargetMatch = null
+
     setPublishedMatches((prev) => {
       const updated = prev.map((m) => {
         if (m.id === matchId) {
-          return {
+          const updatedItem = {
             ...m,
             categoryWinners: cleanCatMap,
             winner: areAllDone ? winnerSummary : '',
@@ -554,6 +567,8 @@ function App() {
             isCompleted: areAllDone,
             completedAt: areAllDone ? (m.completedAt || Date.now()) : null,
           }
+          updatedTargetMatch = updatedItem
+          return updatedItem
         }
         return m
       })
@@ -562,6 +577,12 @@ function App() {
       } catch (e) {}
       return updated
     })
+
+    if (updatedTargetMatch) {
+      SupabaseService.upsertTournament(updatedTargetMatch).catch(() => {})
+      syncServerData({ matches: [updatedTargetMatch] })
+    }
+
     if (selectedMatch?.id === matchId) {
       setSelectedMatch((prev) => ({
         ...prev,
