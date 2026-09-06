@@ -347,7 +347,8 @@ function App() {
       // 1. Fetch authoritative data from Local/Network Shared DB
       try {
         const res = await fetch('/api/tournaments')
-        if (res.ok) {
+        const contentType = res.headers.get('content-type') || ''
+        if (res.ok && contentType.includes('application/json')) {
           const data = await res.json()
           if (!isMounted) return
 

@@ -6,6 +6,7 @@ import { supabase } from './supabaseClient';
 export const SupabaseService = {
   // --- Tournaments ---
   async getTournaments() {
+    if (!supabase) return null;
     try {
       const { data, error } = await supabase
         .from('tournaments')
@@ -20,6 +21,7 @@ export const SupabaseService = {
   },
 
   async upsertTournament(tournament) {
+    if (!supabase) return null;
     try {
       const { data, error } = await supabase
         .from('tournaments')
@@ -50,6 +52,7 @@ export const SupabaseService = {
   },
 
   async deleteTournament(tournamentId) {
+    if (!supabase) return false;
     try {
       const { error } = await supabase
         .from('tournaments')
@@ -65,6 +68,7 @@ export const SupabaseService = {
 
   // --- Draws & Fixtures ---
   async getTournamentDraws(tournamentId) {
+    if (!supabase) return null;
     try {
       const { data, error } = await supabase
         .from('tournament_draws')
@@ -79,6 +83,7 @@ export const SupabaseService = {
   },
 
   async upsertTournamentDraw(id, tournamentId, category, drawData, isPublished = false) {
+    if (!supabase) return null;
     try {
       const { data, error } = await supabase
         .from('tournament_draws')
@@ -101,6 +106,7 @@ export const SupabaseService = {
 
   // --- Live Score / Match Realtime ---
   async updateLiveMatch(matchData) {
+    if (!supabase) return null;
     try {
       const { data, error } = await supabase
         .from('live_matches')
@@ -118,6 +124,9 @@ export const SupabaseService = {
   },
 
   subscribeToLiveMatches(onUpdate) {
+    if (!supabase) {
+      return { unsubscribe: () => {} };
+    }
     return supabase
       .channel('live_matches_channel')
       .on(
@@ -132,6 +141,7 @@ export const SupabaseService = {
 
   // --- Credentials ---
   async getCredentials() {
+    if (!supabase) return null;
     try {
       const { data, error } = await supabase
         .from('credentials')
@@ -145,6 +155,7 @@ export const SupabaseService = {
   },
 
   async upsertCredential(cred) {
+    if (!supabase) return null;
     try {
       const { data, error } = await supabase
         .from('credentials')
