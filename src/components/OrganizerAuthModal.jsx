@@ -20,8 +20,9 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
-  // Admin Phone Verification & Set Password states
+  // Admin Phone & Email Verification states
   const [adminPhone, setAdminPhone] = useState('9840012345')
+  const [adminEmail, setAdminEmail] = useState('tournamentmafia2026@gmail.com')
   const [adminOtpStep, setAdminOtpStep] = useState(1) // 1: Send OTP, 2: Enter OTP & Set Password
   const [enteredOtp, setEnteredOtp] = useState('')
   const [generatedOtp, setGeneratedOtp] = useState('')
@@ -61,6 +62,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       setStatusNotification('')
       const creds = getSavedCreds()
       setAdminPhone(creds.mobile || '9840012345')
+      setAdminEmail(creds.email || 'tournamentmafia2026@gmail.com')
     }
   }, [isOpen])
 
@@ -200,7 +202,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
   }
 
   // -------------------------------------------------------------
-  // 2. ADMIN: VERIFY PHONE & SET PASSWORD VIA GMAIL OTP
+  // 2. ADMIN: VERIFY PHONE & EMAIL AND SET PASSWORD VIA OTP
   // -------------------------------------------------------------
   const generateSecureRandomOtp = () => {
     if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
@@ -218,9 +220,16 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setStatusNotification('')
     setEnteredOtp('')
 
-    const cleanInput = adminPhone.trim()
-    if (!cleanInput || cleanInput.length < 5) {
+    const cleanPhone = adminPhone.trim()
+    const cleanEmail = adminEmail.trim()
+
+    if (!cleanPhone || cleanPhone.length < 5) {
       setErrorMessage('Please enter a valid Mobile Number.')
+      return
+    }
+
+    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setErrorMessage('Please enter a valid Email Address to receive the OTP.')
       return
     }
 
@@ -228,26 +237,23 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     const otp = generateSecureRandomOtp()
     setGeneratedOtp(otp)
 
-    const creds = getSavedCreds()
-    const targetEmail = creds.email || 'tournamentmafia2026@gmail.com'
-
     try {
-      await sendAuthEmail({
-        to_email: targetEmail,
+      const res = await sendAuthEmail({
+        to_email: cleanEmail,
         username: 'Chief Organizer',
         otp,
         action: 'Admin Phone Verification OTP',
-        customMessage: `Your fresh 6-digit verification OTP for Badminton Portal Admin is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes. Do not share with anyone)`,
+        customMessage: `Your fresh 6-digit verification OTP for Badminton Portal Admin (Mobile: ${cleanPhone}) is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes. Do not share with anyone)`,
       })
 
       setIsLoading(false)
       setAdminOtpStep(2)
-      // NEVER show the OTP code on the UI!
-      setStatusNotification(`✓ A new 6-digit random OTP has been sent to your Gmail (${targetEmail}). Please check your inbox!`)
+      // Display clear recipient email
+      setStatusNotification(`✓ A new 6-digit random OTP has been sent to ${cleanEmail}. Please check your Inbox and Spam folder!`)
     } catch (err) {
       setIsLoading(false)
       setAdminOtpStep(2)
-      setStatusNotification(`✓ Verification OTP sent to your registered Gmail. Check inbox and enter below.`)
+      setStatusNotification(`✓ Verification OTP sent to ${cleanEmail}. Check your inbox and enter below.`)
     }
   }
 
@@ -259,12 +265,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     const cleanEnteredOtp = enteredOtp.trim()
 
     if (!cleanEnteredOtp || cleanEnteredOtp.length !== 6) {
-      setErrorMessage('Please enter the 6-digit OTP code received in your Gmail.')
+      setErrorMessage('Please enter the 6-digit OTP code received in your email.')
       return
     }
 
     if (cleanEnteredOtp !== generatedOtp.trim()) {
-      setErrorMessage('Incorrect OTP! Please enter the exact 6-digit code received in your latest Gmail message.')
+      setErrorMessage('Incorrect OTP! Please enter the exact 6-digit code received in your email.')
       return
     }
 
@@ -278,11 +284,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       return
     }
 
-    // Save verified mobile number and password
+    // Save verified mobile number, email, and password
     const currentCreds = getSavedCreds()
     const updated = {
       ...currentCreds,
       mobile: adminPhone.trim(),
+      email: adminEmail.trim(),
       password: newAdminPassword.trim(),
     }
     localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updated))
@@ -290,7 +297,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     // Automatically log in as Admin
     const adminSession = {
       username: updated.username || 'admin',
-      email: updated.email || 'tournamentmafia2026@gmail.com',
+      email: updated.email,
       mobile: updated.mobile,
       name: 'Chief Organizer',
       role: 'organizer',
@@ -383,13 +390,13 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
           </div>
 
           <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '800', color: '#f8fafc' }}>
-            {view === 'login' ? 'Tournament Portal Sign-In' : 'Admin: Verify Phone & Set Password'}
+            {view === 'login' ? 'Tournament Portal Sign-In' : 'Admin Phone Verification & Setup'}
           </h2>
 
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
             {view === 'login'
               ? 'Admin Login (Phone/Password) & Umpire Login'
-              : 'Verify your Mobile Number via Gmail OTP to set your Admin Password'}
+              : 'Enter your Mobile Number & Email to receive your 6-digit OTP'}
           </p>
         </div>
 
@@ -572,7 +579,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               }}
             >
               <div style={{ fontSize: '11.5px', color: '#94a3b8', marginBottom: '6px' }}>
-                Admin 1st time Sign-in or forgot password?
+                New Mobile Number or forgot password?
               </div>
               <button
                 type="button"
@@ -605,6 +612,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
           <div>
             {adminOtpStep === 1 ? (
               <form onSubmit={handleSendAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {/* Mobile Number Input */}
                 <div>
                   <label
                     style={{
@@ -617,7 +625,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       letterSpacing: '0.04em',
                     }}
                   >
-                    Enter Admin Mobile Number
+                    Enter Mobile Number
                   </label>
                   <div style={{ position: 'relative' }}>
                     <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
@@ -646,6 +654,48 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   </div>
                 </div>
 
+                {/* Email Input where OTP will be delivered */}
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: '#cbd5e1',
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    Email Address (To Receive OTP)
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
+                      📧
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. yourname@gmail.com"
+                      value={adminEmail}
+                      onChange={(e) => setAdminEmail(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px 12px 38px',
+                        background: 'rgba(15, 23, 42, 0.7)',
+                        border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                        borderRadius: '12px',
+                        color: '#f8fafc',
+                        fontSize: '13.5px',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
+                      onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
+                    />
+                  </div>
+                </div>
+
                 <div
                   style={{
                     background: 'rgba(59, 130, 246, 0.08)',
@@ -657,7 +707,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     lineHeight: '1.4',
                   }}
                 >
-                  🔒 <strong>Verification:</strong> A 6-digit confidential OTP will be delivered directly to your registered Gmail (`tournamentmafia2026@gmail.com`).
+                  🔒 <strong>Verification:</strong> A 6-digit random confidential OTP will be dispatched to the email entered above.
                 </div>
 
                 <button
@@ -675,7 +725,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
                   }}
                 >
-                  {isLoading ? 'Sending OTP to Gmail...' : 'Send OTP to Gmail & Continue'}
+                  {isLoading ? 'Sending OTP to Email...' : 'Send OTP to Email & Continue'}
                 </button>
 
                 <div style={{ textAlign: 'center', marginTop: '4px' }}>
@@ -705,10 +755,10 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                 >
                   <div style={{ fontSize: '26px', marginBottom: '2px' }}>📬</div>
                   <div style={{ fontSize: '13.5px', color: '#60a5fa', fontWeight: '800' }}>
-                    Check Your Gmail Inbox
+                    Check Your Email ({adminEmail})
                   </div>
                   <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
-                    Enter the 6-digit OTP code sent to your registered Gmail.
+                    Enter the 6-digit random OTP code sent to your email.
                   </div>
                 </div>
 
@@ -725,7 +775,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       letterSpacing: '0.05em',
                     }}
                   >
-                    ENTER 6-DIGIT OTP FROM GMAIL
+                    ENTER 6-DIGIT OTP
                   </label>
                   <input
                     type="text"
@@ -763,7 +813,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       marginBottom: '5px',
                     }}
                   >
-                    SET NEW ADMIN PASSWORD
+                    SET PASSWORD FOR MOBILE ({adminPhone})
                   </label>
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -853,7 +903,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     onClick={() => setAdminOtpStep(1)}
                     style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
                   >
-                    ← Change Mobile Number
+                    ← Change Phone/Email
                   </button>
 
                   <button
