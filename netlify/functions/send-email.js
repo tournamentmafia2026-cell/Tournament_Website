@@ -39,16 +39,11 @@ export const handler = async (event) => {
     const recipient = to || gmailUser
 
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // SSL direct connection
+      service: 'gmail',
       auth: {
         user: gmailUser,
         pass: gmailPass,
       },
-      connectionTimeout: 10000,
-      greetingTimeout: 8000,
-      socketTimeout: 15000,
     })
 
     const mailOptions = {
