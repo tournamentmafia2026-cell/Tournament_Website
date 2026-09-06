@@ -479,23 +479,12 @@ export const BadmintonFixturesManager = ({
     if (!selectedMatch) return []
     const mId = selectedMatch.id
     const mIdStr = String(mId)
-    const fromAuth = authenticators[mId] || authenticators[mIdStr] || []
-    const fromParts = selectedMatch.participants || []
-    const fromMatchAuth = selectedMatch.authenticators || []
-
-    const combined = [...fromAuth, ...fromParts, ...fromMatchAuth]
-    const unique = []
-    const seen = new Set()
-    combined.forEach((p) => {
-      if (!p) return
-      const pName = p.name ? String(p.name).trim().toLowerCase() : ''
-      const pId = p.id ? String(p.id) : pName
-      if (pId && !seen.has(pId)) {
-        seen.add(pId)
-        unique.push(p)
-      }
-    })
-    return unique
+    const fromAuth = authenticators && (authenticators[mId] || authenticators[mIdStr])
+    if (fromAuth && Array.isArray(fromAuth)) {
+      return fromAuth
+    }
+    const fromParts = selectedMatch.participants || selectedMatch.authenticators || []
+    return fromParts
   }, [selectedMatch, authenticators])
 
   const uploadedCategoryPlayers = useMemo(() => {
@@ -618,12 +607,10 @@ export const BadmintonFixturesManager = ({
     cats.forEach((cat) => {
       let d = tournamentDraws[`${tourId}-${cat}`]
       if (!d) {
-        const allTourPlayers = [
-          ...(authenticators[tourId] || []),
-          ...(authenticators[String(tourId)] || []),
-          ...(targetTour.participants || []),
-          ...(targetTour.authenticators || []),
-        ]
+        const fromAuth = authenticators && (authenticators[tourId] || authenticators[String(tourId)])
+        const allTourPlayers = (fromAuth && Array.isArray(fromAuth))
+          ? fromAuth
+          : (targetTour.participants || targetTour.authenticators || [])
         const catPlayers = allTourPlayers.filter((p) => (p.category || 'Men Singles').trim().toLowerCase() === cat.trim().toLowerCase())
         if (catPlayers.length >= 2) {
           d = generateBadmintonDraw(catPlayers, {

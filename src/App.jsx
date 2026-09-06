@@ -230,13 +230,7 @@ function App() {
     } catch (error) {
       // fallback
     }
-    const initialAuth = initialBadmintonDb?.authenticators || {}
-    const sanitized = {}
-    Object.keys(initialAuth).forEach((k) => {
-      const list = Array.isArray(initialAuth[k]) ? initialAuth[k] : []
-      sanitized[k] = list.map(sanitizeParticipant)
-    })
-    return sanitized
+    return {}
   })
   const [participantForm, setParticipantForm] = useState({ name: '', name1: '', name2: '', court: '', place: '', category: 'Men Singles' })
   const [editingParticipantId, setEditingParticipantId] = useState(null)
@@ -345,10 +339,12 @@ function App() {
 
     const syncAllData = async () => {
       // 1. Prioritize authoritative Cloud DB from Supabase
+      let hasSupaData = false
       try {
         const supaTournaments = await SupabaseService.getTournaments()
         if (!isMounted) return
         if (supaTournaments && Array.isArray(supaTournaments) && supaTournaments.length > 0) {
+          hasSupaData = true
           const mapped = supaTournaments.map((t) => ({
             id: t.id,
             matchName: t.match_name || t.matchName,
@@ -368,43 +364,30 @@ function App() {
             completedAt: t.completed_at || t.completedAt || null,
           })).map(sanitizeTournament)
 
-          setPublishedMatches((prev) => {
-            const map = new Map()
-            mapped.forEach((m) => map.set(String(m.id), m))
-            prev.forEach((m) => {
-              if (!map.has(String(m.id))) {
-                map.set(String(m.id), m)
-              }
-            })
-            const merged = Array.from(map.values())
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
-            } catch (e) {}
-            return merged
-          })
+          setPublishedMatches(mapped)
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
+          } catch (e) {}
 
-          // Extract and merge participants from Supabase tournaments
+          // Extract and set participants from Supabase tournaments
           const authMap = {}
           supaTournaments.forEach((t) => {
             const tId = String(t.id)
-            const pList = Array.isArray(t.authenticators) && t.authenticators.length > 0
+            const pList = Array.isArray(t.authenticators)
               ? t.authenticators
-              : (Array.isArray(t.participants) && t.participants.length > 0 ? t.participants : [])
-            if (pList.length > 0) {
-              authMap[tId] = pList
-              authMap[t.id] = pList
-            }
+              : (Array.isArray(t.participants) ? t.participants : [])
+            authMap[tId] = pList
+            authMap[t.id] = pList
           })
 
-          if (Object.keys(authMap).length > 0) {
-            setAuthenticators((prev) => {
-              const merged = { ...prev, ...authMap }
-              try {
-                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
-              } catch (e) {}
-              return merged
-            })
-          }
+          setAuthenticators((prev) => {
+            const next = { ...prev, ...authMap }
+            try {
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+              localStorage.setItem('badminton-match-authenticators', JSON.stringify(next))
+            } catch (e) {}
+            return next
+          })
         }
 
         // Sync Tournament Draws from Supabase
@@ -455,25 +438,37 @@ function App() {
           const data = await res.json()
           if (!isMounted) return
 
-          if (data && Array.isArray(data.matches) && data.matches.length > 0) {
-            const sanitized = data.matches
-              .filter((m) => m && m.id !== 1 && m.id !== 2 && !String(m.matchName || '').includes('Chennai Badminton Championship') && !String(m.matchName || '').includes('State Open Badminton'))
-              .map(sanitizeTournament)
+          if (!hasSupaData) {
+            if (data && Array.isArray(data.matches) && data.matches.length > 0) {
+              const sanitized = data.matches
+                .filter((m) => m && m.id !== 1 && m.id !== 2 && !String(m.matchName || '').includes('Chennai Badminton Championship') && !String(m.matchName || '').includes('State Open Badminton'))
+                .map(sanitizeTournament)
 
-            setPublishedMatches((prev) => {
-              const map = new Map()
-              sanitized.forEach((m) => map.set(String(m.id), m))
-              prev.forEach((m) => {
-                if (!map.has(String(m.id))) {
-                  map.set(String(m.id), m)
-                }
+              setPublishedMatches((prev) => {
+                const map = new Map()
+                sanitized.forEach((m) => map.set(String(m.id), m))
+                prev.forEach((m) => {
+                  if (!map.has(String(m.id))) {
+                    map.set(String(m.id), m)
+                  }
+                })
+                const merged = Array.from(map.values())
+                try {
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+                } catch (e) {}
+                return merged
               })
-              const merged = Array.from(map.values())
-              try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
-              } catch (e) {}
-              return merged
-            })
+            }
+
+            if (data.authenticators && typeof data.authenticators === 'object') {
+              setAuthenticators((prev) => {
+                const merged = { ...prev, ...data.authenticators }
+                try {
+                  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
+                } catch (e) {}
+                return merged
+              })
+            }
           }
 
           if (data.publishedStatus && typeof data.publishedStatus === 'object') {
@@ -481,16 +476,6 @@ function App() {
               const merged = { ...prev, ...data.publishedStatus }
               try {
                 localStorage.setItem('badminton-published-status', JSON.stringify(merged))
-              } catch (e) {}
-              return merged
-            })
-          }
-
-          if (data.authenticators && typeof data.authenticators === 'object') {
-            setAuthenticators((prev) => {
-              const merged = { ...prev, ...data.authenticators }
-              try {
-                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
               } catch (e) {}
               return merged
             })
@@ -1226,23 +1211,22 @@ function App() {
     const matchIdStr = String(matchId)
     const targetMatch = publishedMatches.find((m) => String(m.id) === matchIdStr) || selectedMatch
 
-    const currentList = [
-      ...(authenticators[matchId] || []),
-      ...(authenticators[matchIdStr] || []),
-      ...(targetMatch?.participants || []),
-      ...(targetMatch?.authenticators || []),
-    ]
+    const fromAuth = (authenticators && (authenticators[matchId] || authenticators[matchIdStr]))
+    const currentList = (fromAuth && Array.isArray(fromAuth))
+      ? fromAuth
+      : (targetMatch?.participants || targetMatch?.authenticators || [])
 
     const filteredList = currentList.filter((p) => {
       if (!p) return false
-      if (String(p.id) === String(participantId)) return false
+      if (participantId && String(p.id) === String(participantId)) return false
+      if (participantId && p.name && String(p.name).trim().toLowerCase() === String(participantId).trim().toLowerCase()) return false
       return true
     })
 
     const uniqueFiltered = []
     const seen = new Set()
     filteredList.forEach((p) => {
-      const k = p.id ? String(p.id) : (p.name ? String(p.name).toLowerCase() : null)
+      const k = p.id ? String(p.id) : (p.name ? String(p.name).trim().toLowerCase() : null)
       if (k && !seen.has(k)) {
         seen.add(k)
         uniqueFiltered.push(p)
@@ -1257,6 +1241,7 @@ function App() {
       }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+        localStorage.setItem('badminton-match-authenticators', JSON.stringify(next))
       } catch (e) {}
       syncServerData({ authenticators: next })
       return next
