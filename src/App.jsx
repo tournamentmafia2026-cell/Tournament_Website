@@ -1100,6 +1100,7 @@ function App() {
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
       } catch (err) {}
+      syncServerData({ authenticators: next })
       return next
     })
 
@@ -1138,6 +1139,7 @@ function App() {
           }
 
           localStorage.setItem('badminton-tournament-draws', JSON.stringify(allDraws))
+          syncServerData({ tournamentDraws: allDraws })
         }
       }
     } catch (err) {
@@ -1170,10 +1172,20 @@ function App() {
   }
 
   const handleRemoveParticipant = (matchId, participantId) => {
-    setAuthenticators((prev) => ({
-      ...prev,
-      [matchId]: (prev[matchId] || []).filter((p) => p.id !== participantId)
-    }))
+    setAuthenticators((prev) => {
+      const matchPlayers = prev[matchId] || prev[String(matchId)] || []
+      const filtered = matchPlayers.filter((p) => p.id !== participantId)
+      const next = {
+        ...prev,
+        [matchId]: filtered,
+        [String(matchId)]: filtered,
+      }
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+      } catch (e) {}
+      syncServerData({ authenticators: next })
+      return next
+    })
   }
 
   const handleDeleteMatch = (matchId) => {
@@ -1242,6 +1254,7 @@ function App() {
       const existing = JSON.parse(localStorage.getItem('badminton-tournament-draws') || '{}')
       existing[drawKey] = draw
       localStorage.setItem('badminton-tournament-draws', JSON.stringify(existing))
+      syncServerData({ tournamentDraws: existing })
     } catch (e) {
       console.error('Error saving draw', e)
     }

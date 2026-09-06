@@ -94,6 +94,12 @@ export function BadmintonLoginsPage({
       body: JSON.stringify({ temporaryCredentials: newList }),
     }).catch(() => {})
 
+    fetch('/api/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ temporaryCredentials: newList }),
+    }).catch(() => {})
+
     // Upsert active credentials to Supabase
     if (Array.isArray(newList)) {
       newList.forEach((cred) => {
