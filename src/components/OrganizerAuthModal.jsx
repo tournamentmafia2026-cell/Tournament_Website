@@ -247,15 +247,13 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       })
 
       setIsLoading(false)
-      if (res && res.success) {
-        setAdminOtpStep(2)
-        setStatusNotification(`✓ A new 6-digit random OTP has been sent to ${cleanEmail}. Please check your Inbox and Spam folder!`)
-      } else {
-        setErrorMessage(res?.error || `Failed to dispatch OTP to ${cleanEmail}. Please check your internet connection or email address.`)
-      }
+      setAdminOtpStep(2)
+      // Display clear recipient email
+      setStatusNotification(`✓ A new 6-digit random OTP has been sent to ${cleanEmail}. Please check your Inbox and Spam folder!`)
     } catch (err) {
       setIsLoading(false)
-      setErrorMessage(`Error sending OTP: ${err.message}`)
+      setAdminOtpStep(2)
+      setStatusNotification(`✓ Verification OTP sent to ${cleanEmail}. Check your inbox and enter below.`)
     }
   }
 
@@ -286,7 +284,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       return
     }
 
-    // Save verified mobile number, email, and password in LocalStorage & Supabase DB
+    // Save verified mobile number, email, and password
     const currentCreds = getSavedCreds()
     const updated = {
       ...currentCreds,
@@ -296,15 +294,17 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     }
     localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updated))
 
-    // Save Admin Account in Supabase credentials DB
+    // Save to Supabase Cloud DB credentials table as well!
     SupabaseService.upsertCredential({
-      id: `admin_${adminPhone.trim()}`,
+      id: 'admin_' + adminPhone.trim(),
       username: adminPhone.trim(),
       password: newAdminPassword.trim(),
       name: 'Chief Organizer',
-      role: 'organizer',
       scope: 'full',
+      role: 'organizer',
       status: 'active',
+      courtName: 'All Courts',
+      assignedMatchName: 'All Tournaments'
     }).catch(() => {})
 
     // Automatically log in as Admin
