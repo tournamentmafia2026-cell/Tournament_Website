@@ -474,11 +474,37 @@ export const BadmintonFixturesManager = ({
 
 
   const drawKey = selectedMatch && selectedCategory ? `${selectedMatch.id}-${selectedCategory}` : (selectedMatch ? `${selectedMatch.id}-Men Singles` : '1-Men Singles')
-  const uploadedCategoryPlayers = selectedMatch && selectedCategory
-    ? (authenticators[selectedMatch.id] || []).filter(
-        (p) => (p.category || 'Men Singles') === selectedCategory
-      )
-    : []
+  
+  const allTournamentPlayers = useMemo(() => {
+    if (!selectedMatch) return []
+    const mId = selectedMatch.id
+    const mIdStr = String(mId)
+    const fromAuth = authenticators[mId] || authenticators[mIdStr] || []
+    const fromParts = selectedMatch.participants || []
+    const fromMatchAuth = selectedMatch.authenticators || []
+
+    const combined = [...fromAuth, ...fromParts, ...fromMatchAuth]
+    const unique = []
+    const seen = new Set()
+    combined.forEach((p) => {
+      if (!p) return
+      const pName = p.name ? String(p.name).trim().toLowerCase() : ''
+      const pId = p.id ? String(p.id) : pName
+      if (pId && !seen.has(pId)) {
+        seen.add(pId)
+        unique.push(p)
+      }
+    })
+    return unique
+  }, [selectedMatch, authenticators])
+
+  const uploadedCategoryPlayers = useMemo(() => {
+    if (!selectedMatch || !selectedCategory) return []
+    const selCatNorm = selectedCategory.trim().toLowerCase()
+    return allTournamentPlayers.filter(
+      (p) => (p.category || 'Men Singles').trim().toLowerCase() === selCatNorm
+    )
+  }, [allTournamentPlayers, selectedMatch, selectedCategory])
 
   // Only use manually entered players. NEVER inject sample or dummy players!
   const categoryPlayers = uploadedCategoryPlayers
@@ -496,15 +522,17 @@ export const BadmintonFixturesManager = ({
             startTime: '09:00',
             matchDurationMinutes: 30,
           })
-        : generateBadmintonDraw(categoryPlayers, {
-            drawSize: 16,
-            totalMembers: categoryPlayers.length || 16,
-            seedsCount: 4,
-            courtName: selectedMatch?.courtName || 'Court 1',
-            venue: selectedMatch?.matchAddress || 'Badminton Arena',
-            startTime: '09:00',
-            matchDurationMinutes: 30,
-          }))
+        : (categoryPlayers.length === 1
+            ? generateBadmintonDraw(categoryPlayers, {
+                drawSize: 2,
+                totalMembers: 1,
+                seedsCount: 1,
+                courtName: selectedMatch?.courtName || 'Court 1',
+                venue: selectedMatch?.matchAddress || 'Badminton Arena',
+                startTime: '09:00',
+                matchDurationMinutes: 30,
+              })
+            : null))
 
   // All Round 1 slots for the Tap-to-Exchange Player Picker
   const allRound1Slots = (currentDraw?.matches || [])
@@ -590,7 +618,13 @@ export const BadmintonFixturesManager = ({
     cats.forEach((cat) => {
       let d = tournamentDraws[`${tourId}-${cat}`]
       if (!d) {
-        const catPlayers = (authenticators[tourId] || []).filter((p) => (p.category || 'Men Singles') === cat)
+        const allTourPlayers = [
+          ...(authenticators[tourId] || []),
+          ...(authenticators[String(tourId)] || []),
+          ...(targetTour.participants || []),
+          ...(targetTour.authenticators || []),
+        ]
+        const catPlayers = allTourPlayers.filter((p) => (p.category || 'Men Singles').trim().toLowerCase() === cat.trim().toLowerCase())
         if (catPlayers.length >= 2) {
           d = generateBadmintonDraw(catPlayers, {
             drawSize: getNextPowerOfTwo(catPlayers.length),

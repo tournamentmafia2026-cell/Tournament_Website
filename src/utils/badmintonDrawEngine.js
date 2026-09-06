@@ -284,6 +284,9 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     const autoSeedsCount = drawSize >= 64 ? 8 : drawSize >= 16 ? 4 : drawSize >= 8 ? 2 : 1
     seedsCount = Math.min(autoSeedsCount, Math.floor(drawSize / 2))
   }
+  if (activePlayerList.length > 0) {
+    seedsCount = Math.min(seedsCount, activePlayerList.length)
+  }
   seedsCount = Math.min(seedsCount, seedPositions.length, totalMatchesInR1)
 
   // 1. Prepare Seeded Players with explicit seed number and isSeed flag
@@ -307,15 +310,6 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
         name: activePlayerList[i].name ? String(activePlayerList[i].name).trim().toUpperCase() : `SEED ${seedNum}`,
         place: activePlayerList[i].place || '',
         court: activePlayerList[i].court || '',
-        seed: seedNum,
-        isSeed: true,
-      })
-    } else {
-      seedsToPlace.push({
-        id: `seed-${seedNum}`,
-        name: `SEED ${seedNum}`,
-        place: '',
-        court: '',
         seed: seedNum,
         isSeed: true,
       })
