@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
+import { ConfirmDeleteModal } from './ConfirmDeleteModal'
 
 export const StadiumAdManagerModal = ({
   isOpen,
@@ -9,21 +10,29 @@ export const StadiumAdManagerModal = ({
   adSettings = DEFAULT_AD_SETTINGS,
   onSaveSettings,
 }) => {
-  // Navigation Tabs: 'text' | 'fullscreen' | 'timing' | 'roster'
-  const [activeTab, setActiveTab] = useState('text')
+  // Navigation Tabs: 'video' | 'image' | 'text' | 'roster'
+  const [activeTab, setActiveTab] = useState('video')
   const [localAds, setLocalAds] = useState(ads.length > 0 ? ads : DEFAULT_SPONSOR_ADS)
   const [localSettings, setLocalSettings] = useState(adSettings)
   const [editingAdId, setEditingAdId] = useState(null)
+  const [deleteAdConfirm, setDeleteAdConfirm] = useState(null)
 
-  // Full Screen Media Form State
-  const [mediaType, setMediaType] = useState('video') // 'video' | 'image'
-  const [sponsorName, setSponsorName] = useState('')
-  const [tagline, setTagline] = useState('')
+  // Form State for Video Ads
+  const [videoSponsorName, setVideoSponsorName] = useState('')
+  const [videoTagline, setVideoTagline] = useState('')
   const [videoUrl, setVideoUrl] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
-  const [phoneOrLink, setPhoneOrLink] = useState('')
+  const [videoPhoneOrLink, setVideoPhoneOrLink] = useState('')
+  const [videoDuration, setVideoDuration] = useState(15)
 
-  const fileInputRef = useRef(null)
+  // Form State for Image Ads
+  const [imageSponsorName, setImageSponsorName] = useState('')
+  const [imageTagline, setImageTagline] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [imageAccentColor, setImageAccentColor] = useState('#38bdf8')
+  const [imagePhoneOrLink, setImagePhoneOrLink] = useState('')
+  const [imageDuration, setImageDuration] = useState(10)
+
+  const imageFileInputRef = useRef(null)
   const videoFileInputRef = useRef(null)
 
   if (!isOpen) return null
@@ -38,7 +47,7 @@ export const StadiumAdManagerModal = ({
       }
       const reader = new FileReader()
       reader.onloadend = () => {
-        setLogoUrl(reader.result)
+        setImageUrl(reader.result)
       }
       reader.readAsDataURL(file)
     }
@@ -60,80 +69,143 @@ export const StadiumAdManagerModal = ({
     }
   }
 
-  const handleSaveMediaAd = (e) => {
+  // Save Video Ad
+  const handleSaveVideoAd = (e) => {
     e.preventDefault()
-    if (!sponsorName.trim()) {
-      alert('Please enter Sponsor / Brand Name.')
+    if (!videoSponsorName.trim()) {
+      alert('Please enter Sponsor / Brand Name for this Video Ad.')
       return
     }
-
-    if (mediaType === 'image' && !logoUrl.trim() && !tagline.trim()) {
-      alert('Please upload an Image file or paste an Image URL.')
-      return
-    }
-    if (mediaType === 'video' && !videoUrl.trim() && !tagline.trim()) {
-      alert('Please upload a Video file or paste a Video URL.')
+    if (!videoUrl.trim() && !videoTagline.trim()) {
+      alert('Please upload a video file or paste a valid video URL.')
       return
     }
 
     const adObject = {
-      id: editingAdId || `ad-${Date.now()}`,
-      sponsorName: sponsorName.trim(),
-      badge: mediaType === 'video' ? '🎬 Video Sponsor' : '🖼️ Image Sponsor',
-      tier: 'gold',
-      mediaType,
-      tagline: tagline.trim() || sponsorName.trim(),
+      id: editingAdId || `ad-v-${Date.now()}`,
+      sponsorName: videoSponsorName.trim(),
+      mediaType: 'video',
+      tagline: videoTagline.trim() || videoSponsorName.trim(),
       description: '',
-      ctaText: 'Official Partner',
-      phoneOrLink: phoneOrLink.trim(),
-      accentColor: mediaType === 'video' ? '#10b981' : '#38bdf8',
-      logoUrl: mediaType === 'image' ? logoUrl : '',
-      videoUrl: mediaType === 'video' ? videoUrl : '',
+      ctaText: 'Official Video Partner',
+      phoneOrLink: videoPhoneOrLink.trim(),
+      accentColor: '#10b981',
+      logoUrl: '',
+      videoUrl: videoUrl.trim(),
       active: true,
-      displayDuration: 10,
+      displayDuration: Number(videoDuration) || 15,
     }
 
+    let updatedList
     if (editingAdId) {
-      const updated = localAds.map((item) => (item.id === editingAdId ? adObject : item))
-      setLocalAds(updated)
-      onSaveAds?.(updated)
+      updatedList = localAds.map((item) => (item.id === editingAdId ? adObject : item))
     } else {
-      const created = [...localAds, adObject]
-      setLocalAds(created)
-      onSaveAds?.(created)
+      updatedList = [...localAds, adObject]
     }
 
-    handleResetMediaForm()
+    setLocalAds(updatedList)
+    onSaveAds?.(updatedList)
+    handleResetVideoForm()
     setActiveTab('roster')
   }
 
-  const handleResetMediaForm = () => {
-    setEditingAdId(null)
-    setSponsorName('')
-    setTagline('')
-    setVideoUrl('')
-    setLogoUrl('')
-    setPhoneOrLink('')
+  // Save Image Ad
+  const handleSaveImageAd = (e) => {
+    e.preventDefault()
+    if (!imageSponsorName.trim()) {
+      alert('Please enter Sponsor / Brand Name for this Image Ad.')
+      return
+    }
+    if (!imageUrl.trim() && !imageTagline.trim()) {
+      alert('Please upload an image file or paste an image URL.')
+      return
+    }
+
+    const adObject = {
+      id: editingAdId || `ad-img-${Date.now()}`,
+      sponsorName: imageSponsorName.trim(),
+      mediaType: 'image',
+      tagline: imageTagline.trim() || imageSponsorName.trim(),
+      description: '',
+      ctaText: 'Official Partner',
+      phoneOrLink: imagePhoneOrLink.trim(),
+      accentColor: imageAccentColor || '#38bdf8',
+      logoUrl: imageUrl.trim(),
+      videoUrl: '',
+      active: true,
+      displayDuration: Number(imageDuration) || 10,
+    }
+
+    let updatedList
+    if (editingAdId) {
+      updatedList = localAds.map((item) => (item.id === editingAdId ? adObject : item))
+    } else {
+      updatedList = [...localAds, adObject]
+    }
+
+    setLocalAds(updatedList)
+    onSaveAds?.(updatedList)
+    handleResetImageForm()
+    setActiveTab('roster')
   }
 
-  const handleStartEdit = (ad) => {
+  const handleResetVideoForm = () => {
+    setEditingAdId(null)
+    setVideoSponsorName('')
+    setVideoTagline('')
+    setVideoUrl('')
+    setVideoPhoneOrLink('')
+    setVideoDuration(15)
+  }
+
+  const handleResetImageForm = () => {
+    setEditingAdId(null)
+    setImageSponsorName('')
+    setImageTagline('')
+    setImageUrl('')
+    setImageAccentColor('#38bdf8')
+    setImagePhoneOrLink('')
+    setImageDuration(10)
+  }
+
+  const handleStartEditAd = (ad) => {
     setEditingAdId(ad.id)
-    setMediaType(ad.mediaType === 'video' || ad.videoUrl ? 'video' : 'image')
-    setSponsorName(ad.sponsorName || '')
-    setTagline(ad.tagline || '')
-    setVideoUrl(ad.videoUrl || '')
-    setLogoUrl(ad.logoUrl || '')
-    setPhoneOrLink(ad.phoneOrLink || '')
-    setActiveTab('fullscreen')
+    if (ad.mediaType === 'video' || ad.videoUrl) {
+      setVideoSponsorName(ad.sponsorName || '')
+      setVideoTagline(ad.tagline || '')
+      setVideoUrl(ad.videoUrl || '')
+      setVideoPhoneOrLink(ad.phoneOrLink || '')
+      setVideoDuration(ad.displayDuration || 15)
+      setActiveTab('video')
+    } else {
+      setImageSponsorName(ad.sponsorName || '')
+      setImageTagline(ad.tagline || '')
+      setImageUrl(ad.logoUrl || '')
+      setImageAccentColor(ad.accentColor || '#38bdf8')
+      setImagePhoneOrLink(ad.phoneOrLink || '')
+      setImageDuration(ad.displayDuration || 10)
+      setActiveTab('image')
+    }
   }
 
   const handleDeleteAd = (id) => {
-    if (window.confirm('Delete this sponsor item?')) {
-      const filtered = localAds.filter((a) => a.id !== id)
-      setLocalAds(filtered)
-      onSaveAds?.(filtered)
-      if (editingAdId === id) handleResetMediaForm()
-    }
+    const target = localAds.find((a) => a.id === id)
+    setDeleteAdConfirm({
+      id,
+      title: 'Delete Sponsor Advertisement?',
+      message: `Are you sure you want to permanently delete "${target?.sponsorName || 'this advertisement'}"?`,
+      itemName: target?.sponsorName,
+      onConfirm: () => {
+        const filtered = localAds.filter((a) => a.id !== id)
+        setLocalAds(filtered)
+        onSaveAds?.(filtered)
+        if (editingAdId === id) {
+          handleResetVideoForm()
+          handleResetImageForm()
+        }
+        setDeleteAdConfirm(null)
+      },
+    })
   }
 
   const handleToggleAdActive = (id) => {
@@ -149,6 +221,21 @@ export const StadiumAdManagerModal = ({
   }
 
   const activeAds = localAds.filter((a) => a.active !== false)
+  const videoAdsList = localAds.filter((a) => a.mediaType === 'video' || Boolean(a.videoUrl))
+  const imageAdsList = localAds.filter((a) => a.mediaType !== 'video' && !a.videoUrl)
+
+  // Current calculated speed in seconds
+  const currentSpeedSeconds = (() => {
+    const sp = localSettings.tickerSpeed
+    if (typeof sp === 'number') return sp
+    if (sp && !isNaN(Number(sp))) return Number(sp)
+    if (sp === 'ultra-fast') return 8
+    if (sp === 'fast') return 14
+    if (sp === 'normal') return 22
+    if (sp === 'slow') return 32
+    if (sp === 'ultra-slow') return 45
+    return 32
+  })()
 
   return (
     <div
@@ -174,7 +261,7 @@ export const StadiumAdManagerModal = ({
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           width: '100%',
-          maxWidth: '960px',
+          maxWidth: '980px',
           maxHeight: '94vh',
           backgroundColor: '#090d16',
           border: '1.5px solid rgba(56, 189, 248, 0.35)',
@@ -216,7 +303,7 @@ export const StadiumAdManagerModal = ({
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 900, color: '#f8fafc', letterSpacing: '-0.01em' }}>
-                  Stadium TV Ads & Ticker Studio
+                  Stadium TV Ads Studio
                 </h2>
                 <span
                   style={{
@@ -233,7 +320,7 @@ export const StadiumAdManagerModal = ({
                 </span>
               </div>
               <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                Separate management for Dual Scrolling Text Tickers, Full-Screen Video/Image Ads & Automation Timers.
+                Manage Video Ads, Image Posters, and Dual Scrolling Text Tickers with Speed Controls.
               </p>
             </div>
           </div>
@@ -259,7 +346,7 @@ export const StadiumAdManagerModal = ({
           </button>
         </div>
 
-        {/* Tab Switcher Bar */}
+        {/* 4 DISTINCT TABS: Video Ads | Image Ads | Text Tickers | Ad Library */}
         <div
           style={{
             display: 'grid',
@@ -270,14 +357,71 @@ export const StadiumAdManagerModal = ({
             gap: '8px',
           }}
         >
+          {/* Tab 1: Video */}
+          <button
+            type="button"
+            onClick={() => {
+              if (activeTab !== 'video') handleResetVideoForm()
+              setActiveTab('video')
+            }}
+            style={{
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: activeTab === 'video' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
+              color: activeTab === 'video' ? '#ffffff' : '#94a3b8',
+              fontWeight: 800,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: activeTab === 'video' ? '0 4px 14px rgba(16, 185, 129, 0.35)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span>🎬</span>
+            <span>Video Ads ({videoAdsList.length})</span>
+          </button>
+
+          {/* Tab 2: Image */}
+          <button
+            type="button"
+            onClick={() => {
+              if (activeTab !== 'image') handleResetImageForm()
+              setActiveTab('image')
+            }}
+            style={{
+              padding: '11px 14px',
+              borderRadius: '10px',
+              border: 'none',
+              background: activeTab === 'image' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'transparent',
+              color: activeTab === 'image' ? '#ffffff' : '#94a3b8',
+              fontWeight: 800,
+              fontSize: '13px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: activeTab === 'image' ? '0 4px 14px rgba(59, 130, 246, 0.35)' : 'none',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <span>🖼️</span>
+            <span>Image Ads ({imageAdsList.length})</span>
+          </button>
+
+          {/* Tab 3: Text */}
           <button
             type="button"
             onClick={() => setActiveTab('text')}
             style={{
-              padding: '10px 14px',
+              padding: '11px 14px',
               borderRadius: '10px',
               border: 'none',
-              background: activeTab === 'text' ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'transparent',
+              background: activeTab === 'text' ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : 'transparent',
               color: activeTab === 'text' ? '#ffffff' : '#94a3b8',
               fontWeight: 800,
               fontSize: '13px',
@@ -286,73 +430,23 @@ export const StadiumAdManagerModal = ({
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              boxShadow: activeTab === 'text' ? '0 4px 14px rgba(2, 132, 199, 0.35)' : 'none',
+              boxShadow: activeTab === 'text' ? '0 4px 14px rgba(245, 158, 11, 0.35)' : 'none',
               transition: 'all 0.2s ease',
             }}
           >
             <span>📜</span>
-            <span>Scrolling Text Tickers</span>
+            <span>Text Ticker & Speed</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              if (!editingAdId) handleResetMediaForm()
-              setActiveTab('fullscreen')
-            }}
-            style={{
-              padding: '10px 14px',
-              borderRadius: '10px',
-              border: 'none',
-              background: activeTab === 'fullscreen' ? 'linear-gradient(135deg, #059669 0%, #047857 100%)' : 'transparent',
-              color: activeTab === 'fullscreen' ? '#ffffff' : '#94a3b8',
-              fontWeight: 800,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              boxShadow: activeTab === 'fullscreen' ? '0 4px 14px rgba(5, 150, 105, 0.35)' : 'none',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <span>🎬</span>
-            <span>{editingAdId ? 'Edit Full-Screen Ad' : 'Full-Screen Video/Image'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('timing')}
-            style={{
-              padding: '10px 14px',
-              borderRadius: '10px',
-              border: 'none',
-              background: activeTab === 'timing' ? 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)' : 'transparent',
-              color: activeTab === 'timing' ? '#ffffff' : '#94a3b8',
-              fontWeight: 800,
-              fontSize: '13px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              boxShadow: activeTab === 'timing' ? '0 4px 14px rgba(139, 92, 246, 0.35)' : 'none',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <span>⏱️</span>
-            <span>Timing & Automation</span>
-          </button>
-
+          {/* Tab 4: Library / Roster */}
           <button
             type="button"
             onClick={() => setActiveTab('roster')}
             style={{
-              padding: '10px 14px',
+              padding: '11px 14px',
               borderRadius: '10px',
               border: 'none',
-              background: activeTab === 'roster' ? 'linear-gradient(135deg, #334155 0%, #1e293b 100%)' : 'transparent',
+              background: activeTab === 'roster' ? 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)' : 'transparent',
               color: activeTab === 'roster' ? '#ffffff' : '#94a3b8',
               fontWeight: 800,
               fontSize: '13px',
@@ -361,7 +455,7 @@ export const StadiumAdManagerModal = ({
               alignItems: 'center',
               justifyContent: 'center',
               gap: '8px',
-              boxShadow: activeTab === 'roster' ? '0 4px 14px rgba(51, 65, 85, 0.35)' : 'none',
+              boxShadow: activeTab === 'roster' ? '0 4px 14px rgba(139, 92, 246, 0.35)' : 'none',
               transition: 'all 0.2s ease',
             }}
           >
@@ -374,79 +468,791 @@ export const StadiumAdManagerModal = ({
         <div style={{ padding: '24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* =====================================================
-              TAB 1: SCROLLING TEXT TICKERS (TOP & BOTTOM DEDICATED)
+              TAB 1: 🎬 VIDEO ADS
+              ===================================================== */}
+          {activeTab === 'video' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+              <form onSubmit={handleSaveVideoAd} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#34d399', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>🎬</span>
+                      <span>{editingAdId ? 'Edit Video Commercial' : 'Add Full-Screen Video Commercial'}</span>
+                    </h3>
+                    <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#94a3b8' }}>
+                      Upload an MP4/WebM video or paste a video URL to play full-screen during match standby or intervals.
+                    </p>
+                  </div>
+                  {editingAdId && (
+                    <button
+                      type="button"
+                      onClick={handleResetVideoForm}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#f87171',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✕ Cancel Edit
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)',
+                    border: '1.5px solid rgba(16, 185, 129, 0.35)',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                  }}
+                >
+                  {/* 1. Sponsor Name & Video Upload */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#34d399', marginBottom: '6px' }}>
+                        Brand / Sponsor Name *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Red Bull Energy"
+                        value={videoSponsorName}
+                        onChange={(e) => setVideoSponsorName(e.target.value)}
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '12px 14px',
+                          background: '#0f172a',
+                          border: '1.5px solid rgba(52, 211, 153, 0.35)',
+                          borderRadius: '10px',
+                          color: '#ffffff',
+                          fontSize: '13.5px',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+
+                      <div style={{ marginTop: '12px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#94a3b8', marginBottom: '6px' }}>
+                          Tagline / Promo Message (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Gives You Wings • Free samples at Stall #1"
+                          value={videoTagline}
+                          onChange={(e) => setVideoTagline(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#0f172a',
+                            border: '1px solid rgba(148, 163, 184, 0.3)',
+                            borderRadius: '8px',
+                            color: '#ffffff',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#34d399', marginBottom: '6px' }}>
+                        Commercial Video File (MP4 / WebM)
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        <input
+                          type="file"
+                          ref={videoFileInputRef}
+                          accept="video/mp4,video/webm,video/ogg"
+                          onChange={handleVideoUpload}
+                          style={{ display: 'none' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => videoFileInputRef.current?.click()}
+                          style={{
+                            flex: 1,
+                            padding: '10px 16px',
+                            borderRadius: '8px',
+                            background: 'rgba(16, 185, 129, 0.2)',
+                            border: '1px solid #10b981',
+                            color: '#34d399',
+                            fontWeight: 800,
+                            fontSize: '12.5px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          📁 Choose Video File
+                        </button>
+                        {videoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setVideoUrl('')}
+                            style={{
+                              padding: '10px 14px',
+                              borderRadius: '8px',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              color: '#f87171',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="url"
+                        placeholder="Or paste direct video URL (e.g. https://.../ad.mp4)"
+                        value={videoUrl.startsWith('data:') ? '✅ Video File Uploaded from Device' : videoUrl}
+                        onChange={(e) => setVideoUrl(e.target.value)}
+                        disabled={videoUrl.startsWith('data:')}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#0f172a',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          borderRadius: '8px',
+                          color: '#ffffff',
+                          fontSize: '12.5px',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 2. Duration Preset Pills & Action Button */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '12px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 800, color: '#94a3b8' }}>⏱️ Duration:</span>
+                      {[5, 10, 15, 20, 30].map((dur) => (
+                        <button
+                          key={dur}
+                          type="button"
+                          onClick={() => setVideoDuration(dur)}
+                          style={{
+                            padding: '5px 12px',
+                            borderRadius: '16px',
+                            background: Number(videoDuration) === dur ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                            border: Number(videoDuration) === dur ? '1.5px solid #10b981' : '1px solid rgba(255, 255, 255, 0.12)',
+                            color: Number(videoDuration) === dur ? '#34d399' : '#94a3b8',
+                            fontSize: '12px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {dur}s {dur === 15 ? '★' : ''}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="submit"
+                      style={{
+                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '11px 24px',
+                        borderRadius: '10px',
+                        fontWeight: 900,
+                        fontSize: '13.5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 16px rgba(16, 185, 129, 0.35)',
+                      }}
+                    >
+                      <span>💾</span>
+                      <span>{editingAdId ? 'Update Video Ad' : 'Save Video Ad'}</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Video Ads Table */}
+              <div>
+                <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 800, color: '#94a3b8' }}>
+                  Active Video Commercials ({videoAdsList.length})
+                </h4>
+                {videoAdsList.length === 0 ? (
+                  <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '16px', borderRadius: '12px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                    No video commercials added yet. Upload or paste a video above!
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+                    {videoAdsList.map((ad) => (
+                      <div
+                        key={ad.id}
+                        style={{
+                          background: '#0f172a',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          borderRadius: '12px',
+                          padding: '12px 14px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 800, color: '#34d399', fontSize: '14px' }}>🎬 {ad.sponsorName}</span>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>⏱️ {ad.displayDuration || 15}s</span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#cbd5e1' }}>{ad.tagline}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAdActive(ad.id)}
+                            style={{
+                              background: ad.active !== false ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.2)',
+                              color: ad.active !== false ? '#4ade80' : '#94a3b8',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '4px 8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {ad.active !== false ? '● ACTIVE' : '○ PAUSED'}
+                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditAd(ad)}
+                              style={{ background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAd(ad.id)}
+                              style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* =====================================================
+              TAB 2: 🖼️ IMAGE ADS
+              ===================================================== */}
+          {activeTab === 'image' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+              <form onSubmit={handleSaveImageAd} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>🖼️</span>
+                      <span>{editingAdId ? 'Edit Image Poster / Banner' : 'Add Image Sponsor Banner / Poster'}</span>
+                    </h3>
+                    <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#94a3b8' }}>
+                      Upload a sponsor image poster or banner to show on the live TV top ticker bar and standby screen.
+                    </p>
+                  </div>
+                  {editingAdId && (
+                    <button
+                      type="button"
+                      onClick={handleResetImageForm}
+                      style={{
+                        background: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        color: '#f87171',
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✕ Cancel Edit
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                    borderRadius: '16px',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                  }}
+                >
+                  {/* 1. Sponsor Name & Image Upload */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#38bdf8', marginBottom: '6px' }}>
+                        Brand / Sponsor Name *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Victor Sports"
+                        value={imageSponsorName}
+                        onChange={(e) => setImageSponsorName(e.target.value)}
+                        required
+                        style={{
+                          width: '100%',
+                          padding: '12px 14px',
+                          background: '#0f172a',
+                          border: '1.5px solid rgba(56, 189, 248, 0.35)',
+                          borderRadius: '10px',
+                          color: '#ffffff',
+                          fontSize: '13.5px',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+
+                      <div style={{ marginTop: '12px' }}>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#94a3b8', marginBottom: '6px' }}>
+                          Tagline / Promo Offer (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Flat 20% Off on all Rackets • Arena Stall #2"
+                          value={imageTagline}
+                          onChange={(e) => setImageTagline(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px 14px',
+                            background: '#0f172a',
+                            border: '1px solid rgba(148, 163, 184, 0.3)',
+                            borderRadius: '8px',
+                            color: '#ffffff',
+                            fontSize: '13px',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12.5px', fontWeight: 800, color: '#38bdf8', marginBottom: '6px' }}>
+                        Image Banner / Poster File
+                      </label>
+                      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                        <input
+                          type="file"
+                          ref={imageFileInputRef}
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          style={{ display: 'none' }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => imageFileInputRef.current?.click()}
+                          style={{
+                            flex: 1,
+                            padding: '10px 16px',
+                            borderRadius: '8px',
+                            background: 'rgba(56, 189, 248, 0.2)',
+                            border: '1px solid #38bdf8',
+                            color: '#38bdf8',
+                            fontWeight: 800,
+                            fontSize: '12.5px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                          }}
+                        >
+                          📁 Choose Image File
+                        </button>
+                        {imageUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setImageUrl('')}
+                            style={{
+                              padding: '10px 14px',
+                              borderRadius: '8px',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              color: '#f87171',
+                              fontSize: '12px',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="url"
+                        placeholder="Or paste direct image URL (e.g. https://.../banner.png)"
+                        value={imageUrl.startsWith('data:') ? '✅ Image File Uploaded from Device' : imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        disabled={imageUrl.startsWith('data:')}
+                        style={{
+                          width: '100%',
+                          padding: '10px 14px',
+                          background: '#0f172a',
+                          border: '1px solid rgba(56, 189, 248, 0.3)',
+                          borderRadius: '8px',
+                          color: '#ffffff',
+                          fontSize: '12.5px',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* 2. Duration & Accent Color & Action Button */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '12px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 800, color: '#94a3b8' }}>⏱️ Duration:</span>
+                        {[5, 10, 15, 20].map((dur) => (
+                          <button
+                            key={dur}
+                            type="button"
+                            onClick={() => setImageDuration(dur)}
+                            style={{
+                              padding: '5px 12px',
+                              borderRadius: '16px',
+                              background: Number(imageDuration) === dur ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                              border: Number(imageDuration) === dur ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.12)',
+                              color: Number(imageDuration) === dur ? '#38bdf8' : '#94a3b8',
+                              fontSize: '12px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {dur}s {dur === 10 ? '★' : ''}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '12px', fontWeight: 800, color: '#94a3b8' }}>🎨 Color:</span>
+                        {['#38bdf8', '#10b981', '#f59e0b', '#a855f7', '#ef4444'].map((col) => (
+                          <button
+                            key={col}
+                            type="button"
+                            onClick={() => setImageAccentColor(col)}
+                            style={{
+                              width: '24px',
+                              height: '24px',
+                              borderRadius: '50%',
+                              backgroundColor: col,
+                              border: imageAccentColor === col ? '2px solid #ffffff' : '1px solid rgba(255,255,255,0.2)',
+                              cursor: 'pointer',
+                              transform: imageAccentColor === col ? 'scale(1.2)' : 'scale(1)',
+                              transition: 'transform 0.15s ease',
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      style={{
+                        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                        color: '#ffffff',
+                        border: 'none',
+                        padding: '11px 24px',
+                        borderRadius: '10px',
+                        fontWeight: 900,
+                        fontSize: '13.5px',
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 16px rgba(2, 132, 199, 0.35)',
+                      }}
+                    >
+                      <span>💾</span>
+                      <span>{editingAdId ? 'Update Image Ad' : 'Save Image Ad'}</span>
+                    </button>
+                  </div>
+                </div>
+              </form>
+
+              {/* Image Ads Table */}
+              <div>
+                <h4 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 800, color: '#94a3b8' }}>
+                  Active Image Posters & Banners ({imageAdsList.length})
+                </h4>
+                {imageAdsList.length === 0 ? (
+                  <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '16px', borderRadius: '12px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+                    No image banners added yet. Upload an image above!
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+                    {imageAdsList.map((ad) => (
+                      <div
+                        key={ad.id}
+                        style={{
+                          background: '#0f172a',
+                          border: `1.5px solid ${ad.accentColor || 'rgba(56, 189, 248, 0.3)'}`,
+                          borderRadius: '12px',
+                          padding: '12px 14px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontWeight: 800, color: ad.accentColor || '#38bdf8', fontSize: '14px' }}>🖼️ {ad.sponsorName}</span>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>⏱️ {ad.displayDuration || 10}s</span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#cbd5e1' }}>{ad.tagline}</div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleAdActive(ad.id)}
+                            style={{
+                              background: ad.active !== false ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.2)',
+                              color: ad.active !== false ? '#4ade80' : '#94a3b8',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '4px 8px',
+                              fontSize: '11px',
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {ad.active !== false ? '● ACTIVE' : '○ PAUSED'}
+                          </button>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditAd(ad)}
+                              style={{ background: '#0284c7', color: '#fff', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAd(ad.id)}
+                              style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#f87171', border: 'none', borderRadius: '6px', padding: '4px 8px', fontSize: '11px', cursor: 'pointer', fontWeight: 700 }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* =====================================================
+              TAB 3: 📜 TEXT TICKERS & SCROLL SPEED CONTROLS
               ===================================================== */}
           {activeTab === 'text' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#38bdf8' }}>
-                    📜 Live Stadium Dual Scrolling Text Banners
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>📜</span>
+                    <span>Live Dual Scrolling Text Tickers & Speed Controls</span>
                   </h3>
                   <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#94a3b8' }}>
-                    Type your custom text below. Both rows will auto-scroll continuously across the bottom of the TV Live Cast.
+                    Customize announcements, news, sponsor messages, and precisely adjust how fast the text scrolls across the TV screen.
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleSettingChange('topScrollingText', '🏆 Welcome to the Badminton Championship • Report to assigned courts 10 minutes prior to schedule!')
-                      handleSettingChange('bottomScrollingText', '⭐ Exclusive 20% tournament discount on all rackets & pro gear at Arena Lobby Stall #1!')
-                    }}
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleSettingChange('topScrollingText', '🏆 Welcome to the Badminton Championship • Report to assigned courts 10 minutes prior to schedule!')
+                    handleSettingChange('bottomScrollingText', '⭐ Exclusive 20% tournament discount on all rackets & pro gear at Arena Lobby Stall #1!')
+                  }}
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    color: '#fbbf24',
+                    padding: '6px 14px',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ✨ Load Presets
+                </button>
+              </div>
+
+              {/* SPEED CONTROLS CARD */}
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)',
+                  border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                  borderRadius: '16px',
+                  padding: '18px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '13.5px', fontWeight: 900, color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span>⚡ Text Scroll Speed Controller</span>
+                  </label>
+                  <span
                     style={{
-                      background: 'rgba(56, 189, 248, 0.12)',
-                      border: '1px solid rgba(56, 189, 248, 0.3)',
-                      color: '#38bdf8',
-                      padding: '6px 14px',
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      border: '1px solid #f59e0b',
+                      color: '#fbbf24',
+                      padding: '3px 10px',
                       borderRadius: '8px',
                       fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
+                      fontWeight: 900,
                     }}
                   >
-                    ✨ Load Sample Presets
-                  </button>
+                    🚀 Cycle Duration: {currentSpeedSeconds}s per loop
+                  </span>
+                </div>
+
+                {/* 5 Quick Presets */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                  {[
+                    { label: '🐢 Ultra Slow', val: 'ultra-slow', sec: 45 },
+                    { label: '🚶 Slow', val: 'slow', sec: 32 },
+                    { label: '⚡ Normal', val: 'normal', sec: 22 },
+                    { label: '🚀 Fast', val: 'fast', sec: 14 },
+                    { label: '🔥 Ultra Fast', val: 'ultra-fast', sec: 8 },
+                  ].map((spd) => {
+                    const isSelected = localSettings.tickerSpeed === spd.val || currentSpeedSeconds === spd.sec
+                    return (
+                      <button
+                        key={spd.val}
+                        type="button"
+                        onClick={() => handleSettingChange('tickerSpeed', spd.val)}
+                        style={{
+                          padding: '10px 8px',
+                          borderRadius: '10px',
+                          border: isSelected ? '2px solid #f59e0b' : '1px solid rgba(148, 163, 184, 0.2)',
+                          background: isSelected ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : '#0f172a',
+                          color: isSelected ? '#ffffff' : '#cbd5e1',
+                          fontWeight: 800,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '2px',
+                          boxShadow: isSelected ? '0 4px 14px rgba(245, 158, 11, 0.35)' : 'none',
+                        }}
+                      >
+                        <span>{spd.label}</span>
+                        <span style={{ fontSize: '10px', opacity: 0.8 }}>({spd.sec}s)</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Interactive Fine-Tuning Slider */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '4px' }}>
+                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 700, minWidth: '85px' }}>
+                    Fine-Tune Speed:
+                  </span>
+                  <input
+                    type="range"
+                    min="6"
+                    max="60"
+                    step="1"
+                    value={currentSpeedSeconds}
+                    onChange={(e) => handleSettingChange('tickerSpeed', Number(e.target.value))}
+                    style={{ flex: 1, accentColor: '#f59e0b', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '13px', fontWeight: 900, color: '#fbbf24', minWidth: '45px', textAlign: 'right' }}>
+                    {currentSpeedSeconds}s
+                  </span>
+                </div>
+
+                {/* LIVE ANIMATED TICKER SPEED SIMULATOR */}
+                <div
+                  style={{
+                    background: '#020617',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    borderRadius: '12px',
+                    padding: '10px 14px',
+                    overflow: 'hidden',
+                    position: 'relative',
+                  }}
+                >
+                  <span style={{ fontSize: '10.5px', fontWeight: 800, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '6px' }}>
+                    👀 Live Speed Simulator ({currentSpeedSeconds}s Loop)
+                  </span>
+                  <div style={{ overflow: 'hidden', whiteSpace: 'nowrap', width: '100%', position: 'relative' }}>
+                    <div
+                      style={{
+                        display: 'inline-block',
+                        whiteSpace: 'nowrap',
+                        animation: `stadiumSponsorScroll ${currentSpeedSeconds}s linear infinite`,
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        color: '#fbbf24',
+                      }}
+                    >
+                      🏸 {localSettings.topScrollingText || 'Live scrolling text preview at current speed'} • ⭐ {localSettings.bottomScrollingText || 'Adjust speed slider to change pace!'} • 
+                    </div>
+                  </div>
                 </div>
               </div>
 
               {/* Row 1 Text Input */}
               <div
                 style={{
-                  background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)',
-                  border: '1.5px solid rgba(56, 189, 248, 0.4)',
-                  borderRadius: '16px',
-                  padding: '18px 20px',
+                  background: 'rgba(15, 23, 42, 0.7)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '14px',
+                  padding: '16px 18px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '10px',
+                  gap: '8px',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 900, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>📢 Row 1: Top Scrolling Announcement Text</span>
+                  <label style={{ fontSize: '13px', fontWeight: 900, color: '#38bdf8' }}>
+                    📢 Row 1: Top Announcement / Match News Text
                   </label>
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                    {(localSettings.topScrollingText || '').length} characters
+                    {(localSettings.topScrollingText || '').length} chars
                   </span>
                 </div>
                 <textarea
                   rows={2}
-                  placeholder="e.g. 🏆 Matches are in Quarter Finals! Refreshments available at Counter 1 • Prize distribution starts at 6 PM."
+                  placeholder="e.g. 🏆 Matches are in Quarter Finals! Refreshments available at Counter 1 • Prize distribution at 6 PM."
                   value={localSettings.topScrollingText || ''}
                   onChange={(e) => handleSettingChange('topScrollingText', e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 14px',
                     background: '#0f172a',
                     border: '1px solid rgba(56, 189, 248, 0.3)',
-                    borderRadius: '10px',
+                    borderRadius: '8px',
                     color: '#ffffff',
-                    fontSize: '14px',
+                    fontSize: '13.5px',
                     lineHeight: 1.5,
                     boxSizing: 'border-box',
                     fontFamily: 'inherit',
-                    resize: 'none',
                   }}
                 />
               </div>
@@ -454,657 +1260,386 @@ export const StadiumAdManagerModal = ({
               {/* Row 2 Text Input */}
               <div
                 style={{
-                  background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.7) 100%)',
-                  border: '1.5px solid rgba(74, 222, 128, 0.4)',
-                  borderRadius: '16px',
-                  padding: '18px 20px',
+                  background: 'rgba(15, 23, 42, 0.7)',
+                  border: '1px solid rgba(74, 222, 128, 0.3)',
+                  borderRadius: '14px',
+                  padding: '16px 18px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '10px',
+                  gap: '8px',
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 900, color: '#4ade80', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span>⭐ Row 2: Bottom Scrolling Special Offer / Sponsor Text</span>
+                  <label style={{ fontSize: '13px', fontWeight: 900, color: '#4ade80' }}>
+                    ⭐ Row 2: Bottom Sponsor Commercial Offer Text
                   </label>
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                    {(localSettings.bottomScrollingText || '').length} characters
+                    {(localSettings.bottomScrollingText || '').length} chars
                   </span>
                 </div>
                 <textarea
                   rows={2}
-                  placeholder="e.g. 🔥 Special Offer: 20% discount on all badminton equipment at Stall #1 • Energy drinks at Counter 2!"
+                  placeholder="e.g. ⭐ Flat 20% tournament discount on Yonex Astrox & Victor shoes at Arena Pro Shop Stall #1!"
                   value={localSettings.bottomScrollingText || ''}
                   onChange={(e) => handleSettingChange('bottomScrollingText', e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 14px',
                     background: '#0f172a',
                     border: '1px solid rgba(74, 222, 128, 0.3)',
-                    borderRadius: '10px',
+                    borderRadius: '8px',
                     color: '#ffffff',
-                    fontSize: '14px',
+                    fontSize: '13.5px',
                     lineHeight: 1.5,
                     boxSizing: 'border-box',
                     fontFamily: 'inherit',
-                    resize: 'none',
                   }}
                 />
-              </div>
-
-              {/* Live Ticker Simulator Preview */}
-              <div
-                style={{
-                  background: '#020617',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '14px',
-                  padding: '14px 18px',
-                  overflow: 'hidden',
-                }}
-              >
-                <span style={{ fontSize: '11px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
-                  📺 Live TV Ticker Simulator (Real-Time Preview)
-                </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div style={{ background: '#0f172a', padding: '6px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ background: '#0284c7', color: '#fff', fontSize: '10px', fontWeight: 900, padding: '2px 6px', borderRadius: '4px' }}>
-                      ROW 1
-                    </span>
-                    <span style={{ fontSize: '12.5px', color: '#38bdf8', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {localSettings.topScrollingText || '(No text entered for Row 1)'}
-                    </span>
-                  </div>
-                  <div style={{ background: '#0f172a', padding: '6px 12px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ background: '#059669', color: '#fff', fontSize: '10px', fontWeight: 900, padding: '2px 6px', borderRadius: '4px' }}>
-                      ROW 2
-                    </span>
-                    <span style={{ fontSize: '12.5px', color: '#4ade80', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {localSettings.bottomScrollingText || '(No text entered for Row 2)'}
-                    </span>
-                  </div>
-                </div>
               </div>
             </div>
           )}
 
           {/* =====================================================
-              TAB 2: FULL-SCREEN VIDEO & IMAGE ADS FORM
+              TAB 4: 📋 AD LIBRARY & TIMING SETTINGS
               ===================================================== */}
-          {activeTab === 'fullscreen' && (
-            <form
-              onSubmit={handleSaveMediaAd}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '18px',
-              }}
-            >
+          {activeTab === 'roster' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#34d399' }}>
-                    {editingAdId ? '✏️ Edit Full-Screen Commercial' : '🎬 Add Full-Screen Video or Image Sponsor'}
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#a78bfa' }}>
+                    📋 Master Sponsor Ad Library & Timing
                   </h3>
                   <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#94a3b8' }}>
-                    This ad will run automatically in full-screen during standby (no live matches) and on interval during live matches.
+                    Enable, disable, or delete existing sponsors. Configure full-screen intermission rotation timers.
                   </p>
                 </div>
-                {editingAdId && (
+                <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={handleResetMediaForm}
+                    onClick={() => {
+                      handleResetVideoForm()
+                      setActiveTab('video')
+                    }}
                     style={{
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      color: '#f87171',
-                      padding: '6px 12px',
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '7px 14px',
                       borderRadius: '8px',
                       fontSize: '12px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    ✕ Cancel Edit
-                  </button>
-                )}
-              </div>
-
-              {/* Media Type Selector */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <button
-                  type="button"
-                  onClick={() => setMediaType('video')}
-                  style={{
-                    padding: '14px 18px',
-                    borderRadius: '14px',
-                    border: mediaType === 'video' ? '2px solid #10b981' : '1.5px solid rgba(148, 163, 184, 0.2)',
-                    background: mediaType === 'video' ? 'rgba(16, 185, 129, 0.15)' : '#0f172a',
-                    color: mediaType === 'video' ? '#34d399' : '#94a3b8',
-                    fontWeight: 900,
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    boxShadow: mediaType === 'video' ? '0 4px 16px rgba(16, 185, 129, 0.25)' : 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <span style={{ fontSize: '20px' }}>🎬</span>
-                  <span>Full-Screen Video Commercial</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setMediaType('image')}
-                  style={{
-                    padding: '14px 18px',
-                    borderRadius: '14px',
-                    border: mediaType === 'image' ? '2px solid #38bdf8' : '1.5px solid rgba(148, 163, 184, 0.2)',
-                    background: mediaType === 'image' ? 'rgba(56, 189, 248, 0.15)' : '#0f172a',
-                    color: mediaType === 'image' ? '#38bdf8' : '#94a3b8',
-                    fontWeight: 900,
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    boxShadow: mediaType === 'image' ? '0 4px 16px rgba(56, 189, 248, 0.25)' : 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <span style={{ fontSize: '20px' }}>🖼️</span>
-                  <span>Full-Screen Image Sponsor</span>
-                </button>
-              </div>
-
-              {/* Sponsor Name & Details */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#cbd5e1', marginBottom: '6px', display: 'block' }}>
-                    Sponsor / Brand Name:
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. YONEX / VICTOR SPORTS / PRIME ACADEMY"
-                    value={sponsorName}
-                    onChange={(e) => setSponsorName(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      background: '#0f172a',
-                      border: '1px solid rgba(148, 163, 184, 0.3)',
-                      borderRadius: '10px',
-                      color: '#ffffff',
-                      fontSize: '13.5px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 800, color: '#cbd5e1', marginBottom: '6px', display: 'block' }}>
-                    Contact / Stall / Website (Optional):
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Stall #1 • +91 98765 43210 • www.yonex.com"
-                    value={phoneOrLink}
-                    onChange={(e) => setPhoneOrLink(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      background: '#0f172a',
-                      border: '1px solid rgba(148, 163, 184, 0.3)',
-                      borderRadius: '10px',
-                      color: '#ffffff',
-                      fontSize: '13.5px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Upload Dropzones */}
-              {mediaType === 'video' && (
-                <div style={{ background: '#0f172a', padding: '16px', borderRadius: '14px', border: '1.5px dashed #10b981' }}>
-                  <label style={{ fontSize: '12.5px', fontWeight: 800, color: '#34d399', marginBottom: '10px', display: 'block' }}>
-                    🎬 Video Source (Upload File or Paste Link):
-                  </label>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <input
-                      type="file"
-                      ref={videoFileInputRef}
-                      accept="video/mp4,video/webm,video/ogg"
-                      style={{ display: 'none' }}
-                      onChange={handleVideoUpload}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => videoFileInputRef.current?.click()}
-                      style={{
-                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                        border: 'none',
-                        color: '#ffffff',
-                        padding: '10px 18px',
-                        borderRadius: '10px',
-                        fontWeight: 800,
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        boxShadow: '0 4px 12px rgba(5, 150, 105, 0.35)',
-                      }}
-                    >
-                      📁 Upload MP4/WebM File
-                    </button>
-                    <span style={{ color: '#64748b', fontSize: '12px' }}>OR</span>
-                    <input
-                      type="url"
-                      placeholder="Paste direct .mp4 video URL (e.g. https://.../video.mp4)"
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: '10px 14px',
-                        background: '#1e293b',
-                        border: '1px solid rgba(148, 163, 184, 0.3)',
-                        borderRadius: '10px',
-                        color: '#ffffff',
-                        fontSize: '13px',
-                      }}
-                    />
-                  </div>
-
-                  {videoUrl && (
-                    <div style={{ marginTop: '14px' }}>
-                      <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Video Player Preview:</span>
-                      <video
-                        src={videoUrl}
-                        controls
-                        muted
-                        style={{ maxHeight: '180px', borderRadius: '10px', border: '1px solid #334155' }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {mediaType === 'image' && (
-                <div style={{ background: '#0f172a', padding: '16px', borderRadius: '14px', border: '1.5px dashed #38bdf8' }}>
-                  <label style={{ fontSize: '12.5px', fontWeight: 800, color: '#38bdf8', marginBottom: '10px', display: 'block' }}>
-                    🖼️ Image Source (Upload File or Paste Link):
-                  </label>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={handleImageUpload}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      style={{
-                        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                        border: 'none',
-                        color: '#ffffff',
-                        padding: '10px 18px',
-                        borderRadius: '10px',
-                        fontWeight: 800,
-                        fontSize: '13px',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        boxShadow: '0 4px 12px rgba(2, 132, 199, 0.35)',
-                      }}
-                    >
-                      📁 Upload Image File
-                    </button>
-                    <span style={{ color: '#64748b', fontSize: '12px' }}>OR</span>
-                    <input
-                      type="url"
-                      placeholder="Paste direct Image URL (e.g. https://.../banner.png)"
-                      value={logoUrl}
-                      onChange={(e) => setLogoUrl(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: '10px 14px',
-                        background: '#1e293b',
-                        border: '1px solid rgba(148, 163, 184, 0.3)',
-                        borderRadius: '10px',
-                        color: '#ffffff',
-                        fontSize: '13px',
-                      }}
-                    />
-                  </div>
-
-                  {logoUrl && (
-                    <div style={{ marginTop: '14px' }}>
-                      <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Image Banner Preview:</span>
-                      <img
-                        src={logoUrl}
-                        alt="Preview"
-                        style={{ maxHeight: '180px', borderRadius: '10px', border: '1px solid #334155', objectFit: 'contain' }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Tagline / Headline */}
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 800, color: '#cbd5e1', marginBottom: '6px', display: 'block' }}>
-                  Commercial Headline / Promotion Message:
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Exclusive 20% Tournament Discount on all Rackets & Shoes at the Arena Lobby!"
-                  value={tagline}
-                  onChange={(e) => setTagline(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    background: '#0f172a',
-                    border: '1px solid rgba(148, 163, 184, 0.3)',
-                    borderRadius: '10px',
-                    color: '#ffffff',
-                    fontSize: '13.5px',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              {/* Submit */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                <button
-                  type="submit"
-                  style={{
-                    background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
-                    border: '1px solid #86efac',
-                    color: '#ffffff',
-                    padding: '12px 28px',
-                    borderRadius: '12px',
-                    fontWeight: 900,
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 16px rgba(22, 163, 74, 0.4)',
-                  }}
-                >
-                  {editingAdId ? '💾 Update Full-Screen Ad' : '➕ Save & Add to Full-Screen Rotation'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* =====================================================
-              TAB 3: TIMING & AUTOMATION CONTROLS
-              ===================================================== */}
-          {activeTab === 'timing' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#c4b5fd' }}>
-                  ⏱️ Live Broadcast Timing & Display Automation
-                </h3>
-                <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#94a3b8' }}>
-                  Fine-tune full-screen commercial intervals, display duration, and ticker scrolling speed.
-                </p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                {/* Interval Box */}
-                <div style={{ background: '#0f172a', padding: '18px', borderRadius: '16px', border: '1px solid rgba(139, 92, 246, 0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '24px' }}>⏱️</span>
-                    <div>
-                      <strong style={{ fontSize: '14px', color: '#f8fafc' }}>Full-Screen Ad Interval</strong>
-                      <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>Triggered during live matches</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>Every</span>
-                    <input
-                      type="number"
-                      min="1"
-                      max="60"
-                      value={localSettings.fullScreenIntervalMinutes || 2}
-                      onChange={(e) => handleSettingChange('fullScreenIntervalMinutes', Math.max(1, parseInt(e.target.value, 10) || 1))}
-                      style={{
-                        width: '70px',
-                        padding: '6px 10px',
-                        background: '#1e293b',
-                        border: '1.5px solid #8b5cf6',
-                        borderRadius: '8px',
-                        color: '#c4b5fd',
-                        fontWeight: 900,
-                        fontSize: '15px',
-                        textAlign: 'center',
-                      }}
-                    />
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>minutes</span>
-                  </div>
-                </div>
-
-                {/* Duration Box */}
-                <div style={{ background: '#0f172a', padding: '18px', borderRadius: '16px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                    <span style={{ fontSize: '24px' }}>⏳</span>
-                    <div>
-                      <strong style={{ fontSize: '14px', color: '#f8fafc' }}>Display Duration</strong>
-                      <span style={{ fontSize: '12px', color: '#94a3b8', display: 'block' }}>How long full-screen stays visible</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px' }}>
-                    <input
-                      type="number"
-                      min="3"
-                      max="120"
-                      value={localSettings.fullScreenDurationSeconds || 10}
-                      onChange={(e) => handleSettingChange('fullScreenDurationSeconds', Math.max(3, parseInt(e.target.value, 10) || 10))}
-                      style={{
-                        width: '70px',
-                        padding: '6px 10px',
-                        background: '#1e293b',
-                        border: '1.5px solid #38bdf8',
-                        borderRadius: '8px',
-                        color: '#38bdf8',
-                        fontWeight: 900,
-                        fontSize: '15px',
-                        textAlign: 'center',
-                      }}
-                    />
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>seconds per ad</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Scroll Speed & Audio */}
-              <div style={{ background: '#0f172a', padding: '18px', borderRadius: '16px', border: '1px solid rgba(148, 163, 184, 0.2)', display: 'flex', flexWrap: 'wrap', gap: '20px', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <span style={{ fontSize: '22px' }}>⚡</span>
-                  <div>
-                    <strong style={{ fontSize: '13.5px', color: '#f8fafc', display: 'block' }}>All Tickers Scroll Speed</strong>
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Applies identically to Top Ribbon and Bottom Tickers</span>
-                  </div>
-                  <select
-                    value={localSettings.tickerSpeed || 'slow'}
-                    onChange={(e) => handleSettingChange('tickerSpeed', e.target.value)}
-                    style={{
-                      padding: '7px 14px',
-                      background: '#1e293b',
-                      border: '1px solid rgba(148, 163, 184, 0.3)',
-                      borderRadius: '8px',
-                      color: '#f8fafc',
                       fontWeight: 800,
-                      fontSize: '13px',
                       cursor: 'pointer',
                     }}
                   >
-                    <option value="slow">Slow & Legible (Recommended for TV)</option>
-                    <option value="normal">Normal</option>
-                    <option value="fast">Fast</option>
+                    + Add Video Ad
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleResetImageForm()
+                      setActiveTab('image')
+                    }}
+                    style={{
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    + Add Image Ad
+                  </button>
+                </div>
+              </div>
+
+              {/* Timing & Standby Automation Controls */}
+              <div
+                style={{
+                  background: 'rgba(139, 92, 246, 0.08)',
+                  border: '1.5px solid rgba(139, 92, 246, 0.35)',
+                  borderRadius: '16px',
+                  padding: '16px 20px',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                  gap: '16px',
+                }}
+              >
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#c4b5fd', marginBottom: '6px' }}>
+                    📺 Repeat Interval
+                  </label>
+                  <select
+                    value={localSettings.fullScreenIntervalMinutes || 1}
+                    onChange={(e) => handleSettingChange('fullScreenIntervalMinutes', Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      borderRadius: '8px',
+                      color: '#ffffff',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    <option value={1}>Every 1 Minute (Recommended)</option>
+                    <option value={2}>Every 2 Minutes</option>
+                    <option value={3}>Every 3 Minutes</option>
+                    <option value={5}>Every 5 Minutes</option>
                   </select>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13.5px', color: '#cbd5e1', fontWeight: 700 }}>
-                    <input
-                      type="checkbox"
-                      checked={localSettings.videoMuted !== false}
-                      onChange={(e) => handleSettingChange('videoMuted', e.target.checked)}
-                    />
-                    <span>🔇 Mute Video Commercial Audio</span>
-                  </label>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* =====================================================
-              TAB 4: AD LIBRARY & ROSTER
-              ===================================================== */}
-          {activeTab === 'roster' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 900, color: '#f8fafc' }}>
-                    Sponsor & Commercial Media Library ({localAds.length})
-                  </h3>
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    Toggle ads ON/OFF, edit media, or preview
-                  </span>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#c4b5fd', marginBottom: '6px' }}>
+                    ⏱️ Ad Display Duration
+                  </label>
+                  <select
+                    value={localSettings.fullScreenDurationSeconds || 10}
+                    onChange={(e) => handleSettingChange('fullScreenDurationSeconds', Number(e.target.value))}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      borderRadius: '8px',
+                      color: '#ffffff',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    <option value={5}>5 Seconds</option>
+                    <option value={8}>8 Seconds</option>
+                    <option value={10}>10 Seconds (Recommended)</option>
+                    <option value={15}>15 Seconds</option>
+                    <option value={20}>20 Seconds</option>
+                    <option value={30}>30 Seconds</option>
+                  </select>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleResetMediaForm()
-                    setActiveTab('fullscreen')
-                  }}
-                  style={{
-                    background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    padding: '8px 16px',
-                    borderRadius: '10px',
-                    fontWeight: 800,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  ➕ Add New Media Ad
-                </button>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#c4b5fd', marginBottom: '6px' }}>
+                    🎭 Public Page Display Mode
+                  </label>
+                  <select
+                    value={localSettings.publicDisplayMode || 'periodic'}
+                    onChange={(e) => handleSettingChange('publicDisplayMode', e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      borderRadius: '8px',
+                      color: '#ffffff',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    <option value="periodic">🔄 Periodic Pop-in (Show 10s, auto-hide, repeat every 1m)</option>
+                    <option value="static">📌 Always Fixed / Static (Permanently on screen)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 800, color: '#c4b5fd', marginBottom: '6px' }}>
+                    🔇 Video Sound Mode
+                  </label>
+                  <select
+                    value={localSettings.videoMuted !== false ? 'muted' : 'unmuted'}
+                    onChange={(e) => handleSettingChange('videoMuted', e.target.value === 'muted')}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      background: '#0f172a',
+                      border: '1px solid rgba(139, 92, 246, 0.3)',
+                      borderRadius: '8px',
+                      color: '#ffffff',
+                      fontSize: '12.5px',
+                    }}
+                  >
+                    <option value="muted">🔇 Mute Videos (Quiet Live Cast)</option>
+                    <option value="unmuted">🔊 Enable Audio (Sound ON)</option>
+                  </select>
+                </div>
               </div>
 
-              {localAds.length === 0 ? (
-                <div style={{ padding: '40px', textAlign: 'center', background: '#0f172a', borderRadius: '16px', color: '#94a3b8' }}>
-                  No sponsor ads added yet. Switch to the Full-Screen tab to add a video or image sponsor!
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '10px' }}>
-                  {localAds.map((ad) => {
-                    const isVideo = ad.mediaType === 'video' || ad.videoUrl
-                    const isImage = ad.mediaType === 'image' || ad.logoUrl
+              {/* Informative timing summary badge */}
+              <div
+                style={{
+                  background: 'rgba(56, 189, 248, 0.1)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  marginTop: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: '#93c5fd',
+                }}
+              >
+                <span>💡</span>
+                <span>
+                  <strong>Active Ad Rule:</strong> Ads will appear on screen for <strong>{localSettings.fullScreenDurationSeconds || 10} seconds</strong>, then smoothly hide and re-appear every <strong>{localSettings.fullScreenIntervalMinutes || 1} minute</strong>.
+                </span>
+              </div>
 
-                    return (
-                      <div
-                        key={ad.id}
-                        style={{
-                          background: '#0f172a',
-                          border: ad.active !== false ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(148, 163, 184, 0.1)',
-                          opacity: ad.active !== false ? 1 : 0.6,
-                          borderRadius: '14px',
-                          padding: '12px 18px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '14px',
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, minWidth: 0 }}>
-                          <span style={{ fontSize: '26px' }}>
-                            {isVideo ? '🎬' : '🖼️'}
-                          </span>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <strong style={{ fontSize: '14px', color: '#f8fafc' }}>{ad.sponsorName}</strong>
-                              <span
-                                style={{
-                                  background: isVideo ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.2)',
-                                  color: isVideo ? '#34d399' : '#38bdf8',
-                                  fontSize: '10.5px',
-                                  fontWeight: 800,
-                                  padding: '2px 7px',
-                                  borderRadius: '6px',
-                                }}
-                              >
-                                {isVideo ? 'VIDEO' : 'IMAGE'}
-                              </span>
-                            </div>
-                            <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {ad.tagline || ad.description}
-                            </p>
-                          </div>
+              {/* Master Ad Cards List */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: '14px' }}>
+                {localAds.map((ad) => {
+                  const isVideo = ad.mediaType === 'video' || Boolean(ad.videoUrl)
+                  return (
+                    <div
+                      key={ad.id}
+                      style={{
+                        background: '#0f172a',
+                        border: `1.5px solid ${isVideo ? '#10b981' : (ad.accentColor || '#38bdf8')}`,
+                        borderRadius: '14px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                        opacity: ad.active !== false ? 1 : 0.6,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span
+                          style={{
+                            background: isVideo ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.2)',
+                            color: isVideo ? '#34d399' : '#38bdf8',
+                            fontSize: '11px',
+                            fontWeight: 900,
+                            padding: '3px 8px',
+                            borderRadius: '6px',
+                          }}
+                        >
+                          {isVideo ? '🎬 VIDEO AD' : '🖼️ IMAGE AD'}
+                        </span>
+                        <span style={{ fontSize: '11.5px', color: '#94a3b8' }}>⏱️ {ad.displayDuration || 10}s</span>
+                      </div>
+
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 900, color: '#f8fafc' }}>
+                          {ad.sponsorName}
+                        </h4>
+                        <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#94a3b8', lineHeight: 1.4 }}>
+                          {ad.tagline}
+                        </p>
+                      </div>
+
+                      {ad.phoneOrLink && (
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          📍 {ad.phoneOrLink}
                         </div>
+                      )}
 
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '8px', borderTop: '1px solid rgba(148, 163, 184, 0.1)' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAdActive(ad.id)}
+                          style={{
+                            background: ad.active !== false ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.2)',
+                            color: ad.active !== false ? '#4ade80' : '#94a3b8',
+                            border: 'none',
+                            borderRadius: '6px',
+                            padding: '5px 10px',
+                            fontSize: '11.5px',
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {ad.active !== false ? '● ACTIVE' : '○ PAUSED'}
+                        </button>
+                        <div style={{ display: 'flex', gap: '6px' }}>
                           <button
                             type="button"
-                            onClick={() => handleToggleAdActive(ad.id)}
+                            onClick={() => handleStartEditAd(ad)}
                             style={{
-                              background: ad.active !== false ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.2)',
+                              background: '#0284c7',
+                              color: '#ffffff',
                               border: 'none',
-                              color: ad.active !== false ? '#4ade80' : '#94a3b8',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              fontWeight: 800,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {ad.active !== false ? '● ACTIVE' : 'OFF'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleStartEdit(ad)}
-                            style={{
-                              background: '#1e293b',
-                              border: '1px solid rgba(148, 163, 184, 0.3)',
-                              color: '#e2e8f0',
-                              padding: '6px 12px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
+                              borderRadius: '6px',
+                              padding: '5px 10px',
+                              fontSize: '11.5px',
                               fontWeight: 700,
                               cursor: 'pointer',
                             }}
                           >
-                            Edit
+                            ✏️ Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDeleteAd(ad.id)}
                             style={{
-                              background: 'rgba(239, 68, 68, 0.15)',
-                              border: '1px solid rgba(239, 68, 68, 0.3)',
-                              color: '#fca5a5',
-                              padding: '6px 10px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
+                              background: 'rgba(239, 68, 68, 0.2)',
+                              color: '#f87171',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '5px 10px',
+                              fontSize: '11.5px',
                               fontWeight: 700,
                               cursor: 'pointer',
                             }}
                           >
-                            🗑️
+                            🗑️ Delete
                           </button>
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
+
+        </div>
+
+        {/* Modal Bottom Footer */}
+        <div
+          style={{
+            padding: '14px 26px',
+            borderTop: '1px solid rgba(148, 163, 184, 0.12)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(15, 23, 42, 0.95)',
+          }}
+        >
+          <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+            ⚡ All changes sync instantly to Stadium TV Live Cast in real-time.
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '10px',
+              padding: '10px 24px',
+              fontWeight: 900,
+              fontSize: '13.5px',
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
+            }}
+          >
+            ✓ Done / Close
+          </button>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteAdConfirm && (
+        <ConfirmDeleteModal
+          isOpen={true}
+          title={deleteAdConfirm.title}
+          message={deleteAdConfirm.message}
+          itemName={deleteAdConfirm.itemName}
+          confirmText="🗑️ Yes, Delete Ad"
+          cancelText="✕ Cancel"
+          onConfirm={deleteAdConfirm.onConfirm}
+          onClose={() => setDeleteAdConfirm(null)}
+        />
+      )}
     </div>
   )
 }

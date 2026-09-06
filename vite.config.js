@@ -27,7 +27,22 @@ function getDbData() {
   } catch (e) {
     console.error('Error reading DB:', e)
   }
-  return { matches: [], publishedStatus: {}, authenticators: {}, temporaryCredentials: [], tournamentDraws: {} }
+  return {
+    matches: [],
+    publishedStatus: {},
+    authenticators: {},
+    temporaryCredentials: [],
+    tournamentDraws: {},
+    reportedPlayers: {},
+    organizerCredentials: {},
+    systemSettings: {
+      matchPoints: 30,
+      matchSets: 3,
+      liveUmpireMode: true,
+      liveStreamActive: false,
+      stadiumCourtsCount: 4,
+    },
+  }
 }
 
 function saveDbData(data) {
@@ -37,7 +52,48 @@ function saveDbData(data) {
       fs.mkdirSync(dir, { recursive: true })
     }
     const current = getDbData()
-    const merged = { ...current, ...data }
+    const merged = { ...current }
+
+    // Merge all incoming payload fields safely
+    Object.keys(data).forEach((key) => {
+      // If incoming matches is empty array but current DB has matches, DO NOT wipe
+      if (key === 'matches') {
+        if (Array.isArray(data.matches) && data.matches.length > 0) {
+          merged.matches = sanitizeMatchesData(data.matches)
+        } else if (Array.isArray(data.matches) && data.matches.length === 0 && (!current.matches || current.matches.length === 0)) {
+          merged.matches = []
+        }
+        return
+      }
+
+      if (key === 'authenticators') {
+        if (data.authenticators && typeof data.authenticators === 'object' && Object.keys(data.authenticators).length > 0) {
+          merged.authenticators = { ...(current.authenticators || {}), ...data.authenticators }
+        }
+        return
+      }
+
+      if (key === 'temporaryCredentials') {
+        if (Array.isArray(data.temporaryCredentials)) {
+          merged.temporaryCredentials = data.temporaryCredentials
+        }
+        return
+      }
+
+      if (
+        typeof data[key] === 'object' &&
+        data[key] !== null &&
+        !Array.isArray(data[key]) &&
+        typeof current[key] === 'object' &&
+        current[key] !== null &&
+        !Array.isArray(current[key])
+      ) {
+        merged[key] = { ...current[key], ...data[key] }
+      } else {
+        merged[key] = data[key]
+      }
+    })
+
     if (merged.matches) {
       merged.matches = sanitizeMatchesData(merged.matches)
     }
@@ -64,10 +120,19 @@ export default defineConfig({
       configureServer(server) {
         // Sync Tournaments & Draws across all connected devices (Mobile, Tablet, PC)
         server.middlewares.use('/api/tournaments', (req, res, next) => {
-          if (req.method === 'GET') {
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 204
+            res.end()
+            return
+          }
+
+          if (req.method === 'HEAD' || req.method === 'GET') {
             const data = getDbData()
             res.setHeader('Content-Type', 'application/json')
-            res.setHeader('Access-Control-Allow-Origin', '*')
             res.end(JSON.stringify(data || {}))
             return
           }
@@ -82,7 +147,6 @@ export default defineConfig({
                 const parsed = JSON.parse(body || '{}')
                 const saved = saveDbData(parsed)
                 res.setHeader('Content-Type', 'application/json')
-                res.setHeader('Access-Control-Allow-Origin', '*')
                 res.end(JSON.stringify({ success: true, data: saved }))
               } catch (err) {
                 res.statusCode = 500

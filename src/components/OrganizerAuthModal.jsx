@@ -93,42 +93,65 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setIsLoading(true)
 
     try {
-      // 1. Check Temporary Authenticator & Umpire credentials (both local & server DB)
+      // 1. Check Temporary Authenticator & Umpire credentials (fetch from server DB, localStorage, and Supabase)
       let tempList = []
-      const savedTemp = localStorage.getItem('badminton-temporary-credentials')
-      if (savedTemp) {
-        try {
-          tempList = JSON.parse(savedTemp)
-        } catch {}
-      }
-
-      // Try syncing with server DB
-      if (tempList.length === 0) {
-        try {
-          const serverRes = await fetch('/api/tournaments')
+      
+      // A. Fetch latest credentials from Shared Server DB
+      try {
+        const serverRes = await fetch('/api/tournaments')
+        if (serverRes.ok) {
           const serverData = await serverRes.json()
           if (serverData && Array.isArray(serverData.temporaryCredentials)) {
             tempList = serverData.temporaryCredentials
           }
+        }
+      } catch {}
+
+      // B. Merge with LocalStorage credentials
+      const savedTemp = localStorage.getItem('badminton-temporary-credentials')
+      if (savedTemp) {
+        try {
+          const localList = JSON.parse(savedTemp)
+          if (Array.isArray(localList)) {
+            const map = new Map()
+            localList.forEach((t) => {
+              if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
+            })
+            tempList.forEach((t) => {
+              if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
+            })
+            tempList = Array.from(map.values())
+          }
         } catch {}
       }
 
+      // C. Match user against combined credentials list
       const tempMatch = tempList.find(
         (t) =>
-          t.username.toLowerCase() === cleanUser &&
-          (t.password === cleanPass || t.password.toLowerCase() === cleanPass.toLowerCase())
+          t &&
+          t.username &&
+          t.username.trim().toLowerCase() === cleanUser &&
+          (String(t.password).trim() === cleanPass ||
+            String(t.password).trim().toLowerCase() === cleanPass.toLowerCase())
       )
 
       if (tempMatch) {
-        const isUmpire = tempMatch.scope === 'umpire' || tempMatch.role === 'umpire' || tempMatch.username.toLowerCase().includes('umpire')
+        const isUmpire =
+          tempMatch.scope === 'umpire' ||
+          tempMatch.role === 'umpire' ||
+          tempMatch.username.toLowerCase().includes('umpire') ||
+          tempMatch.username.toLowerCase().includes('ref')
+        
+        const courtAssigned = tempMatch.assignedCourt || tempMatch.courtName || 'Court 1'
         const tempSession = {
           username: tempMatch.username,
-          name: tempMatch.name || tempMatch.username,
+          name: tempMatch.name || tempMatch.authName || tempMatch.username,
           role: isUmpire ? 'umpire' : 'temporary_authenticator',
           assignedMatchId: tempMatch.assignedMatchId,
           assignedMatchName: tempMatch.assignedMatchName,
           scope: isUmpire ? 'umpire' : (tempMatch.scope || 'full'),
-          courtName: tempMatch.courtName || 'Court 1',
+          courtName: courtAssigned,
+          assignedCourt: courtAssigned,
           token: `auth_temp_${Date.now()}`,
           loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }
@@ -140,23 +163,6 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         return
       }
 
-      // Default preset Umpire credentials fallback
-      if (cleanUser === 'umpire_court1' && (cleanPass === 'pass_court1' || cleanPass.toLowerCase() === 'pass_court1')) {
-        const defaultUmpireSession = {
-          username: 'umpire_court1',
-          name: 'Court 1 Umpire & Referee',
-          role: 'umpire',
-          scope: 'umpire',
-          courtName: 'Court 1',
-          token: `auth_temp_${Date.now()}`,
-          loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }
-        setUsername('')
-        setPassword('')
-        setIsLoading(false)
-        onSuccess(defaultUmpireSession)
-        return
-      }
     } catch (err) {
       console.error('Error checking temporary credentials', err)
     }

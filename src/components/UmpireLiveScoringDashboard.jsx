@@ -81,9 +81,35 @@ export function UmpireLiveScoringDashboard({
     return () => clearInterval(timer)
   }, [selectedMatchId])
 
+  // Strict helper to check if a match is assigned to THIS logged-in umpire
+  const isMatchForThisUmpire = (m) => {
+    if (!m || (m.player1?.isBye && m.player2?.isBye)) return false
+
+    // Master admin can view all matches
+    if (session?.username === 'admin' || session?.role === 'admin') return true
+
+    const uName = session?.username?.toLowerCase()?.trim() || ''
+    const matchUmpire = (m.assignedUmpireUsername || m.umpireUsername || '')?.toLowerCase()?.trim()
+
+    // 1. If match has an assigned umpire username, strictly check against logged-in umpire username
+    if (matchUmpire) {
+      return Boolean(uName && matchUmpire === uName)
+    }
+
+    // 2. Fallback ONLY if match has NO assigned umpire username: check dedicated court
+    const uCourt = (session?.assignedCourt || session?.courtName || '')?.toLowerCase()?.trim()
+    const matchCourt = (m.court || m.assignedCourt || '')?.toLowerCase()?.trim()
+    if (uCourt && matchCourt && matchCourt === uCourt) {
+      return true
+    }
+
+    return false
+  }
+
   // Collect Live Matches assigned to THIS umpire
   const liveMatches = useMemo(() => {
     const list = []
+
     Object.keys(tournamentDraws).forEach((key) => {
       const draw = tournamentDraws[key]
       if (draw && Array.isArray(draw.matches)) {
@@ -91,11 +117,7 @@ export function UmpireLiveScoringDashboard({
         const cat = catParts.join('-') || draw.category || 'Standard'
         draw.matches.forEach((m) => {
           if (m.status === 'live' && !(m.player1?.isBye && m.player2?.isBye)) {
-            const isForMe =
-              (session?.username && m.assignedUmpireUsername === session.username) ||
-              (session?.assignedCourt && m.court === session.assignedCourt) ||
-              (!session?.username && !session?.assignedCourt)
-            if (isForMe) {
+            if (isMatchForThisUmpire(m)) {
               list.push({
                 ...m,
                 drawKey: key,
@@ -107,37 +129,10 @@ export function UmpireLiveScoringDashboard({
         })
       }
     })
+
     return list
   }, [tournamentDraws, session])
 
-  // Collect Upcoming Matches assigned to THIS umpire
-  const scheduledMatches = useMemo(() => {
-    const list = []
-    Object.keys(tournamentDraws).forEach((key) => {
-      const draw = tournamentDraws[key]
-      if (draw && Array.isArray(draw.matches)) {
-        const [tId, ...catParts] = key.split('-')
-        const cat = catParts.join('-') || draw.category || 'Standard'
-        draw.matches.forEach((m) => {
-          if (m.status !== 'completed' && m.status !== 'live' && !(m.player1?.isBye && m.player2?.isBye) && !m.winner) {
-            const isForMe =
-              (session?.username && m.assignedUmpireUsername === session.username) ||
-              (session?.assignedCourt && m.court === session.assignedCourt) ||
-              (!session?.username && !session?.assignedCourt)
-            if (isForMe) {
-              list.push({
-                ...m,
-                drawKey: key,
-                tournamentId: tId,
-                category: cat,
-              })
-            }
-          }
-        })
-      }
-    })
-    return list
-  }, [tournamentDraws, session])
 
   // Active match being scored
   const [activeMatchId, setActiveMatchId] = useState(null)
@@ -164,12 +159,98 @@ export function UmpireLiveScoringDashboard({
   const drawKey = activeMatch?.drawKey || (currentMatch ? `${currentMatch.id}-${activeMatch?.category || 'Men Singles'}` : '')
   const currentDraw = tournamentDraws[drawKey] || null
 
+  // Dynamic Match Sets & Points Settings (Configured in Schedule List by Organizer)
+  const [matchTotalPoints, setMatchTotalPoints] = useState(() => {
+    try {
+      const saved = localStorage.getItem('badminton-match-points')
+      return saved ? JSON.parse(saved) : 30
+    } catch {
+      return 30
+    }
+  })
+
+  const [matchTotalSets, setMatchTotalSets] = useState(() => {
+    try {
+      const saved = localStorage.getItem('badminton-match-sets')
+      return saved ? JSON.parse(saved) : 3
+    } catch {
+      return 3
+    }
+  })
+
+  // Real-time synchronization of system settings across tabs, windows & server
+  useEffect(() => {
+    const syncSettings = () => {
+      try {
+        const savedPts = localStorage.getItem('badminton-match-points')
+        if (savedPts) setMatchTotalPoints(JSON.parse(savedPts))
+        const savedSets = localStorage.getItem('badminton-match-sets')
+        if (savedSets) setMatchTotalSets(JSON.parse(savedSets))
+      } catch (e) {}
+
+      fetch('/api/tournaments')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.systemSettings?.matchPoints) {
+            setMatchTotalPoints(data.systemSettings.matchPoints)
+          }
+          if (data?.systemSettings?.matchSets) {
+            setMatchTotalSets(data.systemSettings.matchSets)
+          }
+        })
+        .catch(() => {})
+    }
+
+    const handleCustomEvent = (e) => {
+      if (e.detail?.matchPoints) setMatchTotalPoints(Number(e.detail.matchPoints))
+      if (e.detail?.matchSets) setMatchTotalSets(Number(e.detail.matchSets))
+    }
+
+    syncSettings()
+    window.addEventListener('storage', syncSettings)
+    window.addEventListener('badminton-settings-changed', handleCustomEvent)
+
+    let broadcastChannel = null
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        broadcastChannel = new BroadcastChannel('badminton_sync')
+        broadcastChannel.onmessage = (event) => {
+          if (event.data?.type === 'SETTINGS_UPDATED') {
+            if (event.data.matchPoints) setMatchTotalPoints(Number(event.data.matchPoints))
+            if (event.data.matchSets) setMatchTotalSets(Number(event.data.matchSets))
+          }
+        }
+      } catch (e) {}
+    }
+
+    const timer = setInterval(syncSettings, 3000)
+    return () => {
+      window.removeEventListener('storage', syncSettings)
+      window.removeEventListener('badminton-settings-changed', handleCustomEvent)
+      if (broadcastChannel) broadcastChannel.close()
+      clearInterval(timer)
+    }
+  }, [])
+
+  // Derived Match Rules based on configured Points & Sets
+  const targetPoints = Number(matchTotalPoints) || 30
+  const totalSets = Number(matchTotalSets) || 3
+  const setsToWin = totalSets === 1 ? 1 : Math.ceil(totalSets / 2)
+  const availableSets = useMemo(() => Array.from({ length: Math.max(1, totalSets) }, (_, i) => i + 1), [totalSets])
+
+  // Cap at 30 for 21 or 30 pts, or standard cap for 15/11 pts
+  const maxCap = targetPoints === 21 ? 30 : targetPoints === 30 ? 30 : targetPoints + Math.min(6, Math.max(2, Math.floor(targetPoints * 0.4)))
+  const deuceThreshold = Math.max(1, targetPoints - 1)
+  const intervalPoint = Math.ceil(targetPoints / 2)
+
   // Live Scoring States
-  const [currentSet, setCurrentSet] = useState(1) // 1 | 2 | 3
+  const [currentSet, setCurrentSet] = useState(1) // 1..totalSets
   const [setScores, setSetScores] = useState({
     set1: { p1: 0, p2: 0 },
     set2: { p1: 0, p2: 0 },
     set3: { p1: 0, p2: 0 },
+    set4: { p1: 0, p2: 0 },
+    set5: { p1: 0, p2: 0 },
   })
   const [servingPlayer, setServingPlayer] = useState('p1') // 'p1' | 'p2'
   const [serviceSide, setServiceSide] = useState('right') // 'right' (even) | 'left' (odd)
@@ -183,27 +264,32 @@ export function UmpireLiveScoringDashboard({
   // Sync with active match existing scores when match changes
   useEffect(() => {
     if (activeMatch) {
+      const initialScores = {
+        set1: { p1: Number(activeMatch.scoreSet1A) || 0, p2: Number(activeMatch.scoreSet1B) || 0 },
+        set2: { p1: Number(activeMatch.scoreSet2A) || 0, p2: Number(activeMatch.scoreSet2B) || 0 },
+        set3: { p1: Number(activeMatch.scoreSet3A) || 0, p2: Number(activeMatch.scoreSet3B) || 0 },
+        set4: { p1: Number(activeMatch.scoreSet4A) || 0, p2: Number(activeMatch.scoreSet4B) || 0 },
+        set5: { p1: Number(activeMatch.scoreSet5A) || 0, p2: Number(activeMatch.scoreSet5B) || 0 },
+      }
       if (activeMatch.liveScore && typeof activeMatch.liveScore === 'object') {
         setSetScores({
-          set1: activeMatch.liveScore.set1 || { p1: Number(activeMatch.scoreSet1A) || 0, p2: Number(activeMatch.scoreSet1B) || 0 },
-          set2: activeMatch.liveScore.set2 || { p1: Number(activeMatch.scoreSet2A) || 0, p2: Number(activeMatch.scoreSet2B) || 0 },
-          set3: activeMatch.liveScore.set3 || { p1: Number(activeMatch.scoreSet3A) || 0, p2: Number(activeMatch.scoreSet3B) || 0 },
+          set1: activeMatch.liveScore.set1 || initialScores.set1,
+          set2: activeMatch.liveScore.set2 || initialScores.set2,
+          set3: activeMatch.liveScore.set3 || initialScores.set3,
+          set4: activeMatch.liveScore.set4 || initialScores.set4,
+          set5: activeMatch.liveScore.set5 || initialScores.set5,
         })
-        setCurrentSet(activeMatch.liveScore.currentSet || 1)
+        setCurrentSet(Math.min(totalSets, activeMatch.liveScore.currentSet || 1))
         setServingPlayer(activeMatch.liveScore.servingPlayer || 'p1')
       } else {
-        setSetScores({
-          set1: { p1: Number(activeMatch.scoreSet1A) || 0, p2: Number(activeMatch.scoreSet1B) || 0 },
-          set2: { p1: Number(activeMatch.scoreSet2A) || 0, p2: Number(activeMatch.scoreSet2B) || 0 },
-          set3: { p1: Number(activeMatch.scoreSet3A) || 0, p2: Number(activeMatch.scoreSet3B) || 0 },
-        })
+        setSetScores(initialScores)
         setCurrentSet(1)
         setServingPlayer('p1')
       }
       setIsMatchConcluded(activeMatch.status === 'completed' || Boolean(activeMatch.winner))
       setScoreHistory([])
     }
-  }, [activeMatch?.id])
+  }, [activeMatch?.id, totalSets])
 
   // Server, Supabase & LocalStorage Draw Broadcaster
   const broadcastDrawUpdate = (updatedDraw, targetDrawKey = drawKey) => {
@@ -248,34 +334,42 @@ export function UmpireLiveScoringDashboard({
     }
   }
 
+
   // Live Score Calculator
   const currentSetKey = `set${currentSet}`
   const p1Score = setScores[currentSetKey]?.p1 || 0
   const p2Score = setScores[currentSetKey]?.p2 || 0
 
-  // BWF Game Point / Match Point Logic (21 Points, Lead by 2, Cap at 30)
-  const isDeuce = p1Score >= 20 && p2Score >= 20
+  const checkSetWon = (pPts, oppPts) => {
+    if (targetPoints === 30) return pPts >= 30
+    return (pPts >= targetPoints && pPts - oppPts >= 2) || pPts >= maxCap
+  }
+
+  // Set Point / Game Point & Deuce Logic
+  const isDeuce = targetPoints > 11 && p1Score >= deuceThreshold && p2Score >= deuceThreshold && p1Score === p2Score
   const isSetPoint =
-    (p1Score >= 20 && p1Score - p2Score >= 1) || (p2Score >= 20 && p2Score - p1Score >= 1)
-  const isSetWinnerP1 = (p1Score >= 21 && p1Score - p2Score >= 2) || p1Score === 30
-  const isSetWinnerP2 = (p2Score >= 21 && p2Score - p1Score >= 2) || p2Score === 30
+    !checkSetWon(p1Score, p2Score) && !checkSetWon(p2Score, p1Score) &&
+    ((p1Score >= deuceThreshold && p1Score - p2Score >= 1) || (p2Score >= deuceThreshold && p2Score - p1Score >= 1))
+  const isSetWinnerP1 = checkSetWon(p1Score, p2Score)
+  const isSetWinnerP2 = checkSetWon(p2Score, p1Score)
 
-  // Compute sets won so far
-  const setsWonP1 = [
-    setScores.set1.p1 >= 21 && setScores.set1.p1 - setScores.set1.p2 >= 2 || setScores.set1.p1 === 30,
-    setScores.set2.p1 >= 21 && setScores.set2.p1 - setScores.set2.p2 >= 2 || setScores.set2.p1 === 30,
-    setScores.set3.p1 >= 21 && setScores.set3.p1 - setScores.set3.p2 >= 2 || setScores.set3.p1 === 30,
-  ].filter(Boolean).length
+  // Compute sets won so far across available sets
+  const setsWonP1 = availableSets.filter((sNum) => {
+    const s = setScores[`set${sNum}`]
+    return s && checkSetWon(s.p1, s.p2)
+  }).length
 
-  const setsWonP2 = [
-    setScores.set1.p2 >= 21 && setScores.set1.p2 - setScores.set1.p1 >= 2 || setScores.set1.p2 === 30,
-    setScores.set2.p2 >= 21 && setScores.set2.p2 - setScores.set2.p1 >= 2 || setScores.set2.p2 === 30,
-    setScores.set3.p2 >= 21 && setScores.set3.p2 - setScores.set3.p1 >= 2 || setScores.set3.p2 === 30,
-  ].filter(Boolean).length
+  const setsWonP2 = availableSets.filter((sNum) => {
+    const s = setScores[`set${sNum}`]
+    return s && checkSetWon(s.p2, s.p1)
+  }).length
 
   const isMatchPoint =
-    (setsWonP1 === 1 && p1Score >= 20 && p1Score > p2Score) ||
-    (setsWonP2 === 1 && p2Score >= 20 && p2Score > p1Score)
+    !isMatchConcluded &&
+    setsWonP1 < setsToWin &&
+    setsWonP2 < setsToWin &&
+    ((setsWonP1 === setsToWin - 1 && p1Score >= deuceThreshold && p1Score > p2Score) ||
+     (setsWonP2 === setsToWin - 1 && p2Score >= deuceThreshold && p2Score > p1Score))
 
   // Increment Point
   const handleAddPoint = (player) => {
@@ -291,8 +385,8 @@ export function UmpireLiveScoringDashboard({
 
     const prevP1 = p1Score
     const prevP2 = p2Score
-    const newP1 = player === 'p1' ? Math.min(30, prevP1 + 1) : prevP1
-    const newP2 = player === 'p2' ? Math.min(30, prevP2 + 1) : prevP2
+    const newP1 = player === 'p1' ? Math.min(maxCap, prevP1 + 1) : prevP1
+    const newP2 = player === 'p2' ? Math.min(maxCap, prevP2 + 1) : prevP2
 
     setScoreHistory((prev) => [
       ...prev,
@@ -334,10 +428,16 @@ export function UmpireLiveScoringDashboard({
             scoreSet2B: nextScores.set2.p2 || (nextScores.set2.p1 ? 0 : ''),
             scoreSet3A: nextScores.set3.p1 || (nextScores.set3.p2 ? 0 : ''),
             scoreSet3B: nextScores.set3.p2 || (nextScores.set3.p1 ? 0 : ''),
+            scoreSet4A: nextScores.set4?.p1 || (nextScores.set4?.p2 ? 0 : ''),
+            scoreSet4B: nextScores.set4?.p2 || (nextScores.set4?.p1 ? 0 : ''),
+            scoreSet5A: nextScores.set5?.p1 || (nextScores.set5?.p2 ? 0 : ''),
+            scoreSet5B: nextScores.set5?.p2 || (nextScores.set5?.p1 ? 0 : ''),
             liveScore: {
               ...nextScores,
               currentSet,
               servingPlayer: player,
+              matchPoints: targetPoints,
+              matchSets: totalSets,
             },
           }
         }
@@ -401,10 +501,16 @@ export function UmpireLiveScoringDashboard({
             scoreSet2B: nextScores.set2.p2 || (nextScores.set2.p1 ? 0 : ''),
             scoreSet3A: nextScores.set3.p1 || (nextScores.set3.p2 ? 0 : ''),
             scoreSet3B: nextScores.set3.p2 || (nextScores.set3.p1 ? 0 : ''),
+            scoreSet4A: nextScores.set4?.p1 || (nextScores.set4?.p2 ? 0 : ''),
+            scoreSet4B: nextScores.set4?.p2 || (nextScores.set4?.p1 ? 0 : ''),
+            scoreSet5A: nextScores.set5?.p1 || (nextScores.set5?.p2 ? 0 : ''),
+            scoreSet5B: nextScores.set5?.p2 || (nextScores.set5?.p1 ? 0 : ''),
             liveScore: {
               ...nextScores,
               currentSet,
               servingPlayer,
+              matchPoints: targetPoints,
+              matchSets: totalSets,
             },
           }
         }
@@ -439,10 +545,16 @@ export function UmpireLiveScoringDashboard({
             scoreSet2B: lastState.setScores.set2.p2 || '',
             scoreSet3A: lastState.setScores.set3.p1 || '',
             scoreSet3B: lastState.setScores.set3.p2 || '',
+            scoreSet4A: lastState.setScores.set4?.p1 || '',
+            scoreSet4B: lastState.setScores.set4?.p2 || '',
+            scoreSet5A: lastState.setScores.set5?.p1 || '',
+            scoreSet5B: lastState.setScores.set5?.p2 || '',
             liveScore: {
               ...lastState.setScores,
               currentSet: lastState.currentSet,
               servingPlayer: lastState.servingPlayer,
+              matchPoints: targetPoints,
+              matchSets: totalSets,
             },
           }
         }
@@ -464,8 +576,8 @@ export function UmpireLiveScoringDashboard({
   }
 
   const handleSaveDirectScore = () => {
-    const newP1 = Math.max(0, Math.min(30, Number(directP1) || 0))
-    const newP2 = Math.max(0, Math.min(30, Number(directP2) || 0))
+    const newP1 = Math.max(0, Math.min(maxCap, Number(directP1) || 0))
+    const newP2 = Math.max(0, Math.min(maxCap, Number(directP2) || 0))
 
     setScoreHistory((prev) => [
       ...prev,
@@ -501,10 +613,16 @@ export function UmpireLiveScoringDashboard({
             scoreSet2B: nextScores.set2.p2 || (nextScores.set2.p1 ? 0 : ''),
             scoreSet3A: nextScores.set3.p1 || (nextScores.set3.p2 ? 0 : ''),
             scoreSet3B: nextScores.set3.p2 || (nextScores.set3.p1 ? 0 : ''),
+            scoreSet4A: nextScores.set4?.p1 || (nextScores.set4?.p2 ? 0 : ''),
+            scoreSet4B: nextScores.set4?.p2 || (nextScores.set4?.p1 ? 0 : ''),
+            scoreSet5A: nextScores.set5?.p1 || (nextScores.set5?.p2 ? 0 : ''),
+            scoreSet5B: nextScores.set5?.p2 || (nextScores.set5?.p1 ? 0 : ''),
             liveScore: {
               ...nextScores,
               currentSet,
               servingPlayer,
+              matchPoints: targetPoints,
+              matchSets: totalSets,
             },
           }
         }
@@ -519,7 +637,7 @@ export function UmpireLiveScoringDashboard({
 
   // Complete Set and Advance
   const handleNextSet = () => {
-    if (currentSet < 3) {
+    if (currentSet < totalSets && !isMatchConcluded) {
       setCurrentSet((s) => s + 1)
       setToastMessage(`✓ Advanced to Set ${currentSet + 1}!`)
     }
@@ -534,9 +652,13 @@ export function UmpireLiveScoringDashboard({
       return
     }
 
-    const scoreSummary = `${setScores.set1.p1}-${setScores.set1.p2}${
-      setScores.set2.p1 || setScores.set2.p2 ? `, ${setScores.set2.p1}-${setScores.set2.p2}` : ''
-    }${setScores.set3.p1 || setScores.set3.p2 ? `, ${setScores.set3.p1}-${setScores.set3.p2}` : ''}`
+    const scoreSummary = availableSets
+      .map((sNum) => {
+        const s = setScores[`set${sNum}`]
+        return (s && (s.p1 || s.p2)) ? `${s.p1}-${s.p2}` : null
+      })
+      .filter(Boolean)
+      .join(', ') || `${setScores.set1.p1}-${setScores.set1.p2}`
 
     // Advance Winner in Knockout Tree
     const matchRound = activeMatch.round || 1
@@ -556,10 +678,16 @@ export function UmpireLiveScoringDashboard({
           score: scoreSummary,
           scoreSet1A: setScores.set1.p1,
           scoreSet1B: setScores.set1.p2,
-          scoreSet2A: setScores.set2.p1 || '',
-          scoreSet2B: setScores.set2.p2 || '',
-          scoreSet3A: setScores.set3.p1 || '',
-          scoreSet3B: setScores.set3.p2 || '',
+          scoreSet2A: setScores.set2?.p1 || '',
+          scoreSet2B: setScores.set2?.p2 || '',
+          scoreSet3A: setScores.set3?.p1 || '',
+          scoreSet3B: setScores.set3?.p2 || '',
+          scoreSet4A: setScores.set4?.p1 || '',
+          scoreSet4B: setScores.set4?.p2 || '',
+          scoreSet5A: setScores.set5?.p1 || '',
+          scoreSet5B: setScores.set5?.p2 || '',
+          matchSets: totalSets,
+          matchPoints: targetPoints,
           liveScore: null,
         }
       }
@@ -595,6 +723,8 @@ export function UmpireLiveScoringDashboard({
       set1: { p1: 0, p2: 0 },
       set2: { p1: 0, p2: 0 },
       set3: { p1: 0, p2: 0 },
+      set4: { p1: 0, p2: 0 },
+      set5: { p1: 0, p2: 0 },
     })
     setCurrentSet(1)
     setScoreHistory([])
@@ -611,6 +741,10 @@ export function UmpireLiveScoringDashboard({
             scoreSet2B: '',
             scoreSet3A: '',
             scoreSet3B: '',
+            scoreSet4A: '',
+            scoreSet4B: '',
+            scoreSet5A: '',
+            scoreSet5B: '',
             liveScore: null,
           }
         }
@@ -633,24 +767,20 @@ export function UmpireLiveScoringDashboard({
     if (intervalSeconds !== null && intervalSeconds > 0) {
       timer = setInterval(() => setIntervalSeconds((s) => (s > 0 ? s - 1 : 0)), 1000)
     }
-    return () => clearInterval(timer)
+    return () => {
+      if (timer) clearInterval(timer)
+    }
   }, [intervalSeconds])
 
-  // Quick launch helper
-  const handleQuickLaunchLive = (matchToLaunch) => {
+  // Select a match to score
+  const handleSelectLiveMatch = (mId) => {
+    setActiveMatchId(mId)
+    setMobileTab('scoring')
+  }
+
+  // Launch a match to live scoring
+  const handleLaunchMatch = (matchToLaunch) => {
     if (!matchToLaunch) return
-    const key = matchToLaunch.drawKey
-    const targetDraw = tournamentDraws[key]
-    if (!targetDraw) return
-
-    const updatedMatches = targetDraw.matches.map((m) => {
-      if (m.id === matchToLaunch.id) {
-        return { ...m, status: 'live' }
-      }
-      return m
-    })
-
-    broadcastDrawUpdate({ ...targetDraw, matches: updatedMatches }, key)
     setActiveMatchId(matchToLaunch.id)
     setMobileTab('scoring')
     setToastMessage(`🔴 Match #${matchToLaunch.matchNumber || ''} is now LIVE on Court!`)
@@ -763,7 +893,9 @@ export function UmpireLiveScoringDashboard({
                 {/* Match Info Summary Card */}
                 <div className="mobile-match-info-card">
                   <div className="match-info-top">
-                    <span className="match-cat-badge">🏸 {activeMatch.category || 'Category'}</span>
+                    <span className="match-cat-badge">
+                      🏸 {activeMatch.category || 'Category'} • {totalSets === 1 ? '1 Set (Single)' : `Best of ${totalSets}`} ({targetPoints} Pts)
+                    </span>
                     <span className="match-round-badge">
                       🏆 {activeMatch.roundName || (activeMatch.round ? `Round ${activeMatch.round}` : 'Live Match')}
                     </span>
@@ -772,10 +904,10 @@ export function UmpireLiveScoringDashboard({
 
                   {/* Set Selector Tabs */}
                   <div className="mobile-set-tabs">
-                    {[1, 2, 3].map((sNum) => {
+                    {availableSets.map((sNum) => {
                       const isCur = currentSet === sNum
-                      const sP1 = setScores[`set${sNum}`].p1
-                      const sP2 = setScores[`set${sNum}`].p2
+                      const sP1 = setScores[`set${sNum}`]?.p1 || 0
+                      const sP2 = setScores[`set${sNum}`]?.p2 || 0
                       return (
                         <button
                           key={sNum}
@@ -792,10 +924,12 @@ export function UmpireLiveScoringDashboard({
                 </div>
 
                 {/* Match Alerts (Game Point / Match Point / Deuce / Concluded) */}
-                {(isMatchPoint || isSetPoint || isDeuce || isMatchConcluded) && (
-                  <div className={`mobile-in-game-banner ${isMatchConcluded ? 'concluded' : isMatchPoint ? 'match-point' : isSetPoint ? 'set-point' : 'deuce'}`}>
+                {(isMatchPoint || isSetPoint || isDeuce || isMatchConcluded || setsWonP1 >= setsToWin || setsWonP2 >= setsToWin) && (
+                  <div className={`mobile-in-game-banner ${isMatchConcluded || setsWonP1 >= setsToWin || setsWonP2 >= setsToWin ? 'concluded' : isMatchPoint ? 'match-point' : isSetPoint ? 'set-point' : 'deuce'}`}>
                     {isMatchConcluded
                       ? `🏆 MATCH CONCLUDED — Winner: ${activeMatch.winner?.name || 'Declared'}`
+                      : (setsWonP1 >= setsToWin || setsWonP2 >= setsToWin)
+                      ? `🏆 MATCH WON — ${setsWonP1 >= setsToWin ? (activeMatch.player1?.name || 'Player 1') : (activeMatch.player2?.name || 'Player 2')} won ${setsToWin} sets!`
                       : isMatchPoint
                       ? '⚡ MATCH POINT'
                       : isSetPoint
@@ -804,13 +938,13 @@ export function UmpireLiveScoringDashboard({
                   </div>
                 )}
 
-                {/* 60-Second Mid-Game Interval Alert (11 Points) */}
-                {(p1Score === 11 || p2Score === 11) && !isMatchConcluded && (
+                {/* 60-Second Mid-Game Interval Alert */}
+                {(p1Score === intervalPoint || p2Score === intervalPoint) && targetPoints >= 15 && !isMatchConcluded && (
                   <div className="mobile-interval-card">
                     <div className="interval-info">
                       <span className="interval-bell">🔔</span>
                       <div>
-                        <strong>11-Point Mid-Game Interval</strong>
+                        <strong>{intervalPoint}-Point Mid-Game Interval</strong>
                         <span>60-Second Official Break & Coaching</span>
                       </div>
                     </div>
@@ -876,8 +1010,9 @@ export function UmpireLiveScoringDashboard({
                     <div className="mobile-sets-won-row">
                       <span className="sets-text">Sets:</span>
                       <div className="sets-dots">
-                        <span className={`dot ${setsWonP1 >= 1 ? 'won' : ''}`} />
-                        <span className={`dot ${setsWonP1 >= 2 ? 'won' : ''}`} />
+                        {Array.from({ length: setsToWin }, (_, idx) => (
+                          <span key={idx} className={`dot ${setsWonP1 > idx ? 'won' : ''}`} />
+                        ))}
                       </div>
                     </div>
 
@@ -948,8 +1083,9 @@ export function UmpireLiveScoringDashboard({
                     <div className="mobile-sets-won-row">
                       <span className="sets-text">Sets:</span>
                       <div className="sets-dots">
-                        <span className={`dot ${setsWonP2 >= 1 ? 'won' : ''}`} />
-                        <span className={`dot ${setsWonP2 >= 2 ? 'won' : ''}`} />
+                        {Array.from({ length: setsToWin }, (_, idx) => (
+                          <span key={idx} className={`dot ${setsWonP2 > idx ? 'won' : ''}`} />
+                        ))}
                       </div>
                     </div>
 
@@ -1002,13 +1138,29 @@ export function UmpireLiveScoringDashboard({
                 </div>
 
                 {/* Next Set Quick Action Banner */}
-                {(isSetWinnerP1 || isSetWinnerP2) && currentSet < 3 && !isMatchConcluded && (
+                {(isSetWinnerP1 || isSetWinnerP2) && currentSet < totalSets && !isMatchConcluded && setsWonP1 < setsToWin && setsWonP2 < setsToWin && (
                   <button
                     type="button"
                     onClick={handleNextSet}
                     className="mobile-next-set-banner"
                   >
                     <span>⏩ Set {currentSet} Concluded! Tap for Set {currentSet + 1}</span>
+                  </button>
+                )}
+
+                {/* Match Win Action Banner */}
+                {(setsWonP1 >= setsToWin || setsWonP2 >= setsToWin) && !isMatchConcluded && (
+                  <button
+                    type="button"
+                    onClick={() => handleTriggerDeclareWinner(setsWonP1 >= setsToWin ? 'p1' : 'p2')}
+                    className="mobile-next-set-banner"
+                    style={{
+                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                      boxShadow: '0 4px 15px rgba(16, 185, 129, 0.45)',
+                      marginTop: '10px',
+                    }}
+                  >
+                    <span>🏆 {setsWonP1 >= setsToWin ? (activeMatch.player1?.name || 'Player 1') : (activeMatch.player2?.name || 'Player 2')} has won {setsToWin} sets! Tap to Declare Winner →</span>
                   </button>
                 )}
               </div>
@@ -1019,29 +1171,7 @@ export function UmpireLiveScoringDashboard({
                 <p>
                   Schedule list-la organizer ungaluku match assign panni <strong>"🔴 Start Live"</strong> nu launch pannum pothu, antha match automatic-ah inga live scoring ku open aagum.
                 </p>
-                {scheduledMatches.length > 0 ? (
-                  <div className="quick-launch-list">
-                    <h4>🎾 Your Assigned Upcoming Matches ({scheduledMatches.length}):</h4>
-                    {scheduledMatches.map((sm) => (
-                      <div key={sm.id} className="btn-quick-launch" style={{ cursor: 'default' }}>
-                        <div>
-                          <span style={{ color: '#38bdf8', fontWeight: '800' }}>#{sm.matchNumber || ''} </span>
-                          <span>{sm.player1?.name || 'P1'} vs {sm.player2?.name || 'P2'}</span>
-                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                            {sm.category || 'Category'} • {sm.court || 'Court 1'}
-                          </div>
-                        </div>
-                        <span style={{ fontSize: '10.5px', color: '#facc15', fontWeight: '800', background: 'rgba(250, 204, 21, 0.15)', padding: '3px 8px', borderRadius: '6px' }}>
-                          ⏳ Awaiting Call
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '11.5px', color: '#64748b', fontStyle: 'italic', marginTop: '10px' }}>
-                    No upcoming matches assigned to your login yet. Organizer will assign matches from schedule list.
-                  </div>
-                )}
+
               </div>
             )}
           </>
@@ -1061,7 +1191,7 @@ export function UmpireLiveScoringDashboard({
               {activeMatch && (
                 <div className="scoresheet-match-meta">
                   <span><strong>Match:</strong> {activeMatch.player1?.name || 'P1'} vs {activeMatch.player2?.name || 'P2'}</span>
-                  <span><strong>Category:</strong> {activeMatch.category || 'Standard'} • {activeMatch.court || 'Court 1'}</span>
+                  <span><strong>Category:</strong> {activeMatch.category || 'Standard'} • Best of {totalSets} ({targetPoints} Pts) • {activeMatch.court || 'Court 1'}</span>
                 </div>
               )}
 
@@ -1071,9 +1201,9 @@ export function UmpireLiveScoringDashboard({
                   <thead>
                     <tr>
                       <th>PLAYER</th>
-                      <th className={currentSet === 1 ? 'cur-set' : ''}>S1</th>
-                      <th className={currentSet === 2 ? 'cur-set' : ''}>S2</th>
-                      <th className={currentSet === 3 ? 'cur-set' : ''}>S3</th>
+                      {availableSets.map((sNum) => (
+                        <th key={sNum} className={currentSet === sNum ? 'cur-set' : ''}>S{sNum}</th>
+                      ))}
                       <th>SETS</th>
                     </tr>
                   </thead>
@@ -1083,9 +1213,9 @@ export function UmpireLiveScoringDashboard({
                         {servingPlayer === 'p1' && '🏸 '}
                         {activeMatch?.player1?.name || 'Player 1'}
                       </td>
-                      <td className="score-col">{setScores.set1.p1}</td>
-                      <td className="score-col">{setScores.set2.p1}</td>
-                      <td className="score-col">{setScores.set3.p1}</td>
+                      {availableSets.map((sNum) => (
+                        <td key={sNum} className="score-col">{setScores[`set${sNum}`]?.p1 || 0}</td>
+                      ))}
                       <td className="sets-won-col p1">{setsWonP1}</td>
                     </tr>
                     <tr className={servingPlayer === 'p2' ? 'serving-row' : ''}>
@@ -1093,9 +1223,9 @@ export function UmpireLiveScoringDashboard({
                         {servingPlayer === 'p2' && '🏸 '}
                         {activeMatch?.player2?.name || 'Player 2'}
                       </td>
-                      <td className="score-col">{setScores.set1.p2}</td>
-                      <td className="score-col">{setScores.set2.p2}</td>
-                      <td className="score-col">{setScores.set3.p2}</td>
+                      {availableSets.map((sNum) => (
+                        <td key={sNum} className="score-col">{setScores[`set${sNum}`]?.p2 || 0}</td>
+                      ))}
                       <td className="sets-won-col p2">{setsWonP2}</td>
                     </tr>
                   </tbody>
@@ -1182,33 +1312,7 @@ export function UmpireLiveScoringDashboard({
               )}
             </div>
 
-            {/* Upcoming Scheduled Matches Assigned to this Umpire */}
-            {scheduledMatches.length > 0 && (
-              <div className="queue-section" style={{ marginTop: '20px' }}>
-                <h3 className="section-title">⏱️ Your Assigned Upcoming Matches ({scheduledMatches.length})</h3>
-                <div className="queue-cards-list">
-                  {scheduledMatches.map((sm) => (
-                    <div key={sm.id} className="queue-match-card upcoming">
-                      <div className="q-top">
-                        <span className="q-match-num">Match #{sm.matchNumber || ''}</span>
-                        <span className="q-court">{sm.court || 'Court 1'}</span>
-                      </div>
-                      <div className="q-players">
-                        <span>{sm.player1?.name || 'Player 1'}</span>
-                        <span className="vs">vs</span>
-                        <span>{sm.player2?.name || 'Player 2'}</span>
-                      </div>
-                      <div className="q-bottom">
-                        <span>{sm.category || 'Category'}</span>
-                        <span style={{ fontSize: '10.5px', color: '#facc15', fontWeight: '800', background: 'rgba(250, 204, 21, 0.12)', padding: '3px 8px', borderRadius: '4px' }}>
-                          ⏳ Waiting for Organizer Call
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+
           </div>
         )}
       </main>
@@ -1289,9 +1393,10 @@ export function UmpireLiveScoringDashboard({
               {confirmWinnerPlayer === 'p1' ? activeMatch?.player1?.name || 'Player 1' : activeMatch?.player2?.name || 'Player 2'}
             </p>
             <div className="modal-score-preview">
-              Final Score: {setScores.set1.p1}-{setScores.set1.p2}
-              {(setScores.set2.p1 || setScores.set2.p2) ? `, ${setScores.set2.p1}-${setScores.set2.p2}` : ''}
-              {(setScores.set3.p1 || setScores.set3.p2) ? `, ${setScores.set3.p1}-${setScores.set3.p2}` : ''}
+              Final Score: {availableSets.map((sNum) => {
+                const s = setScores[`set${sNum}`]
+                return (s && (s.p1 || s.p2)) ? `${s.p1}-${s.p2}` : null
+              }).filter(Boolean).join(', ') || `${setScores.set1.p1}-${setScores.set1.p2}`}
             </div>
             <p className="modal-note">
               This will conclude the match, update the schedule result, and advance the winner in the bracket!
@@ -1324,7 +1429,7 @@ export function UmpireLiveScoringDashboard({
             <div className="modal-icon-crown" style={{ fontSize: '28px' }}>✏️</div>
             <h3>Adjust Set {currentSet} Score Directly</h3>
             <p className="modal-note" style={{ margin: '4px 0 16px', color: '#94a3b8' }}>
-              Point thavaraaga pottaal, inge seriyaana point-ai enter panni save seiyalaam.
+              Point thavaraaga pottaal, inge seriyaana point-ai enter panni save seiyalaam (Max {maxCap} Pts).
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
@@ -1344,7 +1449,7 @@ export function UmpireLiveScoringDashboard({
                   <input
                     type="number"
                     min="0"
-                    max="30"
+                    max={maxCap}
                     value={directP1}
                     onChange={(e) => setDirectP1(e.target.value)}
                     style={{
@@ -1362,7 +1467,7 @@ export function UmpireLiveScoringDashboard({
                   />
                   <button
                     type="button"
-                    onClick={() => setDirectP1((prev) => Math.min(30, Number(prev) + 1))}
+                    onClick={() => setDirectP1((prev) => Math.min(maxCap, Number(prev) + 1))}
                     style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(56, 189, 248, 0.2)', border: '1px solid #38bdf8', color: '#38bdf8', fontSize: '18px', fontWeight: '900', cursor: 'pointer' }}
                   >
                     +
@@ -1386,7 +1491,7 @@ export function UmpireLiveScoringDashboard({
                   <input
                     type="number"
                     min="0"
-                    max="30"
+                    max={maxCap}
                     value={directP2}
                     onChange={(e) => setDirectP2(e.target.value)}
                     style={{
@@ -1404,7 +1509,7 @@ export function UmpireLiveScoringDashboard({
                   />
                   <button
                     type="button"
-                    onClick={() => setDirectP2((prev) => Math.min(30, Number(prev) + 1))}
+                    onClick={() => setDirectP2((prev) => Math.min(maxCap, Number(prev) + 1))}
                     style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.2)', border: '1px solid #f43f5e', color: '#f43f5e', fontSize: '18px', fontWeight: '900', cursor: 'pointer' }}
                   >
                     +

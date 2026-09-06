@@ -883,8 +883,26 @@ export const calculateBadmintonWinner = (match, player1, player2, maxSets = 3) =
   if (player1.isBye) return player2
   if (player2.isBye) return player1
 
-  const neededWins = Math.ceil((Number(maxSets) || 3) / 2)
-  const totalSetsCount = Number(maxSets) || 3
+  // If match was already completed with a valid winner, NEVER alter the recorded winner
+  if (match.status === 'completed' && match.winner) {
+    return match.winner
+  }
+
+  // Use per-match configured sets or fallback to maxSets
+  const effectiveMaxSets = Number(match.matchSets || (
+    match.status === 'completed'
+      ? Math.max(
+          (match.scoreSet5A || match.scoreSet5B) ? 5 :
+          (match.scoreSet4A || match.scoreSet4B) ? 4 :
+          (match.scoreSet3A || match.scoreSet3B) ? 3 :
+          (match.scoreSet2A || match.scoreSet2B) ? 2 :
+          1,
+          match.matchSets || 1
+        )
+      : maxSets
+  )) || 3
+  const neededWins = Math.ceil(effectiveMaxSets / 2)
+  const totalSetsCount = effectiveMaxSets
 
   let p1SetsWon = 0
   let p2SetsWon = 0

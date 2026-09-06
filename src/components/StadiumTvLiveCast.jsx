@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { formatCategoryName, formatTournamentName, formatCourtName, formatAddress } from '../utils/textFormatters'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
+import { CourtConfigModal } from './CourtConfigModal'
+import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from '../utils/courtConfig'
 
 export const StadiumTvLiveCast = ({
   tournament,
@@ -37,14 +39,40 @@ export const StadiumTvLiveCast = ({
   const [showControls, setShowControls] = useState(true)
   const idleTimerRef = React.useRef(null)
 
-  const [numCourts, setNumCourts] = useState(() => {
-    try {
-      const saved = localStorage.getItem('badminton-stadium-courts-count')
-      return saved ? parseInt(saved, 10) : 4
-    } catch {
-      return 4
+  const [isCourtConfigModalOpen, setIsCourtConfigModalOpen] = useState(false)
+  const [courtConfig, setCourtConfig] = useState(() => getSavedCourtConfig())
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      if (!isCourtConfigModalOpen) {
+        setCourtConfig(getSavedCourtConfig())
+      }
     }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [isCourtConfigModalOpen])
+
+  const configuredCourts = useMemo(() => {
+    return generateCourtsList(courtConfig)
+  }, [courtConfig])
+
+  const [numCourts, setNumCourts] = useState(() => {
+    return courtConfig.count || 4
   })
+
+  useEffect(() => {
+    if (courtConfig.count) {
+      setNumCourts(courtConfig.count)
+    }
+  }, [courtConfig.count])
+
+  const handleCourtCountChange = (count) => {
+    const val = Math.max(1, Math.min(32, parseInt(count, 10) || 1))
+    setNumCourts(val)
+    const nextCfg = { ...courtConfig, count: val }
+    setCourtConfig(nextCfg)
+    saveCourtConfig(nextCfg)
+  }
 
   // TV Screen Rotation / Orientation (0, 90, 180, 270 degrees)
   const [rotation, setRotation] = useState(() => {
@@ -117,9 +145,15 @@ export const StadiumTvLiveCast = ({
   const [currentAdIndex, setCurrentAdIndex] = useState(0)
 
   const tickerAnimationDuration = useMemo(() => {
-    if (adSettings?.tickerSpeed === 'fast') return '16s'
-    if (adSettings?.tickerSpeed === 'normal') return '24s'
-    return '32s' // Unified identical speed for all 3 scrolls
+    const sp = adSettings?.tickerSpeed
+    if (typeof sp === 'number') return `${sp}s`
+    if (sp && !isNaN(Number(sp))) return `${Number(sp)}s`
+    if (sp === 'ultra-fast') return '8s'
+    if (sp === 'fast') return '14s'
+    if (sp === 'normal') return '22s'
+    if (sp === 'slow') return '32s'
+    if (sp === 'ultra-slow') return '45s'
+    return '32s'
   }, [adSettings?.tickerSpeed])
 
   useEffect(() => {
@@ -135,19 +169,28 @@ export const StadiumTvLiveCast = ({
 
   // Auto-hide buttons when mouse is inactive for clean TV broadcast
   useEffect(() => {
-    const handleMouseMove = () => {
+    const handleActivity = () => {
       setShowControls(true)
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
       idleTimerRef.current = setTimeout(() => {
         setShowControls(false)
-      }, 3000)
+      }, 2500)
     }
 
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('keydown', handleMouseMove)
+    // Auto-hide after initial 2.5s on screen load
+    idleTimerRef.current = setTimeout(() => {
+      setShowControls(false)
+    }, 2500)
+
+    window.addEventListener('mousemove', handleActivity)
+    window.addEventListener('pointermove', handleActivity)
+    window.addEventListener('keydown', handleActivity)
+    window.addEventListener('touchstart', handleActivity)
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('keydown', handleMouseMove)
+      window.removeEventListener('mousemove', handleActivity)
+      window.removeEventListener('pointermove', handleActivity)
+      window.removeEventListener('keydown', handleActivity)
+      window.removeEventListener('touchstart', handleActivity)
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
     }
   }, [])
@@ -199,21 +242,72 @@ export const StadiumTvLiveCast = ({
     return () => clearInterval(timer)
   }, [])
 
-  // Auto-reload tournament draws and scores with real-time storage events & fast 1.5s interval
+  // Auto-reload tournament draws and scores with real-time storage events & fast 1.5s interval from server DB & localStorage
   useEffect(() => {
-    const syncDraws = () => {
+    let isMounted = true
+    const syncDraws = async () => {
+      // 1. Fetch from shared server DB for cross-device & cross-origin sync
+      try {
+        const res = await fetch('/api/tournaments')
+        if (res.ok) {
+          const data = await res.json()
+          if (!isMounted) return
+          if (data && data.tournamentDraws && typeof data.tournamentDraws === 'object') {
+            setTournamentDraws(data.tournamentDraws)
+            try {
+              localStorage.setItem('badminton-tournament-draws', JSON.stringify(data.tournamentDraws))
+            } catch {}
+          }
+          if (data?.liveUmpireMode !== undefined) {
+            setIsLiveUmpireMode(data.liveUmpireMode)
+          }
+          return
+        }
+      } catch {}
+
+      // 2. Fallback to localStorage
       try {
         const saved = localStorage.getItem('badminton-tournament-draws')
-        if (saved) {
+        if (saved && isMounted) {
           setTournamentDraws(JSON.parse(saved))
         }
       } catch {}
     }
+
+    syncDraws()
     window.addEventListener('storage', syncDraws)
     const syncInterval = setInterval(syncDraws, 1500)
     return () => {
+      isMounted = false
       window.removeEventListener('storage', syncDraws)
       clearInterval(syncInterval)
+    }
+  }, [])
+
+  const [isLiveUmpireMode, setIsLiveUmpireMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('badminton-live-umpire-mode')
+      return saved !== null ? JSON.parse(saved) : true
+    } catch {
+      return true
+    }
+  })
+
+  // Auto-sync live umpire mode in real-time
+  useEffect(() => {
+    const syncUmpireMode = () => {
+      try {
+        const saved = localStorage.getItem('badminton-live-umpire-mode')
+        if (saved !== null) {
+          setIsLiveUmpireMode(JSON.parse(saved))
+        }
+      } catch {}
+    }
+    window.addEventListener('storage', syncUmpireMode)
+    const interval = setInterval(syncUmpireMode, 1500)
+    return () => {
+      window.removeEventListener('storage', syncUmpireMode)
+      clearInterval(interval)
     }
   }, [])
 
@@ -286,14 +380,6 @@ export const StadiumTvLiveCast = ({
     }
   }
 
-  // Handle Court Count Change
-  const handleCourtCountChange = (count) => {
-    setNumCourts(count)
-    try {
-      localStorage.setItem('badminton-stadium-courts-count', String(count))
-    } catch {}
-  }
-
   // Fullscreen toggle handler
   const handleToggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -314,15 +400,34 @@ export const StadiumTvLiveCast = ({
   })
 
   useEffect(() => {
-    const syncTournaments = () => {
+    let isMounted = true
+    const syncTournaments = async () => {
+      try {
+        const res = await fetch('/api/tournaments')
+        if (res.ok) {
+          const data = await res.json()
+          if (!isMounted) return
+          if (data && Array.isArray(data.matches) && data.matches.length > 0) {
+            setLiveTournaments(data.matches)
+            try {
+              localStorage.setItem('badminton-published-matches', JSON.stringify(data.matches))
+            } catch {}
+            return
+          }
+        }
+      } catch {}
+
       try {
         const saved = localStorage.getItem('badminton-published-matches')
-        if (saved) setLiveTournaments(JSON.parse(saved))
+        if (saved && isMounted) setLiveTournaments(JSON.parse(saved))
       } catch {}
     }
+
+    syncTournaments()
     window.addEventListener('storage', syncTournaments)
-    const interval = setInterval(syncTournaments, 2500)
+    const interval = setInterval(syncTournaments, 2000)
     return () => {
+      isMounted = false
       window.removeEventListener('storage', syncTournaments)
       clearInterval(interval)
     }
@@ -389,55 +494,58 @@ export const StadiumTvLiveCast = ({
     return allCategoryMatches.filter((m) => m.categoryName === selectedCategory)
   }, [allCategoryMatches, selectedCategory])
 
-  // 1. STRICT LIVE MATCHES: Launched to 'live' by Umpire
-  const allLiveLaunchedMatches = useMemo(() => {
-    const list = activePool.filter((m) => {
+  // Partition matches:
+  // ONLY matches that Admin launched to 'live' in Schedule List appear in Live Cast!
+  // 1. UPCOMING: Matches launched to live by Admin, waiting for Umpire to start
+  // 2. LIVE: Matches where Umpire has actively started match / scoring
+  const { displayLiveMatches, displayUpcomingMatches } = useMemo(() => {
+    const uncompleted = activePool.filter((m) => {
       const isCompleted = m.status === 'completed' || !!m.winner || m.isCompleted
       if (isCompleted) return false
       if (m.player1?.isBye && m.player2?.isBye) return false
-      return m.status === 'live' || (m.isLive === true && m.status !== 'scheduled')
+      return true
     })
 
-    return [...list].sort((a, b) => {
-      const numA = parseInt(a.matchNumber, 10) || parseInt(a.line1, 10) || 9999
-      const numB = parseInt(b.matchNumber, 10) || parseInt(b.line1, 10) || 9999
-      if (numA !== numB) return numA - numB
-      return (Number(a.round) || 1) - (Number(b.round) || 1)
+    // Filter strictly to matches changed to 'live' in Schedule list
+    const launchedMatches = uncompleted.filter(
+      (m) => m.status === 'live' || (m.isLive === true && m.status !== 'completed')
+    )
+
+    const activeLive = []
+    const upcomingQueue = []
+
+    launchedMatches.forEach((m) => {
+      // Check if match is actively in-play (points scored or umpire started)
+      const currentSet = m.liveScore?.currentSet || 1
+      const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
+      const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
+      const hasPoints = (
+        (p1Pts !== undefined && p1Pts !== '' && Number(p1Pts) > 0) ||
+        (p2Pts !== undefined && p2Pts !== '' && Number(p2Pts) > 0) ||
+        (m.scoreSet1A !== undefined && m.scoreSet1A !== '' && Number(m.scoreSet1A) > 0) ||
+        (m.scoreSet1B !== undefined && m.scoreSet1B !== '' && Number(m.scoreSet1B) > 0) ||
+        (m.scoreSet2A !== undefined && m.scoreSet2A !== '' && Number(m.scoreSet2A) > 0) ||
+        (m.scoreSet2B !== undefined && m.scoreSet2B !== '' && Number(m.scoreSet2B) > 0)
+      )
+      const isUmpireStarted = m.liveScore?.isStarted === true || Boolean(m.liveScore?.startedAt) || hasPoints
+
+      if (isUmpireStarted) {
+        activeLive.push({
+          ...m,
+          assignedCourtName: m.court || null,
+          isLiveDisplay: true,
+        })
+      } else {
+        upcomingQueue.push({
+          ...m,
+          assignedCourtName: m.court || null,
+          isLiveDisplay: false,
+        })
+      }
     })
+
+    return { displayLiveMatches: activeLive, displayUpcomingMatches: upcomingQueue }
   }, [activePool])
-
-  // 2. UPCOMING / SCHEDULED MATCHES: Not yet in-play
-  const allUpcomingMatches = useMemo(() => {
-    const list = activePool.filter((m) => {
-      const isCompleted = m.status === 'completed' || !!m.winner || m.isCompleted
-      if (isCompleted) return false
-      if (m.player1?.isBye && m.player2?.isBye) return false
-      const isLive = m.status === 'live' || (m.isLive === true && m.status !== 'scheduled')
-      return !isLive
-    })
-
-    return [...list].sort((a, b) => {
-      const numA = parseInt(a.matchNumber, 10) || parseInt(a.line1, 10) || 9999
-      const numB = parseInt(b.matchNumber, 10) || parseInt(b.line1, 10) || 9999
-      if (numA !== numB) return numA - numB
-      return (Number(a.round) || 1) - (Number(b.round) || 1)
-    })
-  }, [activePool])
-
-  // Display representations
-  const displayLiveMatches = useMemo(() => {
-    return allLiveLaunchedMatches.map((m, idx) => ({
-      ...m,
-      assignedCourtName: m.court || `Court ${idx + 1}`,
-    }))
-  }, [allLiveLaunchedMatches])
-
-  const displayUpcomingMatches = useMemo(() => {
-    return allUpcomingMatches.map((m, idx) => ({
-      ...m,
-      assignedCourtName: m.court || `Court ${((idx) % (numCourts || 4)) + 1}`,
-    }))
-  }, [allUpcomingMatches, numCourts])
 
   // Score change watcher for international TV point flash burst
   useEffect(() => {
@@ -467,80 +575,80 @@ export const StadiumTvLiveCast = ({
     })
   }, [displayLiveMatches])
 
-  // --- FULL-SCREEN SPONSOR INTERVAL & NO-LIVE-MATCH AUTO-SHOWCASE ---
-  const [isFullScreenAdVisible, setIsFullScreenAdVisible] = useState(false)
+  // --- SPONSOR VISUAL DATA & FULL-SCREEN SHOWCASE LOGIC ---
   const [fullScreenAdIndex, setFullScreenAdIndex] = useState(0)
-  const [fullScreenCountdown, setFullScreenCountdown] = useState(10)
-  const [isManualDismissedNoLive, setIsManualDismissedNoLive] = useState(false)
+  const [isIntervalAdVisible, setIsIntervalAdVisible] = useState(false)
+  const [countdownRemaining, setCountdownRemaining] = useState(10)
+  const [isStandbyDismissed, setIsStandbyDismissed] = useState(false)
 
   const visualAds = useMemo(() => {
-    return activeAds.filter((a) => a.mediaType === 'video' || a.mediaType === 'image' || a.logoUrl || a.videoUrl)
+    const list = (activeAds || []).filter((a) => a.active !== false)
+    return list.length > 0 ? list : DEFAULT_SPONSOR_ADS
   }, [activeAds])
 
   const hasLiveMatches = (displayLiveMatches || []).length > 0
+  const hasUpcomingMatches = (displayUpcomingMatches || []).length > 0
+  const hasAnyMatches = hasLiveMatches || hasUpcomingMatches
 
-  // When there are NO live matches: Auto-run full screen showcase continuously
-  const isNoLiveAutoShowcase = !hasLiveMatches && visualAds.length > 0 && !isManualDismissedNoLive
+  // 1. Standby mode: Active when NO matches are on screen
+  const isStandbyShowcaseActive = !hasAnyMatches && visualAds.length > 0 && !isStandbyDismissed
 
-  // Reset manual dismissal if a live match starts or stops
+  // Reset standby dismissal when matches appear or change
   useEffect(() => {
-    setIsManualDismissedNoLive(false)
-  }, [hasLiveMatches])
+    if (hasAnyMatches) {
+      setIsStandbyDismissed(false)
+    }
+  }, [hasAnyMatches])
 
-  // Continuous auto-rotation between all visual ads when no live matches are active
+  // Continuous rotation in Standby mode (when no matches)
   useEffect(() => {
-    if (!isNoLiveAutoShowcase || visualAds.length <= 1) return
-    const durSec = (parseInt(adSettings?.fullScreenDurationSeconds, 10) || 10) * 1000
-    const autoLoopTimer = setInterval(() => {
+    if (!isStandbyShowcaseActive || visualAds.length <= 1) return
+    const curAd = visualAds[fullScreenAdIndex] || visualAds[0]
+    const durSec = Number(curAd?.displayDuration) || Number(adSettings?.fullScreenDurationSeconds) || 10
+    const timer = setTimeout(() => {
       setFullScreenAdIndex((prev) => (prev + 1) % visualAds.length)
-    }, durSec)
-    return () => clearInterval(autoLoopTimer)
-  }, [isNoLiveAutoShowcase, visualAds.length, adSettings?.fullScreenDurationSeconds])
+    }, Math.max(3000, durSec * 1000))
+    return () => clearTimeout(timer)
+  }, [isStandbyShowcaseActive, visualAds, fullScreenAdIndex, adSettings?.fullScreenDurationSeconds])
 
-  // When live matches ARE active: trigger full-screen ad on configured interval
+  // 2. Interval mode: Trigger full-screen showcase during matches on configured interval
   useEffect(() => {
-    if (!hasLiveMatches) return
+    if (!hasAnyMatches) {
+      setIsIntervalAdVisible(false)
+      return
+    }
 
-    const intervalMins = parseInt(adSettings?.fullScreenIntervalMinutes, 10)
-    if (!intervalMins || intervalMins <= 0 || visualAds.length === 0 || adSettings?.intermissionMode) return
+    const intervalMins = Number(adSettings?.fullScreenIntervalMinutes) || 1
+    if (intervalMins <= 0 || visualAds.length === 0) return
 
-    const intervalMs = intervalMins * 60 * 1000
-    const timer = setInterval(() => {
+    const intervalMs = Math.max(15000, intervalMins * 60 * 1000)
+    const intervalTimer = setInterval(() => {
       setFullScreenAdIndex((prev) => (prev + 1) % visualAds.length)
-      const durSec = parseInt(adSettings?.fullScreenDurationSeconds, 10) || 10
-      setFullScreenCountdown(durSec)
-      setIsFullScreenAdVisible(true)
+      const durSec = Number(adSettings?.fullScreenDurationSeconds) || 10
+      setCountdownRemaining(durSec)
+      setIsIntervalAdVisible(true)
     }, intervalMs)
 
-    return () => clearInterval(timer)
-  }, [hasLiveMatches, adSettings?.fullScreenIntervalMinutes, adSettings?.fullScreenDurationSeconds, adSettings?.intermissionMode, visualAds.length])
+    return () => clearInterval(intervalTimer)
+  }, [hasAnyMatches, adSettings?.fullScreenIntervalMinutes, adSettings?.fullScreenDurationSeconds, visualAds.length])
 
-  // Countdown timer when interval full-screen ad is active during live matches
+  // Countdown timer for Interval mode
   useEffect(() => {
-    if (!isFullScreenAdVisible) return
-    const countTimer = setInterval(() => {
-      setFullScreenCountdown((prev) => {
+    if (!isIntervalAdVisible) return
+    const timer = setInterval(() => {
+      setCountdownRemaining((prev) => {
         if (prev <= 1) {
-          setIsFullScreenAdVisible(false)
+          setIsIntervalAdVisible(false)
           return 0
         }
         return prev - 1
       })
     }, 1000)
-    return () => clearInterval(countTimer)
-  }, [isFullScreenAdVisible])
+    return () => clearInterval(timer)
+  }, [isIntervalAdVisible])
 
-  const currentFullScreenAd = visualAds[fullScreenAdIndex] || visualAds[0] || activeAds[0] || null
-
-  const handleTriggerManualSpotlight = () => {
-    if (visualAds.length === 0 && activeAds.length === 0) {
-      alert('No active image or video sponsors configured. Please add an image or video sponsor in Ads & Sponsors manager.')
-      return
-    }
-    const durSec = parseInt(adSettings?.fullScreenDurationSeconds, 10) || 10
-    setFullScreenCountdown(durSec)
-    setIsFullScreenAdVisible(true)
-  }
+  const activeFullScreenAd = visualAds[fullScreenAdIndex] || visualAds[0] || null
+  const shouldRenderFullScreenAd = (isStandbyShowcaseActive || isIntervalAdVisible) && Boolean(activeFullScreenAd)
 
   // Synchronize fullscreen state with browser fullscreen changes (e.g. F11 or Esc)
   useEffect(() => {
@@ -641,7 +749,7 @@ export const StadiumTvLiveCast = ({
   return (
     <div
       style={containerStyle}
-      className={`stadium-tv-cast-container tv-rotate-${rotation} ${isPortrait ? 'is-portrait-tv' : 'is-landscape-tv'} ${liveCountClass} no-upcoming`}
+      className={`stadium-tv-cast-container tv-rotate-${rotation} ${isPortrait ? 'is-portrait-tv' : 'is-landscape-tv'} ${liveCountClass} ${displayUpcomingMatches.length === 0 ? 'no-upcoming' : 'has-upcoming'}`}
       onDoubleClick={handleToggleFullscreen}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
@@ -678,37 +786,6 @@ export const StadiumTvLiveCast = ({
               pointerEvents: showControls ? 'auto' : 'none',
             }}
           >
-            {/* Live Stream Active Badge */}
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '7px 14px',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.3) 100%)',
-                border: '1.5px solid rgba(239, 68, 68, 0.6)',
-                color: '#fca5a5',
-                fontWeight: '900',
-                fontSize: '13px',
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
-              }}
-            >
-              <span
-                style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  background: '#ef4444',
-                  boxShadow: '0 0 10px #ef4444',
-                  animation: 'pulse 1.5s infinite',
-                }}
-              />
-              <span>Live Broadcast</span>
-            </div>
-
-
             {/* Category Filter */}
             <select
               value={selectedCategory}
@@ -723,6 +800,27 @@ export const StadiumTvLiveCast = ({
               ))}
             </select>
 
+            {/* Stadium Courts Count & Format Settings */}
+            <button
+              type="button"
+              onClick={() => setIsCourtConfigModalOpen(true)}
+              className="stadium-tv-btn"
+              style={{
+                background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.3) 0%, rgba(3, 105, 161, 0.45) 100%)',
+                border: '1.5px solid #38bdf8',
+                color: '#e0f2fe',
+                fontWeight: '800',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+              title="Configure Courts Count & Naming Style"
+            >
+              <span>🏟️</span>
+              <span>Courts ({configuredCourts.length})</span>
+              <span style={{ fontSize: '11px', opacity: 0.8 }}>⚙️</span>
+            </button>
+
             {/* TV Screen Rotation / Orientation Selector */}
             <select
               value={rotation}
@@ -736,16 +834,6 @@ export const StadiumTvLiveCast = ({
               <option value={270}>📱 270° Portrait (Vertical Left)</option>
             </select>
 
-            {/* Quick Rotate Button */}
-            <button
-              type="button"
-              onClick={handleCycleRotate}
-              className="stadium-tv-btn rotate-btn"
-              title="Quick Rotate Screen 90°"
-            >
-              🔄 Rotate ({rotation}°)
-            </button>
-
             {/* Fullscreen TV Trigger */}
             <button
               type="button"
@@ -756,56 +844,29 @@ export const StadiumTvLiveCast = ({
               {isFullscreen ? '🗗 Exit Fullscreen' : '⛶ Fullscreen'}
             </button>
 
-            {/* Manual Fullscreen Sponsor Commercial Trigger */}
-            <button
-              type="button"
-              onClick={handleTriggerManualSpotlight}
-              className="stadium-tv-btn sponsor-btn"
-              style={{
-                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.25) 0%, rgba(5, 150, 105, 0.4) 100%)',
-                border: '1.5px solid #10b981',
-                color: '#6ee7b7',
-                fontWeight: '800',
-                padding: '6px 14px',
-                borderRadius: '8px',
-                cursor: 'pointer',
-              }}
-              title="Showcase Full Screen Sponsor Commercial Now"
-            >
-              ⭐ Sponsor Spotlight
-            </button>
-
-            {/* Dedicated Stop Live Stream Button */}
+            {/* Stop Live Stream */}
             <button
               type="button"
               onClick={handleStopStreamAction}
+              className="stadium-tv-btn back-to-app-btn"
               style={{
-                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.5) 100%)',
-                border: '1.5px solid #ef4444',
-                color: '#fee2e2',
-                padding: '7px 14px',
-                borderRadius: '10px',
-                fontWeight: '900',
-                fontSize: '12px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 0 16px rgba(239, 68, 68, 0.45)',
-                transition: 'all 0.2s ease',
+                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                color: '#ffffff',
+                border: 'none',
+                boxShadow: '0 2px 10px rgba(239, 68, 68, 0.4)',
+                fontWeight: '800',
               }}
-              title="Stop Live Stream & Exit Broadcast"
+              title="Turn OFF Live Stream and Exit"
             >
-              <span style={{ fontSize: '13px' }}>⏹️</span>
-              <span>Stop Live Stream</span>
+              ⏹️ Stop Live Stream
             </button>
 
-            {/* Back to App / Exit Live Cast */}
+            {/* Back to App */}
             <button
               type="button"
               onClick={handleExitLiveCast}
               className="stadium-tv-btn back-to-app-btn"
-              title="Exit and return to App"
+              title="Return to App (Stream remains ON)"
             >
               ✕ Back to App
             </button>
@@ -868,423 +929,264 @@ export const StadiumTvLiveCast = ({
         </div>
       )}
 
-      {/* SPONSOR BANNER RIBBON STRIP - AUTO-SCROLLING */}
-      {adSettings.showBannerBar && activeAds.length > 0 && !adSettings.intermissionMode && (
-        <div className="stadium-sponsor-ribbon">
-          <div className="stadium-sponsor-label">
-            <span>✨ OFFICIAL SPONSORS</span>
-          </div>
-          <div className="stadium-sponsor-chips-carousel">
-            <div className="stadium-sponsor-marquee-track" style={{ animationDuration: tickerAnimationDuration }}>
-              {/* First loop of sponsor chips */}
-              {activeAds.map((ad, idx) => (
-                <div
-                  key={`top-sponsor-1-${ad.id || idx}`}
-                  className="stadium-sponsor-chip"
-                  style={{
-                    borderLeftColor: ad.accentColor || '#38bdf8',
-                  }}
-                >
-                  {ad.logoUrl ? (
-                    <img src={ad.logoUrl} alt={ad.sponsorName} className="sponsor-chip-logo" />
-                  ) : (
-                    <span className="sponsor-chip-icon">🏸</span>
-                  )}
-                  <span className="sponsor-chip-name">{ad.sponsorName}</span>
-                  <span className="sponsor-chip-badge" style={{ color: ad.accentColor || '#38bdf8' }}>
-                    {ad.badge || 'Official Sponsor'}
-                  </span>
-                  {ad.tagline && (
-                    <span className="sponsor-chip-tagline">“{ad.tagline}”</span>
-                  )}
-                </div>
-              ))}
-
-              {/* Second duplicated loop for seamless infinite scrolling */}
-              {activeAds.map((ad, idx) => (
-                <div
-                  key={`top-sponsor-2-${ad.id || idx}`}
-                  className="stadium-sponsor-chip"
-                  style={{
-                    borderLeftColor: ad.accentColor || '#38bdf8',
-                  }}
-                >
-                  {ad.logoUrl ? (
-                    <img src={ad.logoUrl} alt={ad.sponsorName} className="sponsor-chip-logo" />
-                  ) : (
-                    <span className="sponsor-chip-icon">🏸</span>
-                  )}
-                  <span className="sponsor-chip-name">{ad.sponsorName}</span>
-                  <span className="sponsor-chip-badge" style={{ color: ad.accentColor || '#38bdf8' }}>
-                    {ad.badge || 'Official Sponsor'}
-                  </span>
-                  {ad.tagline && (
-                    <span className="sponsor-chip-tagline">“{ad.tagline}”</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* INTERMISSION FULLSCREEN SPONSOR SHOWCASE OVERLAY */}
-      {adSettings.intermissionMode && currentHighlightAd && (
-        <div className="stadium-intermission-overlay">
-          <div className="stadium-intermission-card" style={{ borderColor: currentHighlightAd.accentColor || '#38bdf8' }}>
-            <span className="intermission-badge" style={{ background: currentHighlightAd.accentColor || '#38bdf8' }}>
-              {currentHighlightAd.badge || '👑 Title Sponsor'}
-            </span>
-
-            {/* Video or Image Media Showcase */}
-            {Boolean(currentHighlightAd.videoUrl) ? (
-              <div className="intermission-video-frame">
-                <video
-                  src={currentHighlightAd.videoUrl}
-                  autoPlay
-                  loop
-                  muted={adSettings.videoMuted !== false}
-                  playsInline
-                  className="intermission-video-elem"
-                />
-              </div>
-            ) : currentHighlightAd.logoUrl ? (
-              <div className="intermission-img-frame">
-                <img src={currentHighlightAd.logoUrl} alt={currentHighlightAd.sponsorName} className="intermission-logo" />
-              </div>
-            ) : (
-              <div className="intermission-icon">🏸</div>
-            )}
-
-            <h1 className="intermission-title">{currentHighlightAd.sponsorName}</h1>
-            <p className="intermission-tagline">“{currentHighlightAd.tagline}”</p>
-            {currentHighlightAd.description && (
-              <p className="intermission-desc">{currentHighlightAd.description}</p>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', margin: '14px 0 20px' }}>
-              {currentHighlightAd.ctaText && (
-                <span className="intermission-cta-btn" style={{ background: currentHighlightAd.accentColor || '#38bdf8' }}>
-                  {currentHighlightAd.ctaText}
-                </span>
-              )}
-              {currentHighlightAd.phoneOrLink && (
-                <div className="intermission-contact">
-                  📍 {currentHighlightAd.phoneOrLink}
-                </div>
-              )}
-            </div>
-
-            <div className="intermission-footer">
-              <span>🏆 Official Partner of {formatTournamentName(currentTournament?.matchName || 'Badminton Championship')}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 2. MAIN TV BODY - DYNAMICALLY DRIVEN BY LIVE UMPIRE STATUS */}
+      {/* 2. MAIN TV BODY */}
       <main className="stadium-tv-main">
-        {displayLiveMatches.length > 0 ? (
-          /* CASE 1: LIVE MATCHES IN-PLAY ON COURTS */
-          <section className="stadium-broadcast-section live-section fill-full-screen">
-            <div className="stadium-section-header">
-              <div className="stadium-section-title-wrap">
-                <span className="stadium-live-pulse-dot" />
-                <h2 className="stadium-section-title">🔴 LIVE MATCHES ({displayLiveMatches.length})</h2>
-                <span className="stadium-section-subtitle">• In-Play on Courts (Live Umpire Active)</span>
-              </div>
-              <span className="stadium-mode-tag auto-dispatch">
-                ⚡ Live Scoreboard
-              </span>
-            </div>
-
-            <div className="stadium-table-container live-table-wrap">
-              <table className="stadium-broadcast-table stadium-live-table">
-                <thead>
-                  <tr>
-                    <th className="th-court">COURT & MATCH</th>
-                    <th className="th-cat">CATEGORY & ROUND</th>
-                    <th className="th-p1" style={{ textAlign: 'right' }}>PLAYER / TEAM 1</th>
-                    <th className="th-score" style={{ textAlign: 'center' }}>LIVE SCORE</th>
-                    <th className="th-p2" style={{ textAlign: 'left' }}>PLAYER / TEAM 2</th>
-                    <th className="th-status" style={{ textAlign: 'center' }}>STATUS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayLiveMatches.map((m, idx) => {
-                    const p1 = m.player1
-                    const p2 = m.player2
-                    const p1Name = p1?.name || 'Player 1'
-                    const p2Name = p2?.name || 'Player 2'
-                    const currentSet = m.liveScore?.currentSet || 1
-                    const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
-                    const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
-                    const courtDisplay = m.assignedCourtName || m.court || `Court ${idx + 1}`
-
-                    const bwfStatus = getBwfStatusBadge(m, p1Pts, p2Pts, currentSet, m.liveScore?.setsWonA || 0, m.liveScore?.setsWonB || 0)
-                    const isP1Flashing = Boolean(flashScoredKeys[`${m.id}-p1`])
-                    const isP2Flashing = Boolean(flashScoredKeys[`${m.id}-p2`])
-
-                    return (
-                      <tr
-                        key={m.id || `live-${idx}`}
-                        className={`stadium-table-row live-row ${bwfStatus.type === 'match-point' ? 'row-match-point' : ''}`}
-                      >
-                        {/* 1. Court & Match Pill */}
-                        <td className="table-court-cell">
-                          <div className="table-court-tag">
-                            <span className="clean-live-dot" />
-                            <span className="court-name-bold">{courtDisplay}</span>
-                          </div>
-                          <span className="table-match-pill">Match #{m.matchNumber || idx + 1}</span>
-                        </td>
-
-                        {/* 2. Category & Round */}
-                        <td className="table-category-cell">
-                          <div className="table-cat-title">{formatCategoryName(m.categoryName)}</div>
-                          {m.roundName && <div className="table-cat-sub">{m.roundName}</div>}
-                        </td>
-
-                        {/* 3. Player 1 */}
-                        <td className="table-player-cell p1-cell">
-                          <div className="table-player-wrap right-align">
-                            <span className="table-player-name">{p1Name}</span>
-                            {Boolean(p1?.seed || p1?.isSeed) && (
-                              <span className="stadium-seed-badge">S{p1.seed || p1.seedNumber || ''}</span>
-                            )}
-                          </div>
-                          {p1?.place && <div className="table-player-place right-align">{p1.place}</div>}
-                        </td>
-
-                        {/* 4. Live Sets & Points Score */}
-                        <td className="table-score-cell">
-                          <div className="table-set-pill-wrap">
-                            <div className="table-live-points-main">
-                              <span className={`live-point-num ${isP1Flashing ? 'bwf-point-flash' : ''}`}>{p1Pts}</span>
-                              <span className="live-pts-dash">-</span>
-                              <span className={`live-point-num ${isP2Flashing ? 'bwf-point-flash' : ''}`}>{p2Pts}</span>
-                            </div>
-                            <div className="table-sets-sub-line">
-                              <span className="table-set-label">Set {currentSet}</span>
-                              {(m.scoreSet1A !== undefined || m.scoreSet2A !== undefined) && (
-                                <span className="table-sets-box">
-                                  {m.scoreSet1A || 0}-{m.scoreSet1B || 0}
-                                  {m.scoreSet2A !== undefined ? `, ${m.scoreSet2A || 0}-${m.scoreSet2B || 0}` : ''}
-                                  {m.scoreSet3A !== undefined ? `, ${m.scoreSet3A || 0}-${m.scoreSet3B || 0}` : ''}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 5. Player 2 */}
-                        <td className="table-player-cell p2-cell">
-                          <div className="table-player-wrap left-align">
-                            {Boolean(p2?.seed || p2?.isSeed) && (
-                              <span className="stadium-seed-badge">S{p2.seed || p2.seedNumber || ''}</span>
-                            )}
-                            <span className="table-player-name">{p2Name}</span>
-                          </div>
-                          {p2?.place && <div className="table-player-place left-align">{p2.place}</div>}
-                        </td>
-
-                        {/* 6. Status Badge */}
-                        <td className="table-status-cell">
-                          <span className={`stadium-bwf-badge ${bwfStatus.type}`}>
-                            {bwfStatus.label}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* UPCOMING MATCHES QUEUE (Shown below live matches when in-play) */}
-            {displayUpcomingMatches.length > 0 && (
-              <div className="stadium-upcoming-preview-strip">
-                <div className="upcoming-preview-label">
-                  <span className="clean-upcoming-dot" />
-                  <span>⏳ NEXT UP ({displayUpcomingMatches.length}):</span>
-                </div>
-                <div className="upcoming-preview-chips">
-                  {displayUpcomingMatches.slice(0, 6).map((up) => (
-                    <div key={`up-preview-${up.id || up.matchNumber}`} className="upcoming-preview-chip">
-                      <span className="up-court-tag">{up.assignedCourtName}</span>
-                      <span className="up-match-tag">#{up.matchNumber || ''}</span>
-                      <span className="up-names">{up.player1?.name || 'P1'} vs {up.player2?.name || 'P2'}</span>
-                      <span className="up-cat-badge">{formatCategoryName(up.categoryName)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+        {displayLiveMatches.length === 0 && displayUpcomingMatches.length === 0 ? (
+          <div className="stadium-empty-live-box">
+            <div className="stadium-empty-icon">🏸</div>
+            <h3>No Matches Currently Available</h3>
+            <p>Schedule list-ல் இருந்து மேட்ச்களை add அல்லது start செய்யும்போது தானாக இங்கே நேரலையில் காண்பிக்கப்படும்.</p>
+          </div>
         ) : (
-          /* CASE 2: NO LIVE MATCHES IN-PLAY -> SHOW FULL UPCOMING MATCHES QUEUE */
-          <section className="stadium-broadcast-section live-section fill-full-screen">
-            <div className="stadium-section-header">
-              <div className="stadium-section-title-wrap">
-                <span className="stadium-upcoming-pulse-dot" />
-                <h2 className="stadium-section-title">⏳ UPCOMING MATCHES ({displayUpcomingMatches.length})</h2>
-                <span className="stadium-section-subtitle">• Tournament Fixtures & Court Queue</span>
-              </div>
-              <span className="stadium-mode-tag upcoming-dispatch">
-                🏸 Match Queue
-              </span>
-            </div>
+          <>
+            {/* =========================================================
+               SECTION 1: 🔴 LIVE MATCHES (First N Court Matches)
+               ========================================================= */}
+            {displayLiveMatches.length > 0 && (
+              <section className="stadium-broadcast-section live-section">
+                <div className="stadium-section-header">
+                  <div className="stadium-section-title-wrap">
+                    <span className="stadium-live-pulse-dot" />
+                    <h2 className="stadium-section-title">🔴 LIVE MATCHES ({displayLiveMatches.length})</h2>
+                    <span className="stadium-section-subtitle">
+                      • In-Play on {configuredCourts.length > 0 ? `${configuredCourts[0]}..${configuredCourts[configuredCourts.length - 1]}` : `Courts 1..${numCourts || displayLiveMatches.length}`}
+                    </span>
+                  </div>
+                  <span className="stadium-mode-tag auto-dispatch">
+                    ⚡ Live Scoreboard
+                  </span>
+                </div>
 
-            {displayUpcomingMatches.length === 0 ? (
-              <div className="stadium-empty-live-box">
-                <div className="stadium-empty-icon">🏸</div>
-                <h3>No Matches Currently Scheduled</h3>
-                <p>Schedule list-ல் இருந்து மேட்ச்களை "Live" அல்லது Scheduled செய்யும்போது தானாக இங்கே காண்பிக்கப்படும்.</p>
-              </div>
-            ) : (
-              <div className="stadium-table-container live-table-wrap">
-                <table className="stadium-broadcast-table stadium-live-table">
-                  <thead>
-                    <tr>
-                      <th className="th-court">COURT & MATCH</th>
-                      <th className="th-cat">CATEGORY & ROUND</th>
-                      <th className="th-p1" style={{ textAlign: 'right' }}>PLAYER / TEAM 1</th>
-                      <th className="th-score" style={{ textAlign: 'center' }}>SCORE / STATUS</th>
-                      <th className="th-p2" style={{ textAlign: 'left' }}>PLAYER / TEAM 2</th>
-                      <th className="th-status" style={{ textAlign: 'center' }}>STATUS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayUpcomingMatches.map((m, idx) => {
-                      const p1 = m.player1
-                      const p2 = m.player2
-                      const p1Name = p1?.name || 'Player 1'
-                      const p2Name = p2?.name || 'Player 2'
-                      const courtDisplay = m.assignedCourtName || m.court || `Court ${idx + 1}`
+                <div className="stadium-table-container live-table-wrap">
+                  <table className="stadium-broadcast-table stadium-live-table">
+                    <thead>
+                      <tr>
+                        <th className="th-court">COURT & MATCH</th>
+                        <th className="th-cat">CATEGORY & ROUND</th>
+                        <th className="th-p1" style={{ textAlign: 'right' }}>PLAYER / TEAM 1</th>
+                        <th className="th-score" style={{ textAlign: 'center' }}>LIVE SCORE</th>
+                        <th className="th-p2" style={{ textAlign: 'left' }}>PLAYER / TEAM 2</th>
+                        <th className="th-status" style={{ textAlign: 'center' }}>STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayLiveMatches.map((m, idx) => {
+                        const p1 = m.player1
+                        const p2 = m.player2
+                        const p1Name = p1?.name || 'Player 1'
+                        const p2Name = p2?.name || 'Player 2'
+                        const currentSet = m.liveScore?.currentSet || 1
+                        const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
+                        const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
+                        const courtDisplay = m.court || `Match #${m.matchNumber || idx + 1}`
 
-                      return (
-                        <tr
-                          key={m.id || `upcoming-${idx}`}
-                          className="stadium-table-row upcoming-row"
-                        >
-                          {/* 1. Court & Match Pill */}
-                          <td className="table-court-cell">
-                            <div className="table-court-tag">
-                              <span className="clean-upcoming-dot" />
-                              <span className="court-name-bold">{courtDisplay}</span>
-                            </div>
-                            <span className="table-match-pill">Match #{m.matchNumber || idx + 1}</span>
-                          </td>
+                        const bwfStatus = getBwfStatusBadge(m, p1Pts, p2Pts, currentSet, m.liveScore?.setsWonA || 0, m.liveScore?.setsWonB || 0)
+                        const isP1Flashing = Boolean(flashScoredKeys[`${m.id}-p1`])
+                        const isP2Flashing = Boolean(flashScoredKeys[`${m.id}-p2`])
 
-                          {/* 2. Category & Round */}
-                          <td className="table-category-cell">
-                            <div className="table-cat-title">{formatCategoryName(m.categoryName)}</div>
-                            {m.roundName && <div className="table-cat-sub">{m.roundName}</div>}
-                          </td>
+                        return (
+                          <tr
+                            key={m.id || `live-${idx}`}
+                            className={`stadium-table-row live-row ${bwfStatus.type === 'match-point' ? 'row-match-point' : ''}`}
+                          >
+                            {/* 1. Court & Match Pill */}
+                            <td className="table-court-cell">
+                              <div className="table-court-tag">
+                                <span className="clean-live-dot" />
+                                <span className="court-name-bold">{courtDisplay}</span>
+                              </div>
+                              <span className="table-match-pill">{m.court ? `Match #${m.matchNumber || idx + 1}` : 'Live'}</span>
+                            </td>
 
-                          {/* 3. Player 1 */}
-                          <td className="table-player-cell p1-cell">
-                            <div className="table-player-wrap right-align">
-                              <span className="table-player-name">{p1Name}</span>
-                              {Boolean(p1?.seed || p1?.isSeed) && (
-                                <span className="stadium-seed-badge">S{p1.seed || p1.seedNumber || ''}</span>
-                              )}
-                            </div>
-                            {p1?.place && <div className="table-player-place right-align">{p1.place}</div>}
-                          </td>
+                            {/* 2. Category & Round */}
+                            <td className="table-category-cell">
+                              <div className="table-cat-title">{formatCategoryName(m.categoryName)}</div>
+                              {m.roundName && <div className="table-cat-sub">{m.roundName}</div>}
+                            </td>
 
-                          {/* 4. VS / Scheduled Status */}
-                          <td className="table-score-cell">
-                            <div className="table-set-pill-wrap">
-                              <span className="table-vs-pill">VS</span>
-                              <span className="table-set-label">{m.roundName || 'Scheduled'}</span>
-                            </div>
-                          </td>
+                            {/* 3. Player 1 */}
+                            <td className="table-player-cell p1-cell">
+                              <div className="table-player-wrap right-align">
+                                <span className="table-player-name">{p1Name}</span>
+                                {Boolean(p1?.seed || p1?.isSeed) && (
+                                  <span className="stadium-seed-badge">S{p1.seed || p1.seedNumber || ''}</span>
+                                )}
+                              </div>
+                              {p1?.place && <div className="table-player-place right-align">{p1.place}</div>}
+                            </td>
 
-                          {/* 5. Player 2 */}
-                          <td className="table-player-cell p2-cell">
-                            <div className="table-player-wrap left-align">
-                              {Boolean(p2?.seed || p2?.isSeed) && (
-                                <span className="stadium-seed-badge">S{p2.seed || p2.seedNumber || ''}</span>
-                              )}
-                              <span className="table-player-name">{p2Name}</span>
-                            </div>
-                            {p2?.place && <div className="table-player-place left-align">{p2.place}</div>}
-                          </td>
+                            {/* 4. Live Sets & Points Score */}
+                            <td className="table-score-cell">
+                              <div className="table-set-pill-wrap">
+                                <div className="table-live-points-main">
+                                  <span className={`live-point-num ${isP1Flashing ? 'bwf-point-flash' : ''}`}>{p1Pts}</span>
+                                  <span className="live-pts-dash">-</span>
+                                  <span className={`live-point-num ${isP2Flashing ? 'bwf-point-flash' : ''}`}>{p2Pts}</span>
+                                </div>
+                                <div className="table-sets-sub-line">
+                                  <span className="table-set-label">Set {currentSet}</span>
+                                  {(m.scoreSet1A !== undefined || m.scoreSet2A !== undefined) && (
+                                    <span className="table-sets-box">
+                                      {m.scoreSet1A || 0}-{m.scoreSet1B || 0}
+                                      {m.scoreSet2A !== undefined ? `, ${m.scoreSet2A || 0}-${m.scoreSet2B || 0}` : ''}
+                                      {m.scoreSet3A !== undefined ? `, ${m.scoreSet3A || 0}-${m.scoreSet3B || 0}` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
 
-                          {/* 6. Status Badge */}
-                          <td className="table-status-cell">
-                            <span className="stadium-bwf-badge badge-upcoming">
-                              ⏳ UPCOMING
-                            </span>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                            {/* 5. Player 2 */}
+                            <td className="table-player-cell p2-cell">
+                              <div className="table-player-wrap left-align">
+                                {Boolean(p2?.seed || p2?.isSeed) && (
+                                  <span className="stadium-seed-badge">S{p2.seed || p2.seedNumber || ''}</span>
+                                )}
+                                <span className="table-player-name">{p2Name}</span>
+                              </div>
+                              {p2?.place && <div className="table-player-place left-align">{p2.place}</div>}
+                            </td>
+
+                            {/* 6. Status Badge */}
+                            <td className="table-status-cell">
+                              <span className={`stadium-bwf-badge ${bwfStatus.type}`}>
+                                {bwfStatus.label}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
+            {/* =========================================================
+               DISTINCT SEPARATION & DIVIDER (10cm visual spacing)
+               ========================================================= */}
+            {displayLiveMatches.length > 0 && displayUpcomingMatches.length > 0 && (
+              <div className="stadium-live-upcoming-divider">
+                <div className="stadium-divider-line" />
+                <span className="stadium-divider-pill">⏳ UPCOMING MATCHES QUEUE</span>
+                <div className="stadium-divider-line" />
               </div>
             )}
-          </section>
+
+            {/* =========================================================
+               SECTION 2: ⏳ UPCOMING MATCHES (Launched from Schedule)
+               ========================================================= */}
+            {displayUpcomingMatches.length > 0 && (
+              <section className="stadium-broadcast-section upcoming-section">
+                <div className="stadium-section-header">
+                  <div className="stadium-section-title-wrap">
+                    <span className="stadium-upcoming-pulse-dot" />
+                    <h2 className="stadium-section-title">⏳ UPCOMING MATCHES ({displayUpcomingMatches.length})</h2>
+                    <span className="stadium-section-subtitle">• Ready on Court (Waiting for Umpire to start)</span>
+                  </div>
+                  <span className="stadium-mode-tag upcoming-dispatch">
+                    🏸 Court Queue
+                  </span>
+                </div>
+
+                <div className="stadium-table-container upcoming-table-wrap">
+                  <table className="stadium-broadcast-table stadium-upcoming-table">
+                    <thead>
+                      <tr>
+                        <th className="th-court">COURT & MATCH</th>
+                        <th className="th-cat">CATEGORY & ROUND</th>
+                        <th className="th-p1" style={{ textAlign: 'right' }}>PLAYER / TEAM 1</th>
+                        <th className="th-score" style={{ textAlign: 'center' }}>SCORE / STATUS</th>
+                        <th className="th-p2" style={{ textAlign: 'left' }}>PLAYER / TEAM 2</th>
+                        <th className="th-status" style={{ textAlign: 'center' }}>STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayUpcomingMatches.map((m, idx) => {
+                        const p1 = m.player1
+                        const p2 = m.player2
+                        const p1Name = p1?.name || 'Player 1'
+                        const p2Name = p2?.name || 'Player 2'
+                        const courtDisplay = m.court || `Match #${m.matchNumber || idx + 1}`
+
+                        return (
+                          <tr
+                            key={m.id || `upcoming-${idx}`}
+                            className="stadium-table-row upcoming-row"
+                          >
+                            {/* 1. Court & Match Pill */}
+                            <td className="table-court-cell">
+                              <div className="table-court-tag">
+                                <span className="clean-upcoming-dot" />
+                                <span className="court-name-bold" style={{ color: '#fbbf24' }}>{courtDisplay}</span>
+                              </div>
+                              <span className="table-match-pill">{m.court ? `Match #${m.matchNumber || idx + 1}` : 'Upcoming'}</span>
+                            </td>
+
+                            {/* 2. Category & Round */}
+                            <td className="table-category-cell">
+                              <div className="table-cat-title">{formatCategoryName(m.categoryName)}</div>
+                              {m.roundName && <div className="table-cat-sub">{m.roundName}</div>}
+                            </td>
+
+                            {/* 3. Player 1 */}
+                            <td className="table-player-cell p1-cell">
+                              <div className="table-player-wrap right-align">
+                                <span className="table-player-name">{p1Name}</span>
+                                {Boolean(p1?.seed || p1?.isSeed) && (
+                                  <span className="stadium-seed-badge">S{p1.seed || p1.seedNumber || ''}</span>
+                                )}
+                              </div>
+                              {p1?.place && <div className="table-player-place right-align">{p1.place}</div>}
+                            </td>
+
+                            {/* 4. VS / Scheduled Status */}
+                            <td className="table-score-cell">
+                              <div className="table-set-pill-wrap">
+                                <span className="table-vs-pill">VS</span>
+                                <span className="table-set-label">{m.roundName || 'Ready on Court'}</span>
+                              </div>
+                            </td>
+
+                            {/* 5. Player 2 */}
+                            <td className="table-player-cell p2-cell">
+                              <div className="table-player-wrap left-align">
+                                {Boolean(p2?.seed || p2?.isSeed) && (
+                                  <span className="stadium-seed-badge">S{p2.seed || p2.seedNumber || ''}</span>
+                                )}
+                                <span className="table-player-name">{p2Name}</span>
+                              </div>
+                              {p2?.place && <div className="table-player-place left-align">{p2.place}</div>}
+                            </td>
+
+                            {/* 6. Status Badge */}
+                            <td className="table-status-cell">
+                              <span className="stadium-bwf-badge badge-upcoming">
+                                ⏳ READY
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+          </>
         )}
       </main>
-
-      {/* ROTATING FLOATING CORNER SPOTLIGHT AD (PiP) */}
-      {adSettings.showFloatingSpotlight && !adSettings.intermissionMode && currentHighlightAd && (
-        <div
-          className="stadium-floating-ad-card"
-          style={{ borderLeftColor: currentHighlightAd.accentColor || '#38bdf8' }}
-        >
-          {Boolean(currentHighlightAd.videoUrl) ? (
-            <div className="floating-ad-video-box">
-              <video
-                src={currentHighlightAd.videoUrl}
-                autoPlay
-                loop
-                muted
-                playsInline
-                className="floating-ad-video-elem"
-              />
-            </div>
-          ) : currentHighlightAd.logoUrl ? (
-            <div className="floating-ad-img-box">
-              <img src={currentHighlightAd.logoUrl} alt={currentHighlightAd.sponsorName} className="floating-ad-img-elem" />
-            </div>
-          ) : null}
-
-          <div className="floating-ad-top">
-            <span className="floating-ad-badge" style={{ color: currentHighlightAd.accentColor || '#38bdf8' }}>
-              {currentHighlightAd.badge}
-            </span>
-            <span className="floating-ad-brand">{currentHighlightAd.sponsorName}</span>
-          </div>
-          <p className="floating-ad-text">{currentHighlightAd.tagline}</p>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '6px' }}>
-            {currentHighlightAd.ctaText && (
-              <span className="floating-ad-cta" style={{ background: `${currentHighlightAd.accentColor || '#38bdf8'}30`, color: currentHighlightAd.accentColor || '#38bdf8', borderColor: currentHighlightAd.accentColor || '#38bdf8' }}>
-                {currentHighlightAd.ctaText}
-              </span>
-            )}
-            {currentHighlightAd.phoneOrLink && (
-              <span className="floating-ad-sub">📍 {currentHighlightAd.phoneOrLink}</span>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* 3. DUAL AUTO-SCROLLING TICKER MARQUEES (TOP ANNOUNCEMENT + BOTTOM SPONSOR BANNER) */}
       <footer className="stadium-tv-footer">
         {/* ROW 1: TOP SCROLLING ANNOUNCEMENT & LIVE MATCHES */}
         <div className="stadium-ticker-row row-top">
-          <div className="stadium-ticker-label label-top">
-            <span>📢 ANNOUNCEMENT</span>
-          </div>
           <div className="stadium-ticker-content">
             <div className="stadium-ticker-marquee" style={{ animationDuration: tickerAnimationDuration }}>
               {/* User Configured Top Scrolling Announcement */}
               {adSettings.topScrollingText && (
                 <span className="ticker-item highlight-text-top">
-                  ⭐ <strong>NOTICE:</strong> {adSettings.topScrollingText}
+                  📢 {adSettings.topScrollingText}
                 </span>
               )}
 
@@ -1304,24 +1206,26 @@ export const StadiumTvLiveCast = ({
               {/* Seamless Repeat of Top Scrolling Announcement */}
               {adSettings.topScrollingText && (
                 <span className="ticker-item highlight-text-top">
-                  ⭐ <strong>NOTICE:</strong> {adSettings.topScrollingText}
+                  📢 {adSettings.topScrollingText}
                 </span>
               )}
             </div>
           </div>
         </div>
 
-        {/* ROW 2: BOTTOM SCROLLING SPONSORS & OFFERS WITH EXIT BUTTON */}
+        {/* ROW 2: BOTTOM SCROLLING OFFICIAL SPONSORS & OFFERS */}
         <div className="stadium-ticker-row row-bottom">
-          <div className="stadium-ticker-label label-bottom">
-            <span>⭐ SPONSORS & OFFERS</span>
-          </div>
           <div className="stadium-ticker-content">
             <div className="stadium-ticker-marquee" style={{ animationDuration: tickerAnimationDuration }}>
+              {/* Official Sponsor Title Tag */}
+              <span className="ticker-item highlight-text-bottom" style={{ fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+                🏷️ OFFICIAL SPONSORS
+              </span>
+
               {/* User Configured Bottom Scrolling Text */}
               {adSettings.bottomScrollingText && (
                 <span className="ticker-item highlight-text-bottom">
-                  🔥 <strong>SPECIAL:</strong> {adSettings.bottomScrollingText}
+                  ⭐ {adSettings.bottomScrollingText}
                 </span>
               )}
 
@@ -1336,10 +1240,14 @@ export const StadiumTvLiveCast = ({
                 </span>
               ))}
 
-              {/* Seamless Repeat of Bottom Scrolling Text */}
+              {/* Seamless Repeat of Official Sponsor Tag & Sponsors */}
+              <span className="ticker-item highlight-text-bottom" style={{ fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+                🏷️ OFFICIAL SPONSORS
+              </span>
+
               {adSettings.bottomScrollingText && (
                 <span className="ticker-item highlight-text-bottom">
-                  🔥 <strong>SPECIAL:</strong> {adSettings.bottomScrollingText}
+                  ⭐ {adSettings.bottomScrollingText}
                 </span>
               )}
 
@@ -1353,33 +1261,6 @@ export const StadiumTvLiveCast = ({
                 </span>
               ))}
             </div>
-          </div>
-
-          {/* Dedicated Bottom Exit / Turn Off Button */}
-          <div className="stadium-footer-actions" style={{ paddingRight: '10px', flexShrink: 0, zIndex: 10 }}>
-            <button
-              type="button"
-              onClick={handleStopStreamAction}
-              style={{
-                background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
-                border: '1.5px solid #fca5a5',
-                color: '#ffffff',
-                padding: '4px 14px',
-                borderRadius: '8px',
-                fontWeight: '900',
-                fontSize: '11.5px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 2px 10px rgba(239, 68, 68, 0.45)',
-                whiteSpace: 'nowrap',
-              }}
-              title="Stop Live Stream & Exit Broadcast"
-            >
-              <span style={{ fontSize: '12px' }}>⏹️</span>
-              <span>Stop Stream</span>
-            </button>
           </div>
         </div>
       </footer>
@@ -1488,8 +1369,8 @@ export const StadiumTvLiveCast = ({
         </div>
       )}
 
-      {/* FULL-SCREEN SPONSOR SHOWCASE OVERLAY (IMAGE / VIDEO AUTO-INTERVAL & STANDBY SHOWCASE) */}
-      {(isNoLiveAutoShowcase || isFullScreenAdVisible || adSettings?.intermissionMode) && currentFullScreenAd && (
+      {/* FULL-SCREEN SPONSOR SHOWCASE OVERLAY (STANDBY WHEN NO MATCHES / INTERVAL DURING MATCHES) */}
+      {shouldRenderFullScreenAd && (
         <div
           className="stadium-fullscreen-sponsor-overlay"
           style={{
@@ -1503,7 +1384,7 @@ export const StadiumTvLiveCast = ({
             alignItems: 'center',
             padding: '24px 36px',
             overflow: 'hidden',
-            animation: 'fadeIn 0.4s ease-out',
+            animation: 'fadeIn 0.35s ease-out',
           }}
         >
           {/* Top Sponsor Branding Header */}
@@ -1512,39 +1393,40 @@ export const StadiumTvLiveCast = ({
               <span style={{ fontSize: '32px' }}>🏸</span>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '900', color: currentFullScreenAd.accentColor || '#38bdf8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                    ⭐ {currentFullScreenAd.badge || 'OFFICIAL TOURNAMENT SPONSOR'}
+                  <span style={{ fontSize: '13px', fontWeight: '900', color: activeFullScreenAd.accentColor || '#38bdf8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                    ⭐ OFFICIAL TOURNAMENT SPONSOR
                   </span>
-                  <span style={{ background: hasLiveMatches ? 'rgba(56, 189, 248, 0.15)' : 'rgba(34, 197, 94, 0.15)', border: `1px solid ${hasLiveMatches ? 'rgba(56, 189, 248, 0.3)' : '#22c55e'}`, color: hasLiveMatches ? '#38bdf8' : '#4ade80', padding: '2px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: '800' }}>
-                    {hasLiveMatches ? 'LIVE INTERVAL COMMERCIAL' : 'AUTO SPONSOR SHOWCASE'}
-                  </span>
+                  {isIntervalAdVisible && (
+                    <span
+                      style={{
+                        background: 'rgba(56, 189, 248, 0.15)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        color: '#38bdf8',
+                        padding: '3px 12px',
+                        borderRadius: '999px',
+                        fontSize: '11.5px',
+                        fontWeight: '800',
+                      }}
+                    >
+                      ⏳ Returning in {countdownRemaining}s
+                    </span>
+                  )}
                 </div>
                 <h1 style={{ margin: '4px 0 0', fontSize: '30px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.02em' }}>
-                  {currentFullScreenAd.sponsorName}
+                  {activeFullScreenAd.sponsorName}
                 </h1>
               </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {hasLiveMatches && !adSettings?.intermissionMode ? (
-                <div style={{ background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(148, 163, 184, 0.3)', padding: '6px 16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ color: '#38bdf8', fontWeight: '900', fontSize: '16px', fontFamily: 'monospace' }}>
-                    ⏱ {fullScreenCountdown}s
-                  </span>
-                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>Returning to live matches</span>
-                </div>
-              ) : !hasLiveMatches ? (
-                <div style={{ background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(34, 197, 94, 0.4)', padding: '6px 14px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="clean-live-dot" style={{ background: '#22c55e' }} />
-                  <span style={{ fontSize: '12px', color: '#4ade80', fontWeight: 800 }}>Standby Loop (No Live Matches)</span>
-                </div>
-              ) : null}
-
               <button
                 type="button"
                 onClick={() => {
-                  setIsFullScreenAdVisible(false)
-                  if (!hasLiveMatches) setIsManualDismissedNoLive(true)
+                  if (isIntervalAdVisible) {
+                    setIsIntervalAdVisible(false)
+                  } else {
+                    setIsStandbyDismissed(true)
+                  }
                 }}
                 style={{
                   background: 'rgba(239, 68, 68, 0.2)',
@@ -1555,10 +1437,11 @@ export const StadiumTvLiveCast = ({
                   fontWeight: '800',
                   fontSize: '13px',
                   cursor: 'pointer',
+                  transition: 'all 0.2s ease',
                 }}
-                title={hasLiveMatches ? 'Return to live matches' : 'View scoreboard screen'}
+                title={hasAnyMatches ? 'Return to live matches' : 'View empty scoreboard screen'}
               >
-                {hasLiveMatches ? '✕ Skip to Matches' : '✕ View Scoreboard'}
+                {hasAnyMatches ? '✕ Skip to Matches' : '✕ View Scoreboard'}
               </button>
             </div>
           </div>
@@ -1575,35 +1458,54 @@ export const StadiumTvLiveCast = ({
               margin: '18px 0',
               borderRadius: '20px',
               overflow: 'hidden',
-              boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 50px ${currentFullScreenAd.accentColor || '#38bdf8'}25`,
-              border: `2px solid ${currentFullScreenAd.accentColor || '#38bdf8'}60`,
+              boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 50px ${activeFullScreenAd.accentColor || '#38bdf8'}25`,
+              border: `2px solid ${activeFullScreenAd.accentColor || '#38bdf8'}60`,
               background: '#030712',
             }}
           >
-            {currentFullScreenAd.mediaType === 'video' || currentFullScreenAd.videoUrl ? (
+            {activeFullScreenAd.mediaType === 'video' || activeFullScreenAd.videoUrl ? (
               <video
-                src={currentFullScreenAd.videoUrl}
+                src={activeFullScreenAd.videoUrl}
                 autoPlay
                 loop
                 playsInline
                 muted={adSettings?.videoMuted !== false}
                 style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '68vh' }}
               />
-            ) : currentFullScreenAd.logoUrl ? (
+            ) : activeFullScreenAd.logoUrl ? (
               <img
-                src={currentFullScreenAd.logoUrl}
-                alt={currentFullScreenAd.sponsorName}
+                src={activeFullScreenAd.logoUrl}
+                alt={activeFullScreenAd.sponsorName}
                 style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '68vh' }}
               />
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px', textAlign: 'center' }}>
-                <span style={{ fontSize: '64px', marginBottom: '16px' }}>🏸</span>
-                <h2 style={{ fontSize: '36px', color: currentFullScreenAd.accentColor || '#38bdf8', margin: 0, fontWeight: 900 }}>
-                  {currentFullScreenAd.sponsorName}
-                </h2>
-                <p style={{ fontSize: '20px', color: '#e2e8f0', margin: '12px 0 0', maxWidth: '800px' }}>
-                  {currentFullScreenAd.tagline}
-                </p>
+              <div className="stadium-billboard-card" style={{ '--ad-accent': activeFullScreenAd.accentColor || '#38bdf8' }}>
+                <span
+                  className="stadium-billboard-badge"
+                  style={{
+                    color: activeFullScreenAd.accentColor || '#38bdf8',
+                    borderColor: `${activeFullScreenAd.accentColor || '#38bdf8'}50`,
+                    background: `${activeFullScreenAd.accentColor || '#38bdf8'}15`,
+                  }}
+                >
+                  ⭐ OFFICIAL SPONSOR SHOWCASE
+                </span>
+
+                <h1 className="stadium-billboard-title">
+                  {activeFullScreenAd.sponsorName}
+                </h1>
+
+                {activeFullScreenAd.tagline && (
+                  <p className="stadium-billboard-tagline">
+                    “{activeFullScreenAd.tagline}”
+                  </p>
+                )}
+
+                {activeFullScreenAd.description && (
+                  <p className="stadium-billboard-desc">
+                    {activeFullScreenAd.description}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -1613,7 +1515,7 @@ export const StadiumTvLiveCast = ({
             style={{
               width: '100%',
               background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
-              border: `1.5px solid ${currentFullScreenAd.accentColor || '#38bdf8'}40`,
+              border: `1.5px solid ${activeFullScreenAd.accentColor || '#38bdf8'}40`,
               borderRadius: '16px',
               padding: '14px 24px',
               display: 'flex',
@@ -1623,31 +1525,72 @@ export const StadiumTvLiveCast = ({
             }}
           >
             <div style={{ maxWidth: '75%' }}>
-              <p style={{ margin: 0, fontSize: '17px', fontWeight: '800', color: '#f8fafc', lineHeight: 1.3 }}>
-                “{currentFullScreenAd.tagline}”
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '17px',
+                  fontWeight: '800',
+                  color: '#f8fafc',
+                  lineHeight: 1.3,
+                  fontFamily: "'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                “{activeFullScreenAd.tagline}”
               </p>
-              {currentFullScreenAd.description && (
-                <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: '#cbd5e1' }}>
-                  {currentFullScreenAd.description}
+              {activeFullScreenAd.description && (
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#cbd5e1', lineHeight: 1.5 }}>
+                  {activeFullScreenAd.description}
                 </p>
               )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-              {currentFullScreenAd.phoneOrLink && (
-                <span style={{ fontSize: '13.5px', fontWeight: '800', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.12)', padding: '6px 14px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
-                  📍 {currentFullScreenAd.phoneOrLink}
+              {activeFullScreenAd.phoneOrLink && (
+                <span
+                  style={{
+                    fontSize: '13.5px',
+                    fontWeight: '800',
+                    color: '#38bdf8',
+                    background: 'rgba(56, 189, 248, 0.12)',
+                    padding: '8px 16px',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(56, 189, 248, 0.35)',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  📍 {activeFullScreenAd.phoneOrLink}
                 </span>
               )}
-              {currentFullScreenAd.ctaText && (
-                <span style={{ fontSize: '13.5px', fontWeight: '900', color: '#ffffff', background: `linear-gradient(135deg, ${currentFullScreenAd.accentColor || '#0284c7'} 0%, #0369a1 100%)`, padding: '8px 18px', borderRadius: '10px', boxShadow: `0 4px 16px ${currentFullScreenAd.accentColor || '#38bdf8'}40` }}>
-                  {currentFullScreenAd.ctaText}
+              {activeFullScreenAd.ctaText && (
+                <span
+                  style={{
+                    fontSize: '13.5px',
+                    fontWeight: '900',
+                    color: '#ffffff',
+                    background: `linear-gradient(135deg, ${activeFullScreenAd.accentColor || '#0284c7'} 0%, #0369a1 100%)`,
+                    padding: '9px 20px',
+                    borderRadius: '10px',
+                    boxShadow: `0 4px 16px ${activeFullScreenAd.accentColor || '#38bdf8'}40`,
+                    letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {activeFullScreenAd.ctaText}
                 </span>
               )}
             </div>
           </div>
         </div>
       )}
+
+      {/* Stadium Courts Configuration Modal */}
+      <CourtConfigModal
+        isOpen={isCourtConfigModalOpen}
+        initialConfig={courtConfig}
+        onClose={() => setIsCourtConfigModalOpen(false)}
+        onSave={(newCfg) => setCourtConfig(newCfg)}
+      />
     </div>
   )
 }

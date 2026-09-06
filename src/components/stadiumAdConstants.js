@@ -2,8 +2,6 @@ export const DEFAULT_SPONSOR_ADS = [
   {
     id: 'ad-1',
     sponsorName: 'YONEX',
-    badge: '👑 Title Sponsor',
-    tier: 'title',
     mediaType: 'image',
     tagline: 'Official Shuttlecock & Tournament Equipment Partner • Far Beyond Ordinary',
     description: 'Explore the revolutionary Astrox & Nanoflare Series rackets. Trusted by world champions across BWF tournaments worldwide.',
@@ -18,8 +16,6 @@ export const DEFAULT_SPONSOR_ADS = [
   {
     id: 'ad-2',
     sponsorName: 'VICTOR SPORTS',
-    badge: '⚡ Official Kit Sponsor',
-    tier: 'platinum',
     mediaType: 'image',
     tagline: 'Exclusive 20% Tournament Discount on all Rackets & Shoes at the Arena Lobby!',
     description: 'Special tournament offer: Flat 20% off on all Victor Thruster & Auraspeed series when you show your participant badge.',
@@ -34,8 +30,6 @@ export const DEFAULT_SPONSOR_ADS = [
   {
     id: 'ad-3',
     sponsorName: 'HYDRATE+ ISOTONIC',
-    badge: '🥤 Official Energy Drink',
-    tier: 'gold',
     mediaType: 'video',
     tagline: 'Electrolytes & Rapid Hydration for Peak Badminton Performance!',
     description: 'Instant recovery & stamina replenishment between sets. Grab your free ice-cold electrolyte drink at refreshment counters 1 & 2.',
@@ -50,8 +44,6 @@ export const DEFAULT_SPONSOR_ADS = [
   {
     id: 'ad-4',
     sponsorName: 'PRIME SMASH ACADEMY',
-    badge: '🏆 Official Academy Partner',
-    tier: 'gold',
     mediaType: 'image',
     tagline: 'High-Performance Professional Badminton Coaching • Summer Batches Open!',
     description: 'State-of-the-art wooden synthetic courts, BWF certified international coaches, video analysis, and fitness conditioning programs.',
@@ -68,10 +60,12 @@ export const DEFAULT_SPONSOR_ADS = [
 export const DEFAULT_AD_SETTINGS = {
   showBannerBar: true,
   showInTicker: true,
+  showOnPublicPage: true, // Show Sponsor Banners & Tickers on Public Spectator & Fixtures Page
+  publicDisplayMode: 'periodic', // 'periodic' (10s show, 1min cycle) | 'static' (always visible)
   showFloatingSpotlight: false,
-  fullScreenIntervalMinutes: 2, // Show full screen sponsor every 2 minutes
-  fullScreenDurationSeconds: 10, // Full screen display duration in seconds
-  tickerSpeed: 'slow', // 'slow' | 'normal' | 'fast'
+  fullScreenIntervalMinutes: 1, // Repeat every 1 minute
+  fullScreenDurationSeconds: 10, // Display duration in seconds (10s)
+  tickerSpeed: 'slow', // 'ultra-slow' | 'slow' | 'normal' | 'fast' | 'ultra-fast' | seconds number
   topScrollingText: '🏆 Welcome to the Championship • Please report to your assigned court 10 minutes before match time.',
   bottomScrollingText: '⭐ Special Tournament Offer: Flat 20% off on all pro badminton gear at Arena Lobby Stall #1!',
   videoMuted: true,
@@ -79,4 +73,6 @@ export const DEFAULT_AD_SETTINGS = {
   intermissionMode: false,
   rotationInterval: 10,
 }
+
+
 

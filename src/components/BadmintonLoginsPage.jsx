@@ -5,6 +5,7 @@ import {
   formatPersonName,
 } from '../utils/textFormatters'
 import { SupabaseService } from '../utils/supabaseDb'
+import { ConfirmDeleteModal } from './ConfirmDeleteModal'
 
 const TEMP_CREDS_STORAGE_KEY = 'badminton-temporary-credentials'
 const ORGANIZER_SESSION_KEY = 'badminton-organizer-session'
@@ -37,13 +38,14 @@ export function BadmintonLoginsPage({
   const [accessScope, setAccessScope] = useState('full') // 'full' | 'scorekeeper'
   const [expiryOption, setExpiryOption] = useState('24 Hours')
   const [toastMessage, setToastMessage] = useState(null)
+  const [deleteCredConfirm, setDeleteCredConfirm] = useState(null)
 
   // Fetch from server DB on mount
   useEffect(() => {
     fetch('/api/tournaments')
       .then((res) => res.json())
       .then((data) => {
-        if (data && Array.isArray(data.temporaryCredentials) && data.temporaryCredentials.length > 0) {
+        if (data && Array.isArray(data.temporaryCredentials)) {
           setTempCredsList(data.temporaryCredentials)
           localStorage.setItem(TEMP_CREDS_STORAGE_KEY, JSON.stringify(data.temporaryCredentials))
         }
@@ -828,7 +830,7 @@ Login Portal: ${window.location.origin}/`
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteCred(cred.id)}
+                      onClick={() => setDeleteCredConfirm(cred)}
                       style={{
                         padding: '7px 10px',
                         borderRadius: '8px',
@@ -855,6 +857,23 @@ Login Portal: ${window.location.origin}/`
           </div>
         </div>
       </div>
+
+      {/* Delete / Revoke Credential Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteCredConfirm}
+        title="Revoke Official Login?"
+        message={`Are you sure you want to revoke and delete login credentials for "${deleteCredConfirm?.name || deleteCredConfirm?.username}"? This official will no longer be able to log in.`}
+        itemName={deleteCredConfirm?.username}
+        confirmText="🗑️ Yes, Revoke Login"
+        cancelText="✕ Cancel"
+        onConfirm={() => {
+          if (deleteCredConfirm) {
+            handleDeleteCred(deleteCredConfirm.id)
+            setDeleteCredConfirm(null)
+          }
+        }}
+        onClose={() => setDeleteCredConfirm(null)}
+      />
     </div>
   )
 }

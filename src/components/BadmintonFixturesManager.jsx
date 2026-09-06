@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import {
   generateBadmintonDraw,
   sanitizeBadmintonDraw,
@@ -14,7 +14,10 @@ import { MatchScoresheetModal } from './MatchScoresheetModal'
 import { TournamentMasterScheduleModal } from './TournamentMasterScheduleModal'
 import { StadiumAdManagerModal } from './StadiumAdManagerModal'
 import { StadiumTvLiveCast } from './StadiumTvLiveCast'
+import { CourtConfigModal } from './CourtConfigModal'
+import { PublicSponsorShowcase } from './PublicSponsorShowcase'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
+import { getSavedCourtConfig, generateCourtsList } from '../utils/courtConfig'
 import { printOfficialFixturesA4 } from '../utils/printFixturesEngine'
 import { isDoublesCategory } from '../utils/badmintonCategories'
 import {
@@ -115,6 +118,24 @@ export const BadmintonFixturesManager = ({
     }
   }
 
+  // Stadium Courts Configuration State
+  const [isCourtConfigModalOpen, setIsCourtConfigModalOpen] = useState(false)
+  const [courtConfig, setCourtConfig] = useState(() => getSavedCourtConfig())
+
+  useEffect(() => {
+    const handleStorageUpdate = () => {
+      if (!isCourtConfigModalOpen) {
+        setCourtConfig(getSavedCourtConfig())
+      }
+    }
+    window.addEventListener('storage', handleStorageUpdate)
+    return () => window.removeEventListener('storage', handleStorageUpdate)
+  }, [isCourtConfigModalOpen])
+
+  const configuredCourts = useMemo(() => {
+    return generateCourtsList(courtConfig)
+  }, [courtConfig])
+
   const activeAdsCount = (sponsorAds || []).filter((a) => a.active !== false).length
 
   const handleLaunchLiveTv = (tournamentId) => {
@@ -137,8 +158,7 @@ export const BadmintonFixturesManager = ({
     } catch {}
   }
   const [viewMode, setViewMode] = useState('official') // 'official' | 'diagram' | 'bracket' | 'schedule' | 'players'
-  const [sheetTheme, setSheetTheme] = useState('white') // 'white' | 'dark'
-  const [scheduleFilter, setScheduleFilter] = useState('all') // 'all' | 'scheduled' | 'live' | 'completed'
+  const [scheduleFilter, setScheduleFilter] = useState('live') // 'live' | 'scheduled' | 'completed' | 'all'
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState('')
   const [scheduleRoundFilter, setScheduleRoundFilter] = useState('all')
   const [scheduleLayoutView, setScheduleLayoutView] = useState('cards') // 'cards' | 'table'
@@ -172,6 +192,7 @@ export const BadmintonFixturesManager = ({
   const [playerReportingFilter, setPlayerReportingFilter] = useState('all') // 'all' | 'reported' | 'pending'
 
   // Ensure public view strictly displays official draw sheet
+  const [sheetTheme, setSheetTheme] = useState('dark')
   useEffect(() => {
     if (isPublicView && viewMode !== 'official') {
       setViewMode('official')
@@ -208,8 +229,32 @@ export const BadmintonFixturesManager = ({
 
   // Assign Official Umpire & Start Live Match Modal state
   const [assigningLiveMatch, setAssigningLiveMatch] = useState(null)
-  const [availableUmpiresList, setAvailableUmpiresList] = useState([])
-  const [selectedUmpireUsername, setSelectedUmpireUsername] = useState('')
+  const [availableUmpiresList, setAvailableUmpiresList] = useState(() => {
+    try {
+      const saved = localStorage.getItem('badminton-temporary-credentials')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          return parsed.filter((c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role)
+        }
+      }
+    } catch {}
+    return []
+  })
+  const [selectedUmpireUsername, setSelectedUmpireUsername] = useState(() => {
+    try {
+      const saved = localStorage.getItem('badminton-temporary-credentials')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const first = parsed.find((c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role)
+          return first?.username || ''
+        }
+      }
+    } catch {}
+    return ''
+  })
+  const [umpireSearchQuery, setUmpireSearchQuery] = useState('')
   const [selectedLiveCourt, setSelectedLiveCourt] = useState('Court 1')
   const [isQuickCreateUmpire, setIsQuickCreateUmpire] = useState(false)
   const [quickUmpireName, setQuickUmpireName] = useState('')
@@ -278,14 +323,15 @@ export const BadmintonFixturesManager = ({
     return initialDraws
   })
 
-  // Realtime Live Draw and Score Sync from Umpire & Supabase
+  // Realtime Live Draw, Reported Players, and Score Sync from Shared Database & Supabase
   useEffect(() => {
     const syncDraws = () => {
-      // 1. Fetch from Local Server DB
+      // 1. Fetch from Local/Network Server DB
       fetch('/api/tournaments')
         .then((res) => res.json())
         .then((data) => {
-          if (data?.tournamentDraws && typeof data.tournamentDraws === 'object') {
+          if (!data) return
+          if (data.tournamentDraws && typeof data.tournamentDraws === 'object') {
             const sanitized = {}
             Object.keys(data.tournamentDraws).forEach((k) => {
               sanitized[k] = sanitizeBadmintonDraw(data.tournamentDraws[k])
@@ -294,6 +340,27 @@ export const BadmintonFixturesManager = ({
             try {
               localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify({ ...tournamentDraws, ...sanitized }))
             } catch (e) {}
+          }
+
+          if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
+            setReportedPlayers((prev) => ({ ...prev, ...data.reportedPlayers }))
+            try {
+              localStorage.setItem('badminton-reported-players', JSON.stringify({ ...reportedPlayers, ...data.reportedPlayers }))
+            } catch (e) {}
+          }
+
+          if (data.liveUmpireMode !== undefined) {
+            setIsLiveUmpireMode(data.liveUmpireMode)
+            try {
+              localStorage.setItem('badminton-live-umpire-mode', JSON.stringify(data.liveUmpireMode))
+            } catch (e) {}
+          }
+
+          if (data.systemSettings?.matchPoints) {
+            setMatchTotalPoints(data.systemSettings.matchPoints)
+          }
+          if (data.systemSettings?.matchSets) {
+            setMatchTotalSets(data.systemSettings.matchSets)
           }
         })
         .catch(() => {})
@@ -342,10 +409,19 @@ export const BadmintonFixturesManager = ({
       const updatedMap = { ...currentCatMap }
       if (id) updatedMap[id] = nextVal
       if (nameKey) updatedMap[nameKey] = nextVal
-      return {
+      const nextFullMap = {
         ...prev,
         [key]: updatedMap,
       }
+
+      // Sync directly to DB
+      fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportedPlayers: nextFullMap }),
+      }).catch(() => {})
+
+      return nextFullMap
     })
   }
 
@@ -379,10 +455,19 @@ export const BadmintonFixturesManager = ({
         if (p.id) newMap[p.id] = status
         if (p.name) newMap[p.name.trim().toLowerCase()] = status
       })
-      return {
+      const nextFullMap = {
         ...prev,
         [key]: newMap,
       }
+
+      // Sync directly to DB
+      fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reportedPlayers: nextFullMap }),
+      }).catch(() => {})
+
+      return nextFullMap
     })
   }
 
@@ -953,14 +1038,25 @@ export const BadmintonFixturesManager = ({
 
   const handleOpenScoresheet = (match) => {
     if (!match) return
-    if (match.status === 'scheduled') {
-      handlePromptStartLive(match)
-      return
-    }
-    setScoresheetMatch({ ...match, status: match.status === 'scheduled' ? 'live' : match.status })
+    setScoresheetMatch(match)
   }
 
-  const loadAvailableUmpires = () => {
+  const handleScoresheetPrinted = (match) => {
+    if (!match) return
+    if (!isLiveUmpireMode && (match.status === 'scheduled' || !match.winner)) {
+      handleUpdateMatch(match.id, {
+        status: 'live',
+        isLive: true,
+      })
+      try {
+        window.dispatchEvent(new Event('storage'))
+      } catch (e) {}
+      setSwapToast(`🖨️ Scoresheet printed! Match #${match.matchNumber || ''} is now LIVE on court!`)
+      setTimeout(() => setSwapToast(null), 3500)
+    }
+  }
+
+  const loadAvailableUmpires = (preferredCourt = null) => {
     let list = []
     try {
       const saved = localStorage.getItem('badminton-temporary-credentials')
@@ -973,25 +1069,77 @@ export const BadmintonFixturesManager = ({
     } catch {}
 
     setAvailableUmpiresList(list)
-    if (list.length > 0) {
-      setSelectedUmpireUsername(list[0].username)
+
+    if (preferredCourt) {
+      const courtMatch = list.find(
+        (u) => (u.assignedCourt || u.courtName || '').toLowerCase() === preferredCourt.toLowerCase()
+      )
+      if (courtMatch) {
+        setSelectedUmpireUsername(courtMatch.username)
+      } else if (list.length > 0) {
+        setSelectedUmpireUsername(list[0].username)
+      } else {
+        setSelectedUmpireUsername('')
+      }
+    } else if (list.length > 0) {
+      setSelectedUmpireUsername((prev) => prev || list[0].username)
+    } else {
+      setSelectedUmpireUsername('')
     }
 
     fetch('/api/tournaments')
       .then((r) => r.json())
       .then((d) => {
         if (d?.temporaryCredentials && Array.isArray(d.temporaryCredentials)) {
-          const umpireCreds = d.temporaryCredentials.filter((c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role)
-          setAvailableUmpiresList(umpireCreds)
-          if (umpireCreds.length > 0) {
-            setSelectedUmpireUsername((prev) => prev || umpireCreds[0].username)
+          const serverList = d.temporaryCredentials.filter(
+            (c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role
+          )
+          setAvailableUmpiresList(serverList)
+          try {
+            localStorage.setItem('badminton-temporary-credentials', JSON.stringify(d.temporaryCredentials))
+          } catch {}
+
+          if (preferredCourt) {
+            const courtMatch = serverList.find(
+              (u) => (u.assignedCourt || u.courtName || '').toLowerCase() === preferredCourt.toLowerCase()
+            )
+            if (courtMatch) {
+              setSelectedUmpireUsername(courtMatch.username)
+            } else if (serverList.length > 0) {
+              setSelectedUmpireUsername((prev) => prev || serverList[0].username)
+            } else {
+              setSelectedUmpireUsername('')
+            }
+          } else if (serverList.length > 0) {
+            setSelectedUmpireUsername((prev) => prev || serverList[0].username)
+          } else {
+            setSelectedUmpireUsername('')
           }
         }
       })
       .catch(() => {})
   }
 
+  const hasUmpireLogins = availableUmpiresList.length > 0
+
   const handleToggleLiveUmpireMode = () => {
+    let curList = availableUmpiresList || []
+    try {
+      const saved = localStorage.getItem('badminton-temporary-credentials')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          curList = parsed.filter((c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role)
+        }
+      }
+    } catch {}
+
+    if (curList.length === 0 && !isLiveUmpireMode) {
+      setSwapToast('🔒 Live Umpire Mode is LOCKED: No Umpire Logins found! Please create at least 1 Umpire Login in Logins Page first.')
+      setTimeout(() => setSwapToast(null), 4000)
+      return
+    }
+
     const nextMode = !isLiveUmpireMode
     setIsLiveUmpireMode(nextMode)
     try {
@@ -1015,25 +1163,42 @@ export const BadmintonFixturesManager = ({
   const handlePromptStartLive = (match) => {
     if (!match) return
 
-    // When in Manual Mode (GREEN): Umpire selection is bypassed! Set to live and open manual scoring
-    if (!isLiveUmpireMode) {
-      handleUpdateMatch(match.id, { status: 'live' })
+    let curList = availableUmpiresList || []
+    try {
+      const saved = localStorage.getItem('badminton-temporary-credentials')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (Array.isArray(parsed)) {
+          curList = parsed.filter((c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role)
+        }
+      }
+    } catch {}
+
+    // When in Manual Mode (GREEN) or when NO umpire logins exist: Umpire selection is bypassed! Set to live and open manual scoring
+    if (!isLiveUmpireMode || curList.length === 0) {
+      handleUpdateMatch(match.id, { status: 'live', isLive: true })
       setQuickScoreScheduleMatch(match)
-      setSwapToast(`🟢 Match #${match.matchNumber || ''} is now LIVE (Manual Scoring Mode)!`)
-      setTimeout(() => setSwapToast(null), 3000)
+      setSwapToast(
+        curList.length === 0
+          ? `🟢 Match #${match.matchNumber || ''} is now LIVE (Manual Scoring Mode • No Umpires Created)!`
+          : `🟢 Match #${match.matchNumber || ''} is now LIVE (Manual Scoring Mode)!`
+      )
+      setTimeout(() => setSwapToast(null), 3500)
       return
     }
 
-    loadAvailableUmpires()
+    const targetCourt = match.court || selectedMatch?.courtName || 'Court 1'
+    loadAvailableUmpires(targetCourt)
     setAssigningLiveMatch(match)
-    setSelectedLiveCourt(match.court || selectedMatch?.courtName || 'Court 1')
+    setSelectedLiveCourt(targetCourt)
     setIsQuickCreateUmpire(false)
+    setUmpireSearchQuery('')
 
-    // Pre-populate quick create defaults
+    // Pre-populate quick create defaults if user needs to create one
     const rand = Math.floor(100 + Math.random() * 900)
-    setQuickUmpireUser(`umpire_ref${rand}`)
-    setQuickUmpirePass(`bwf${Math.floor(1000 + Math.random() * 9000)}`)
-    setQuickUmpireName(`Court Umpire #${rand}`)
+    setQuickUmpireUser(`umpire_${rand}`)
+    setQuickUmpirePass(`1234`)
+    setQuickUmpireName(`Match Umpire ${rand}`)
   }
 
   const handleConfirmStartLiveMatch = (startLiveImmediately = true) => {
@@ -1086,16 +1251,22 @@ export const BadmintonFixturesManager = ({
 
     // Update match with assigned Umpire & Court
     handleUpdateMatch(assigningLiveMatch.id, {
-      status: startLiveImmediately ? 'live' : (assigningLiveMatch.status || 'scheduled'),
+      status: startLiveImmediately ? 'live' : 'scheduled',
+      isLive: Boolean(startLiveImmediately),
       court: selectedLiveCourt,
+      assignedCourt: selectedLiveCourt,
       assignedUmpireUsername: targetUsername,
       assignedUmpireName: targetName,
     })
 
+    try {
+      window.dispatchEvent(new Event('storage'))
+    } catch (e) {}
+
     if (startLiveImmediately) {
       setSwapToast(`🚀 Match #${assigningLiveMatch.matchNumber || ''} is now LIVE on ${selectedLiveCourt}! Assigned to Umpire: ${targetName}`)
     } else {
-      setSwapToast(`📋 Match #${assigningLiveMatch.matchNumber || ''} assigned to Umpire: ${targetName} on ${selectedLiveCourt} (Upcoming Queue)!`)
+      setSwapToast(`📋 Match #${assigningLiveMatch.matchNumber || ''} assigned to ${targetName} on ${selectedLiveCourt} (Showing in Upcoming Queue)!`)
     }
     setTimeout(() => setSwapToast(null), 4000)
 
@@ -1124,8 +1295,20 @@ export const BadmintonFixturesManager = ({
   }
 
   const handleScoreChange = (match, field, value) => {
+    const effectiveMatchSets = match.matchSets || (
+      match.status === 'completed'
+        ? Math.max(
+            (match.scoreSet5A || match.scoreSet5B) ? 5 :
+            (match.scoreSet4A || match.scoreSet4B) ? 4 :
+            (match.scoreSet3A || match.scoreSet3B) ? 3 :
+            (match.scoreSet2A || match.scoreSet2B) ? 2 :
+            1,
+            match.matchSets || 1
+          )
+        : matchTotalSets
+    )
+    const maxPts = Number(match.matchPoints || matchTotalPoints) || 30
     let finalVal = value
-    const maxPts = Number(matchTotalPoints) || 30
 
     if (value !== '' && value !== undefined) {
       const numVal = Number(value)
@@ -1141,8 +1324,8 @@ export const BadmintonFixturesManager = ({
       }
     }
 
-    const nextMatch = { ...match, [field]: finalVal }
-    const autoWinner = calculateBadmintonWinner(nextMatch, match.player1, match.player2, matchTotalSets, maxPts)
+    const nextMatch = { ...match, [field]: finalVal, matchSets: effectiveMatchSets, matchPoints: maxPts }
+    const autoWinner = calculateBadmintonWinner(nextMatch, match.player1, match.player2, effectiveMatchSets)
     const isCompleted = autoWinner !== null
 
     // Automatic Status Transition:
@@ -1152,6 +1335,8 @@ export const BadmintonFixturesManager = ({
 
     handleUpdateMatch(match.id, {
       [field]: finalVal,
+      matchSets: effectiveMatchSets,
+      matchPoints: maxPts,
       winner: autoWinner,
       status: nextStatus,
     })
@@ -1466,9 +1651,9 @@ export const BadmintonFixturesManager = ({
   // Schedule statistics & computations
   const validScheduleMatches = (currentDraw?.matches || []).filter((m) => !(m.player1?.isBye && m.player2?.isBye))
   const totalScheduleCount = validScheduleMatches.length
-  const liveScheduleCount = validScheduleMatches.filter((m) => m.status === 'live').length
+  const liveScheduleCount = validScheduleMatches.filter((m) => m.status === 'live' || (m.isLive === true && m.status !== 'completed')).length
   const completedScheduleCount = validScheduleMatches.filter((m) => m.status === 'completed').length
-  const scheduledScheduleCount = validScheduleMatches.filter((m) => m.status === 'scheduled').length
+  const scheduledScheduleCount = validScheduleMatches.filter((m) => (m.status === 'scheduled' || !m.status) && !m.isLive).length
   const readyScheduleCount = validScheduleMatches.filter((m) => m.status === 'scheduled' && isMatchBothReported(m)).length
   const progressPercent = totalScheduleCount > 0 ? Math.round((completedScheduleCount / totalScheduleCount) * 100) : 0
 
@@ -1482,7 +1667,8 @@ export const BadmintonFixturesManager = ({
   const filteredScheduleMatches = validScheduleMatches
     .filter((m) => {
       if (scheduleFilter === 'ready' && !(m.status === 'scheduled' && isMatchBothReported(m))) return false
-      if (scheduleFilter !== 'all' && scheduleFilter !== 'ready' && m.status !== scheduleFilter) return false
+      if (scheduleFilter === 'live' && !(m.status === 'live' || (m.isLive === true && m.status !== 'completed'))) return false
+      if (scheduleFilter !== 'all' && scheduleFilter !== 'ready' && scheduleFilter !== 'live' && m.status !== scheduleFilter) return false
       if (courtFilter !== 'all' && m.court !== courtFilter) return false
       if (scheduleRoundFilter !== 'all' && String(m.round) !== String(scheduleRoundFilter)) return false
       if (scheduleSearchQuery.trim()) {
@@ -1515,10 +1701,11 @@ export const BadmintonFixturesManager = ({
       return (a.matchNumber || 0) - (b.matchNumber || 0)
     })
 
-  // Unique courts list
-  const uniqueCourts = Array.from(
-    new Set((currentDraw?.matches || []).map((m) => m.court).filter(Boolean))
-  )
+  // Unique courts list (Combines configured courts and any active match courts)
+  const uniqueCourts = useMemo(() => {
+    const matchCourts = (currentDraw?.matches || []).map((m) => m.court).filter(Boolean)
+    return Array.from(new Set([...configuredCourts, ...matchCourts]))
+  }, [configuredCourts, currentDraw?.matches])
 
   // Unique rounds list for round filter
   const uniqueRoundsList = Array.from(
@@ -2054,71 +2241,73 @@ export const BadmintonFixturesManager = ({
       {/* ========================================================= */}
       {/* Top Bar for Public View vs Admin View */}
       {isPublicView ? (
-        <div className="public-fixtures-topbar">
-              {onBackToPublicFeed && (
+        <>
+          <div className="public-fixtures-topbar">
+            {onBackToPublicFeed && (
+              <button
+                type="button"
+                onClick={onBackToPublicFeed}
+                className="public-fixtures-back-btn"
+              >
+                <span style={{ fontSize: '14px' }}>←</span>
+                <span>Back to Tournaments</span>
+              </button>
+            )}
+
+            {/* Centered Dynamic Category Switcher Pills */}
+            <div className="public-fixtures-center-cat-bar">
+              {publishedCategoryList.length > 0 ? (
+                publishedCategoryList.map((cat) => {
+                  const isCompact = publishedCategoryList.length > 4
+                  const isVeryCompact = publishedCategoryList.length > 7
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`public-fixtures-cat-pill ${selectedCategory === cat ? 'active' : ''} ${isVeryCompact ? 'pill-xs' : isCompact ? 'pill-sm' : ''}`}
+                    >
+                      <span className="cat-pill-dot" />
+                      <span>{cat}</span>
+                    </button>
+                  )
+                })
+              ) : (
+                <span style={{ fontSize: '12px', color: '#fca5a5', fontWeight: '700' }}>
+                  📢 No categories published yet.
+                </span>
+              )}
+            </div>
+
+            {/* Theme Toggle Button on Right */}
+            <div className="public-fixtures-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setSheetTheme(sheetTheme === 'white' ? 'dark' : 'white')}
+                className="public-sheet-theme-btn"
+              >
+                {sheetTheme === 'white' ? '🌙 Dark Mode' : '📄 White Sheet'}
+              </button>
+
+              {onOpenOrganizerLogin && (
                 <button
                   type="button"
-                  onClick={onBackToPublicFeed}
-                  className="public-fixtures-back-btn"
+                  onClick={onOpenOrganizerLogin}
+                  className="public-sheet-theme-btn icon-only"
+                  title="Organizer Login"
+                  aria-label="Organizer Login"
+                  style={{ background: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgba(59, 130, 246, 0.45)', color: '#93c5fd', width: '38px', height: '38px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
                 >
-                  <span style={{ fontSize: '14px' }}>←</span>
-                  <span>Back to Tournaments</span>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                  </svg>
                 </button>
               )}
-
-              {/* Centered Dynamic Category Switcher Pills */}
-              <div className="public-fixtures-center-cat-bar">
-                {publishedCategoryList.length > 0 ? (
-                  publishedCategoryList.map((cat) => {
-                    const isCompact = publishedCategoryList.length > 4
-                    const isVeryCompact = publishedCategoryList.length > 7
-                    return (
-                      <button
-                        key={cat}
-                        type="button"
-                        onClick={() => setSelectedCategory(cat)}
-                        className={`public-fixtures-cat-pill ${selectedCategory === cat ? 'active' : ''} ${isVeryCompact ? 'pill-xs' : isCompact ? 'pill-sm' : ''}`}
-                      >
-                        <span className="cat-pill-dot" />
-                        <span>{cat}</span>
-                      </button>
-                    )
-                  })
-                ) : (
-                  <span style={{ fontSize: '12px', color: '#fca5a5', fontWeight: '700' }}>
-                    📢 No categories published yet.
-                  </span>
-                )}
-              </div>
-
-              {/* Theme Toggle Button on Right */}
-              <div className="public-fixtures-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => setSheetTheme(sheetTheme === 'white' ? 'dark' : 'white')}
-                  className="public-sheet-theme-btn"
-                >
-                  {sheetTheme === 'white' ? '🌙 Dark Mode' : '📄 White Sheet'}
-                </button>
-
-                {onOpenOrganizerLogin && (
-                  <button
-                    type="button"
-                    onClick={onOpenOrganizerLogin}
-                    className="public-sheet-theme-btn icon-only"
-                    title="Organizer Login"
-                    aria-label="Organizer Login"
-                    style={{ background: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgba(59, 130, 246, 0.45)', color: '#93c5fd', width: '38px', height: '38px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                  </button>
-                )}
-              </div>
             </div>
-          ) : (
+          </div>
+        </>
+      ) : (
             <>
               {/* Breadcrumb & Navigation Bar */}
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
@@ -3414,8 +3603,20 @@ export const BadmintonFixturesManager = ({
                           const isEditing = editingScoreMatchId === m.id
                           const isByeMatch = p1?.isBye || p2?.isBye
 
-                          const setsArray = Array.from({ length: matchTotalSets }, (_, idx) => idx + 1)
-                          const maxPts = Number(matchTotalPoints) || 30
+                          const matchEffectiveSets = m.matchSets || (
+                            m.status === 'completed'
+                              ? Math.max(
+                                  (m.scoreSet5A || m.scoreSet5B) ? 5 :
+                                  (m.scoreSet4A || m.scoreSet4B) ? 4 :
+                                  (m.scoreSet3A || m.scoreSet3B) ? 3 :
+                                  (m.scoreSet2A || m.scoreSet2B) ? 2 :
+                                  1,
+                                  m.matchSets || 1
+                                )
+                              : matchTotalSets
+                          )
+                          const setsArray = Array.from({ length: Math.max(1, matchEffectiveSets) }, (_, idx) => idx + 1)
+                          const maxPts = Number(m.matchPoints || matchTotalPoints) || 30
 
                           // Calculate set wins dynamically for all configured sets
                           const s1A = Number(m.scoreSet1A) || 0
@@ -4045,6 +4246,59 @@ export const BadmintonFixturesManager = ({
                       </button>
                     </div>
 
+                    {/* MATCH SETS SELECTOR (ADMIN ONLY) */}
+                    {!isPublicView && (
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: 'rgba(15, 23, 42, 0.85)',
+                          padding: '6px 12px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(56, 189, 248, 0.35)',
+                        }}
+                        title="Select number of sets for matches in this tournament (Default: 3 Sets)"
+                      >
+                        <span style={{ fontSize: '11.5px', color: '#94a3b8', fontWeight: '700' }}>🏆 Sets:</span>
+                        <select
+                          value={matchTotalSets}
+                          onChange={(e) => {
+                            const val = Number(e.target.value) || 3
+                            setMatchTotalSets(val)
+                            try {
+                              localStorage.setItem('badminton-match-sets', JSON.stringify(val))
+                              window.dispatchEvent(new Event('storage'))
+                              window.dispatchEvent(new CustomEvent('badminton-settings-changed', { detail: { matchSets: val, matchPoints: matchTotalPoints } }))
+                              if (typeof BroadcastChannel !== 'undefined') {
+                                const channel = new BroadcastChannel('badminton_sync')
+                                channel.postMessage({ type: 'SETTINGS_UPDATED', matchSets: val, matchPoints: matchTotalPoints })
+                                channel.close()
+                              }
+                            } catch {}
+                            fetch('/api/tournaments', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ systemSettings: { matchSets: val, matchPoints: matchTotalPoints } }),
+                            }).catch(() => {})
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#38bdf8',
+                            fontWeight: '800',
+                            fontSize: '12px',
+                            outline: 'none',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <option value={1} style={{ background: '#0f172a', color: '#f8fafc' }}>1 Set (Single)</option>
+                          <option value={3} style={{ background: '#0f172a', color: '#f8fafc' }}>3 Sets (Best of 3)</option>
+                          <option value={5} style={{ background: '#0f172a', color: '#f8fafc' }}>5 Sets (Best of 5)</option>
+                        </select>
+                      </div>
+                    )}
+
                     {/* MATCH POINTS SELECTOR (ADMIN ONLY) */}
                     {!isPublicView && (
                       <div
@@ -4067,7 +4321,19 @@ export const BadmintonFixturesManager = ({
                             setMatchTotalPoints(val)
                             try {
                               localStorage.setItem('badminton-match-points', JSON.stringify(val))
+                              window.dispatchEvent(new Event('storage'))
+                              window.dispatchEvent(new CustomEvent('badminton-settings-changed', { detail: { matchPoints: val, matchSets: matchTotalSets } }))
+                              if (typeof BroadcastChannel !== 'undefined') {
+                                const channel = new BroadcastChannel('badminton_sync')
+                                channel.postMessage({ type: 'SETTINGS_UPDATED', matchPoints: val, matchSets: matchTotalSets })
+                                channel.close()
+                              }
                             } catch {}
+                            fetch('/api/tournaments', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ systemSettings: { matchPoints: val, matchSets: matchTotalSets } }),
+                            }).catch(() => {})
                           }}
                           style={{
                             background: 'transparent',
@@ -4093,39 +4359,52 @@ export const BadmintonFixturesManager = ({
                         type="button"
                         onClick={handleToggleLiveUmpireMode}
                         title={
-                          isLiveUmpireMode
-                            ? 'Live Umpire Mode is Active (Red). Click to switch to Manual Scoring (Green).'
-                            : 'Manual Scoring Mode is Active (Green). Click to switch to Live Umpire Mode (Red).'
+                          !hasUmpireLogins
+                            ? '🔒 Locked: Create at least 1 Umpire Login in Logins Page to enable Live Umpire Mode.'
+                            : isLiveUmpireMode
+                              ? 'Live Umpire Mode is Active (Red). Click to switch to Manual Scoring (Green).'
+                              : 'Manual Scoring Mode is Active (Green). Click to switch to Live Umpire Mode (Red).'
                         }
                         style={{
                           padding: '8px 16px',
                           borderRadius: '10px',
-                          background: isLiveUmpireMode
-                            ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
-                            : 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
-                          border: isLiveUmpireMode
-                            ? '1.5px solid #f87171'
-                            : '1.5px solid #34d399',
-                          color: '#ffffff',
+                          background: !hasUmpireLogins
+                            ? 'rgba(30, 41, 59, 0.85)'
+                            : isLiveUmpireMode
+                              ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
+                              : 'linear-gradient(135deg, #10b981 0%, #047857 100%)',
+                          border: !hasUmpireLogins
+                            ? '1.5px solid rgba(148, 163, 184, 0.35)'
+                            : isLiveUmpireMode
+                              ? '1.5px solid #f87171'
+                              : '1.5px solid #34d399',
+                          color: !hasUmpireLogins ? '#94a3b8' : '#ffffff',
                           fontWeight: '800',
                           fontSize: '12.5px',
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: '8px',
-                          boxShadow: isLiveUmpireMode
-                            ? '0 0 16px rgba(239, 68, 68, 0.45)'
-                            : '0 0 16px rgba(16, 185, 129, 0.45)',
+                          boxShadow: !hasUmpireLogins
+                            ? 'none'
+                            : isLiveUmpireMode
+                              ? '0 0 16px rgba(239, 68, 68, 0.45)'
+                              : '0 0 16px rgba(16, 185, 129, 0.45)',
                           transition: 'all 0.2s ease',
                         }}
                       >
-                        {isLiveUmpireMode ? (
+                        {!hasUmpireLogins ? (
+                          <>
+                            <span style={{ fontSize: '13px' }}>🔒</span>
+                            <span>Live Umpire: LOCKED (0 Logins)</span>
+                          </>
+                        ) : isLiveUmpireMode ? (
                           <>
                             <span
                               className="live-pulse-dot"
                               style={{ width: '8px', height: '8px', background: '#ffffff', display: 'inline-block' }}
                             />
-                            <span>🔴 Live Umpire: ON</span>
+                            <span>🔴 Live Umpire: ON ({availableUmpiresList.length})</span>
                           </>
                         ) : (
                           <>
@@ -4133,6 +4412,34 @@ export const BadmintonFixturesManager = ({
                             <span>Live Umpire: OFF (Manual)</span>
                           </>
                         )}
+                      </button>
+                    )}
+
+                    {/* CONFIGURE COURTS BUTTON */}
+                    {!isPublicView && (
+                      <button
+                        type="button"
+                        onClick={() => setIsCourtConfigModalOpen(true)}
+                        title="Configure Courts Count & Naming Style (Numeric, Alphabetical, Roman, Custom)"
+                        style={{
+                          padding: '8px 14px',
+                          borderRadius: '10px',
+                          background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(3, 105, 161, 0.35) 100%)',
+                          border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                          color: '#38bdf8',
+                          fontWeight: '800',
+                          fontSize: '12.5px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <span>🏟️</span>
+                        <span>Courts: {configuredCourts.length}</span>
+                        <span style={{ fontSize: '11px', opacity: 0.85 }}>✏️</span>
                       </button>
                     )}
                   </div>
@@ -4247,7 +4554,19 @@ export const BadmintonFixturesManager = ({
                     const isBothRep = isMatchBothReported(m)
                     const isP1Winner = m.winner && p1 && m.winner.id === p1.id
                     const isP2Winner = m.winner && p2 && m.winner.id === p2.id
-                    const setsArray = Array.from({ length: Number(matchTotalSets) || 3 }, (_, i) => i + 1)
+                    const matchEffectiveSets = m.matchSets || (
+                      m.status === 'completed'
+                        ? Math.max(
+                            (m.scoreSet5A || m.scoreSet5B) ? 5 :
+                            (m.scoreSet4A || m.scoreSet4B) ? 4 :
+                            (m.scoreSet3A || m.scoreSet3B) ? 3 :
+                            (m.scoreSet2A || m.scoreSet2B) ? 2 :
+                            1,
+                            m.matchSets || 1
+                          )
+                        : matchTotalSets
+                    )
+                    const setsArray = Array.from({ length: Number(matchEffectiveSets) || 3 }, (_, i) => i + 1)
                     const isFinal = m.round === currentDraw.totalRounds
                     const isSemi = m.round === currentDraw.totalRounds - 1
 
@@ -4350,11 +4669,6 @@ export const BadmintonFixturesManager = ({
                             </span>
                           )}
                           {m.venue && <span>📍 {m.venue}</span>}
-                          {(m.assignedUmpireName || m.assignedUmpireUsername) && (
-                            <span style={{ color: m.status === 'live' ? '#f87171' : '#38bdf8', fontWeight: '800' }}>
-                              • 👤 Umpire: {m.assignedUmpireName || m.assignedUmpireUsername}
-                            </span>
-                          )}
                         </div>
 
                         {/* Matchup Players */}
@@ -4450,14 +4764,12 @@ export const BadmintonFixturesManager = ({
 
                         {/* Actions Footer */}
                         <div className="schedule-card-actions">
-                          {!isPublicView && m.status === 'scheduled' && (
+                          {!isPublicView && isLiveUmpireMode && m.status === 'scheduled' && (
                             <button
                               type="button"
                               onClick={() => handlePromptStartLive(m)}
                               style={{
-                                background: isLiveUmpireMode
-                                  ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                                  : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
                                 color: '#ffffff',
                                 border: 'none',
                                 borderRadius: '8px',
@@ -4468,22 +4780,11 @@ export const BadmintonFixturesManager = ({
                                 display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '5px',
-                                boxShadow: isLiveUmpireMode
-                                  ? '0 2px 8px rgba(239, 68, 68, 0.35)'
-                                  : '0 2px 8px rgba(16, 185, 129, 0.35)',
+                                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
                               }}
                             >
-                              {isLiveUmpireMode ? (
-                                <>
-                                  <span className="live-pulse-dot" style={{ width: '6px', height: '6px', background: '#ffffff' }} />
-                                  <span>🔴 Start Live (Umpire)</span>
-                                </>
-                              ) : (
-                                <>
-                                  <span>🟢</span>
-                                  <span>Start Live</span>
-                                </>
-                              )}
+                              <span className="live-pulse-dot" style={{ width: '6px', height: '6px', background: '#ffffff' }} />
+                              <span>🔴 Start Live (Umpire)</span>
                             </button>
                           )}
 
@@ -4510,7 +4811,7 @@ export const BadmintonFixturesManager = ({
                             </button>
                           )}
 
-                          {!isPublicView && (
+                          {!isPublicView && !isLiveUmpireMode && (
                             <button
                               type="button"
                               className="btn-schedule-score"
@@ -4540,20 +4841,22 @@ export const BadmintonFixturesManager = ({
                             👁️ Details
                           </button>
 
-                          <button
-                            type="button"
-                            className="btn-schedule-status-toggle"
-                            onClick={() => handleOpenScoresheet(m)}
-                            title="Print Official Scoresheet for this match"
-                            style={{
-                              background: 'rgba(59, 130, 246, 0.15)',
-                              borderColor: 'rgba(59, 130, 246, 0.35)',
-                              color: '#93c5fd',
-                              fontWeight: '700',
-                            }}
-                          >
-                            🖨️ Scoresheet
-                          </button>
+                          {!isLiveUmpireMode && (
+                            <button
+                              type="button"
+                              className="btn-schedule-status-toggle"
+                              onClick={() => handleOpenScoresheet(m)}
+                              title="Print Official Scoresheet for this match"
+                              style={{
+                                background: 'rgba(59, 130, 246, 0.15)',
+                                borderColor: 'rgba(59, 130, 246, 0.35)',
+                                color: '#93c5fd',
+                                fontWeight: '700',
+                              }}
+                            >
+                              🖨️ Scoresheet
+                            </button>
+                          )}
                         </div>
                       </div>
                     )
@@ -4645,11 +4948,18 @@ export const BadmintonFixturesManager = ({
                                       Set {m.liveScore?.currentSet || 1}: {m.liveScore ? (m.liveScore[`set${m.liveScore.currentSet || 1}`]?.p1 ?? m.scoreSet1A ?? 0) : (m.scoreSet1A || 0)}-{m.liveScore ? (m.liveScore[`set${m.liveScore.currentSet || 1}`]?.p2 ?? m.scoreSet1B ?? 0) : (m.scoreSet1B || 0)} 🏸
                                     </span>
                                   </div>
-                                ) : (m.scoreSet1A && m.scoreSet1B) ? (
+                                ) : (m.scoreSet1A !== undefined && m.scoreSet1A !== '' && m.scoreSet1B !== undefined && m.scoreSet1B !== '') ? (
                                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                                    <span className="schedule-set-pill">{m.scoreSet1A}-{m.scoreSet1B}</span>
-                                    {m.scoreSet2A && <span className="schedule-set-pill">{m.scoreSet2A}-{m.scoreSet2B}</span>}
-                                    {m.scoreSet3A && <span className="schedule-set-pill">{m.scoreSet3A}-{m.scoreSet3B}</span>}
+                                    {[1, 2, 3, 4, 5].map((sNum) => {
+                                      const sA = m[`scoreSet${sNum}A`]
+                                      const sB = m[`scoreSet${sNum}B`]
+                                      if (sA === '' || sA === undefined || sB === '' || sB === undefined) return null
+                                      return (
+                                        <span key={sNum} className="schedule-set-pill">
+                                          {sA}-{sB}
+                                        </span>
+                                      )
+                                    })}
                                   </div>
                                 ) : (
                                   <span style={{ color: '#64748b' }}>-</span>
@@ -4694,7 +5004,7 @@ export const BadmintonFixturesManager = ({
                               </td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px' }}>
-                                  {!isPublicView && (
+                                  {!isPublicView && !isLiveUmpireMode && (
                                     <button
                                       type="button"
                                       onClick={() => setQuickScoreScheduleMatch(m)}
@@ -4733,26 +5043,28 @@ export const BadmintonFixturesManager = ({
                                   >
                                     👁️ Details
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenScoresheet(m)}
-                                    title="Print Official Scoresheet for this match"
-                                    style={{
-                                      background: 'rgba(59, 130, 246, 0.18)',
-                                      color: '#93c5fd',
-                                      border: '1px solid rgba(59, 130, 246, 0.35)',
-                                      borderRadius: '4px',
-                                      padding: '5px 8px',
-                                      fontSize: '11px',
-                                      fontWeight: '700',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    🖨️ Sheet
-                                  </button>
+                                  {!isLiveUmpireMode && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenScoresheet(m)}
+                                      title="Print Official Scoresheet for this match"
+                                      style={{
+                                        background: 'rgba(59, 130, 246, 0.18)',
+                                        color: '#93c5fd',
+                                        border: '1px solid rgba(59, 130, 246, 0.35)',
+                                        borderRadius: '4px',
+                                        padding: '5px 8px',
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      🖨️ Sheet
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -4947,28 +5259,30 @@ export const BadmintonFixturesManager = ({
 
                       {/* Action Buttons */}
                       <div style={{ display: 'flex', gap: '10px' }}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleOpenScoresheet(m)
-                            setQuickScoreScheduleMatch(null)
-                          }}
-                          style={{
-                            padding: '9px 12px',
-                            background: 'rgba(59, 130, 246, 0.15)',
-                            border: '1px solid rgba(59, 130, 246, 0.35)',
-                            borderRadius: '8px',
-                            color: '#93c5fd',
-                            fontWeight: '700',
-                            fontSize: '12px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                        >
-                          🖨️ Sheet
-                        </button>
+                        {!isLiveUmpireMode && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleOpenScoresheet(m)
+                              setQuickScoreScheduleMatch(null)
+                            }}
+                            style={{
+                              padding: '9px 12px',
+                              background: 'rgba(59, 130, 246, 0.15)',
+                              border: '1px solid rgba(59, 130, 246, 0.35)',
+                              borderRadius: '8px',
+                              color: '#93c5fd',
+                              fontWeight: '700',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                            }}
+                          >
+                            🖨️ Sheet
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn-primary-gradient"
@@ -6111,11 +6425,37 @@ export const BadmintonFixturesManager = ({
 
             {/* Court Selection */}
             <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#cbd5e1', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                🏸 Select Match Court:
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                {['Court 1', 'Court 2', 'Court 3', 'Court 4'].map((court) => (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: '800', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  🏸 Select Match Court ({configuredCourts.length} Available):
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCourtConfigModalOpen(true)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '11.5px',
+                    fontWeight: '800',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: 0,
+                  }}
+                >
+                  ⚙️ Edit Courts
+                </button>
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${Math.min(4, Math.max(2, configuredCourts.length))}, 1fr)`,
+                  gap: '8px',
+                  maxHeight: '140px',
+                  overflowY: 'auto',
+                }}
+              >
+                {configuredCourts.map((court) => (
                   <button
                     key={court}
                     type="button"
@@ -6123,12 +6463,14 @@ export const BadmintonFixturesManager = ({
                     style={{
                       padding: '8px 10px',
                       borderRadius: '8px',
-                      background: selectedLiveCourt === court ? 'rgba(59, 130, 246, 0.3)' : 'rgba(15, 23, 42, 0.6)',
-                      border: selectedLiveCourt === court ? '2px solid #3b82f6' : '1px solid rgba(148, 163, 184, 0.2)',
+                      background: selectedLiveCourt === court ? 'rgba(59, 130, 246, 0.35)' : 'rgba(15, 23, 42, 0.6)',
+                      border: selectedLiveCourt === court ? '2px solid #38bdf8' : '1px solid rgba(148, 163, 184, 0.2)',
                       color: selectedLiveCourt === court ? '#ffffff' : '#94a3b8',
                       fontWeight: '800',
                       fontSize: '12px',
                       cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: selectedLiveCourt === court ? '0 0 10px rgba(56, 189, 248, 0.35)' : 'none',
                     }}
                   >
                     {court}
@@ -6141,7 +6483,7 @@ export const BadmintonFixturesManager = ({
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <label style={{ fontSize: '12px', fontWeight: '800', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  👤 Select Official Umpire Login:
+                  👤 Select Official Umpire Login ({availableUmpiresList.length} Available):
                 </label>
                 <button
                   type="button"
@@ -6156,82 +6498,128 @@ export const BadmintonFixturesManager = ({
                     textDecoration: 'underline',
                   }}
                 >
-                  {isQuickCreateUmpire ? '← Choose Existing Umpire' : '➕ Create New Umpire'}
+                  {isQuickCreateUmpire ? '← Choose From Available Umpires' : '➕ Create New Umpire'}
                 </button>
               </div>
 
               {!isQuickCreateUmpire ? (
-                availableUmpiresList.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto' }}>
-                    {availableUmpiresList.map((umpire) => {
-                      const isSelected = selectedUmpireUsername === umpire.username
-                      return (
-                        <div
-                          key={umpire.username || umpire.id}
-                          onClick={() => setSelectedUmpireUsername(umpire.username)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '10px 14px',
-                            borderRadius: '10px',
-                            background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'rgba(15, 23, 42, 0.5)',
-                            border: isSelected ? '2px solid #3b82f6' : '1px solid rgba(148, 163, 184, 0.2)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <>
+                  {/* Search Filter for Umpires if > 4 */}
+                  {availableUmpiresList.length > 4 && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <input
+                        type="text"
+                        value={umpireSearchQuery}
+                        onChange={(e) => setUmpireSearchQuery(e.target.value)}
+                        placeholder="🔍 Search umpire by name, username, or court..."
+                        style={{
+                          width: '100%',
+                          padding: '7px 12px',
+                          borderRadius: '8px',
+                          background: 'rgba(15, 23, 42, 0.6)',
+                          border: '1px solid rgba(148, 163, 184, 0.25)',
+                          color: '#fff',
+                          fontSize: '12px',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {availableUmpiresList.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto', paddingRight: '2px' }}>
+                      {availableUmpiresList
+                        .filter((umpire) => {
+                          if (!umpireSearchQuery.trim()) return true
+                          const q = umpireSearchQuery.toLowerCase()
+                          const name = (umpire.authName || umpire.name || '').toLowerCase()
+                          const user = (umpire.username || '').toLowerCase()
+                          const court = (umpire.assignedCourt || umpire.courtName || '').toLowerCase()
+                          return name.includes(q) || user.includes(q) || court.includes(q)
+                        })
+                        .map((umpire) => {
+                          const isSelected = selectedUmpireUsername === umpire.username
+                          return (
                             <div
-                              style={{
-                                width: '16px',
-                                height: '16px',
-                                borderRadius: '50%',
-                                border: isSelected ? '5px solid #3b82f6' : '2px solid #64748b',
-                                background: '#0f172a',
+                              key={umpire.username || umpire.id}
+                              onClick={() => {
+                                setSelectedUmpireUsername(umpire.username)
+                                if (umpire.assignedCourt && umpire.assignedCourt !== 'All Courts') {
+                                  setSelectedLiveCourt(umpire.assignedCourt)
+                                } else if (umpire.courtName && umpire.courtName !== 'Main Stadium' && umpire.courtName !== 'All Courts') {
+                                  setSelectedLiveCourt(umpire.courtName)
+                                }
                               }}
-                            />
-                            <div>
-                              <div style={{ fontSize: '13px', fontWeight: '800', color: isSelected ? '#ffffff' : '#e2e8f0' }}>
-                                {umpire.authName || umpire.name || 'Official Umpire'}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '10px 14px',
+                                borderRadius: '10px',
+                                background: isSelected ? 'rgba(59, 130, 246, 0.22)' : 'rgba(15, 23, 42, 0.5)',
+                                border: isSelected ? '2px solid #3b82f6' : '1px solid rgba(148, 163, 184, 0.2)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div
+                                  style={{
+                                    width: '16px',
+                                    height: '16px',
+                                    borderRadius: '50%',
+                                    border: isSelected ? '5px solid #3b82f6' : '2px solid #64748b',
+                                    background: '#0f172a',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <div>
+                                  <div style={{ fontSize: '13px', fontWeight: '800', color: isSelected ? '#ffffff' : '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    {umpire.authName || umpire.name || 'Official Umpire'}
+                                    {umpire.expiry === 'Permanent' && (
+                                      <span style={{ fontSize: '9.5px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '1px 5px', borderRadius: '4px', fontWeight: '700' }}>
+                                        Official
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                    Username: <code style={{ color: '#38bdf8', fontWeight: '700' }}>{umpire.username}</code> • Pass: <code style={{ color: '#94a3b8' }}>{umpire.password || '••••'}</code>
+                                  </div>
+                                </div>
                               </div>
-                              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                Username: <code style={{ color: '#38bdf8' }}>{umpire.username}</code> • Pass: <code style={{ color: '#94a3b8' }}>{umpire.password || '••••'}</code>
-                              </div>
+                              {umpire.assignedCourt && (
+                                <span style={{ fontSize: '10px', fontWeight: '700', background: isSelected ? 'rgba(59, 130, 246, 0.3)' : 'rgba(148, 163, 184, 0.15)', padding: '3px 8px', borderRadius: '5px', color: isSelected ? '#93c5fd' : '#94a3b8', border: isSelected ? '1px solid #3b82f6' : 'none' }}>
+                                  {umpire.assignedCourt}
+                                </span>
+                              )}
                             </div>
-                          </div>
-                          {umpire.assignedCourt && (
-                            <span style={{ fontSize: '10px', background: 'rgba(148, 163, 184, 0.15)', padding: '2px 8px', borderRadius: '4px', color: '#94a3b8' }}>
-                              {umpire.assignedCourt}
-                            </span>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '10px', border: '1px dashed rgba(148, 163, 184, 0.3)' }}>
-                    <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#94a3b8' }}>
-                      No umpire login found yet. Click below to create one instantly!
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setIsQuickCreateUmpire(true)}
-                      style={{
-                        padding: '8px 16px',
-                        borderRadius: '8px',
-                        background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                        color: '#fff',
-                        border: 'none',
-                        fontWeight: '800',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ➕ Quick Create Umpire
-                    </button>
-                  </div>
-                )
+                          )
+                        })}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '10px', border: '1px dashed rgba(148, 163, 184, 0.3)' }}>
+                      <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#94a3b8' }}>
+                        No umpire logins available. Click below to create one instantly!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsQuickCreateUmpire(true)}
+                        style={{
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                          color: '#fff',
+                          border: 'none',
+                          fontWeight: '800',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ➕ Quick Create Umpire
+                      </button>
+                    </div>
+                  )}
+                </>
               ) : (
                 /* Quick Create Umpire Box */
                 <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1.5px solid rgba(56, 189, 248, 0.4)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -6274,55 +6662,31 @@ export const BadmintonFixturesManager = ({
 
             {/* Action Buttons */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <button
-                  type="button"
-                  disabled={!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0}
-                  onClick={() => handleConfirmStartLiveMatch(false)}
-                  style={{
-                    padding: '12px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '13px',
-                    cursor: (!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0) ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    boxShadow: '0 4px 15px rgba(2, 132, 199, 0.4)',
-                  }}
-                  title="Assign this umpire so it shows in their upcoming queue"
-                >
-                  <span>💾 Assign for Upcoming Queue</span>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0}
-                  onClick={() => handleConfirmStartLiveMatch(true)}
-                  style={{
-                    padding: '12px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '13px',
-                    cursor: (!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0) ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    boxShadow: '0 4px 15px rgba(239, 68, 68, 0.4)',
-                  }}
-                >
-                  <span className="live-pulse-dot" style={{ width: '8px', height: '8px', background: '#ffffff' }} />
-                  <span>🚀 Launch to Live Now</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0}
+                onClick={() => handleConfirmStartLiveMatch(true)}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  border: 'none',
+                  color: '#ffffff',
+                  fontWeight: '900',
+                  fontSize: '14px',
+                  cursor: (!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0) ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 18px rgba(239, 68, 68, 0.45)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span className="live-pulse-dot" style={{ width: '8px', height: '8px', background: '#ffffff' }} />
+                <span>🚀 Launch Live</span>
+              </button>
 
               <button
                 type="button"
@@ -6346,10 +6710,353 @@ export const BadmintonFixturesManager = ({
         </div>
       )}
 
+      {/* Interactive Match Breakdown Details & Quick Scoring Popup Modal */}
+      {viewingMatchDetails && (() => {
+        const liveMatch = (currentDraw?.matches || []).find((m) => m.id === viewingMatchDetails.id) || viewingMatchDetails
+        const p1 = liveMatch.player1
+        const p2 = liveMatch.player2
+        const isP1Winner = liveMatch.winner?.id === p1?.id || liveMatch.winner === 'player1'
+        const isP2Winner = liveMatch.winner?.id === p2?.id || liveMatch.winner === 'player2'
+        const maxPts = Number(liveMatch.matchPoints || matchTotalPoints) || 30
+        const totalSets = Number(liveMatch.matchSets || (
+          liveMatch.status === 'completed'
+            ? Math.max(
+                (liveMatch.scoreSet5A || liveMatch.scoreSet5B) ? 5 :
+                (liveMatch.scoreSet4A || liveMatch.scoreSet4B) ? 4 :
+                (liveMatch.scoreSet3A || liveMatch.scoreSet3B) ? 3 :
+                (liveMatch.scoreSet2A || liveMatch.scoreSet2B) ? 2 :
+                1,
+                liveMatch.matchSets || 1
+              )
+            : matchTotalSets
+        )) || 3
+        const setsArr = Array.from({ length: totalSets }, (_, i) => i + 1)
+        const isByeMatch = p1?.isBye || p2?.isBye
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(2, 6, 23, 0.88)',
+              backdropFilter: 'blur(10px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 99999,
+              padding: '16px',
+            }}
+            onClick={() => setViewingMatchDetails(null)}
+          >
+            <div
+              style={{
+                background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)',
+                border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                borderRadius: '20px',
+                maxWidth: '620px',
+                width: '100%',
+                padding: '24px',
+                boxShadow: '0 25px 60px -15px rgba(56, 189, 248, 0.3), 0 0 40px rgba(0, 0, 0, 0.85)',
+                color: '#f8fafc',
+                position: 'relative',
+                maxHeight: '92vh',
+                overflowY: 'auto',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', borderBottom: '1px solid rgba(148, 163, 184, 0.2)', paddingBottom: '12px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: '800', background: 'rgba(56, 189, 248, 0.2)', color: '#38bdf8', padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase' }}>
+                      Match #{liveMatch.matchNumber || liveMatch.id}
+                    </span>
+                    <span style={{ fontSize: '11.5px', color: '#cbd5e1', fontWeight: '700' }}>
+                      {liveMatch.roundName || (liveMatch.round ? `Round ${liveMatch.round}` : 'Knockout Round')}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>•</span>
+                    <span style={{ fontSize: '11.5px', color: '#a78bfa', fontWeight: '700' }}>
+                      {selectedCategory}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span>🏸 {liveMatch.court || selectedMatch?.courtName || 'Court 1'}</span>
+                    {liveMatch.time && <span>⏰ {format12HourTime(liveMatch.time)}</span>}
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        fontSize: '10.5px',
+                        fontWeight: '800',
+                        textTransform: 'uppercase',
+                        background: liveMatch.status === 'live' ? 'rgba(239, 68, 68, 0.2)' : liveMatch.status === 'completed' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                        color: liveMatch.status === 'live' ? '#f87171' : liveMatch.status === 'completed' ? '#4ade80' : '#60a5fa',
+                        border: `1px solid ${liveMatch.status === 'live' ? 'rgba(239, 68, 68, 0.4)' : liveMatch.status === 'completed' ? 'rgba(34, 197, 94, 0.4)' : 'rgba(59, 130, 246, 0.4)'}`,
+                      }}
+                    >
+                      {liveMatch.status === 'live' ? '🔴 LIVE ON COURT' : liveMatch.status === 'completed' ? '🏆 COMPLETED' : '🔵 SCHEDULED'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingMatchDetails(null)}
+                  style={{
+                    background: 'rgba(148, 163, 184, 0.1)',
+                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                    borderRadius: '10px',
+                    color: '#94a3b8',
+                    width: '32px',
+                    height: '32px',
+                    cursor: 'pointer',
+                    fontSize: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Player 1 vs Player 2 Comparison Card */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center', background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '16px', padding: '16px', marginBottom: '18px' }}>
+                {/* Player 1 */}
+                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '12px', background: isP1Winner ? 'rgba(34, 197, 94, 0.15)' : 'rgba(30, 41, 59, 0.5)', border: isP1Winner ? '1.5px solid #22c55e' : '1px solid rgba(148, 163, 184, 0.1)' }}>
+                  {p1?.seed && (
+                    <span style={{ fontSize: '10px', fontWeight: '900', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginBottom: '4px' }}>
+                      Seed {p1.seed}
+                    </span>
+                  )}
+                  <div style={{ fontSize: '15px', fontWeight: '800', color: isP1Winner ? '#4ade80' : '#60a5fa' }}>
+                    {p1 ? (p1.isBye ? 'BYE' : p1.name) : 'TBD'}
+                  </div>
+                  {Boolean(p1?.place || p1?.court) && (
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
+                      {[p1.place, p1.court].filter(Boolean).join(' • ')}
+                    </div>
+                  )}
+                  {isP1Winner && (
+                    <div style={{ fontSize: '11px', color: '#4ade80', fontWeight: '800', marginTop: '6px' }}>
+                      👑 WINNER
+                    </div>
+                  )}
+                </div>
+
+                {/* VS Badge */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(56, 189, 248, 0.15)', border: '1.5px solid #38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '900', color: '#38bdf8' }}>
+                    VS
+                  </div>
+                </div>
+
+                {/* Player 2 */}
+                <div style={{ textAlign: 'center', padding: '10px', borderRadius: '12px', background: isP2Winner ? 'rgba(34, 197, 94, 0.15)' : 'rgba(30, 41, 59, 0.5)', border: isP2Winner ? '1.5px solid #22c55e' : '1px solid rgba(148, 163, 184, 0.1)' }}>
+                  {p2?.seed && (
+                    <span style={{ fontSize: '10px', fontWeight: '900', background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', marginBottom: '4px' }}>
+                      Seed {p2.seed}
+                    </span>
+                  )}
+                  <div style={{ fontSize: '15px', fontWeight: '800', color: isP2Winner ? '#4ade80' : '#f43f5e' }}>
+                    {p2 ? (p2.isBye ? 'BYE' : p2.name) : 'TBD'}
+                  </div>
+                  {Boolean(p2?.place || p2?.court) && (
+                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '3px' }}>
+                      {[p2.place, p2.court].filter(Boolean).join(' • ')}
+                    </div>
+                  )}
+                  {isP2Winner && (
+                    <div style={{ fontSize: '11px', color: '#4ade80', fontWeight: '800', marginTop: '6px' }}>
+                      👑 WINNER
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Set Scores Breakdown & Quick Entry */}
+              {!isByeMatch && p1 && p2 && (
+                <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '14px', padding: '14px', marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '800', color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      📊 Match Sets Scores (Max {maxPts} Points):
+                    </div>
+                    {!isPublicView && (
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {['scheduled', 'live', 'completed'].map((st) => (
+                          <button
+                            key={st}
+                            type="button"
+                            onClick={() => handleUpdateMatch(liveMatch.id, { status: st })}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '10px',
+                              fontWeight: '800',
+                              textTransform: 'uppercase',
+                              background: liveMatch.status === st ? '#3b82f6' : 'rgba(30, 41, 59, 0.8)',
+                              color: '#fff',
+                              border: 'none',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {st}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: `repeat(${totalSets}, 1fr)`, gap: '10px' }}>
+                    {setsArr.map((setNum) => {
+                      const keyA = `scoreSet${setNum}A`
+                      const keyB = `scoreSet${setNum}B`
+                      const valA = Number(liveMatch[keyA]) || 0
+                      const valB = Number(liveMatch[keyB]) || 0
+
+                      return (
+                        <div
+                          key={setNum}
+                          style={{
+                            background: 'rgba(30, 41, 59, 0.7)',
+                            border: '1px solid rgba(148, 163, 184, 0.2)',
+                            borderRadius: '10px',
+                            padding: '10px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', marginBottom: '8px' }}>
+                            SET {setNum}
+                          </div>
+                          {!isPublicView ? (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginBottom: '4px' }}>
+                                <button type="button" className="pro-stepper-btn" onClick={() => handleScoreChange(liveMatch, keyA, Math.max(0, valA - 1))}>-</button>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={maxPts}
+                                  value={liveMatch[keyA] !== undefined ? liveMatch[keyA] : ''}
+                                  onChange={(e) => {
+                                    const raw = e.target.value
+                                    if (raw === '') handleScoreChange(liveMatch, keyA, '')
+                                    else handleScoreChange(liveMatch, keyA, Math.max(0, Math.min(maxPts, Number(raw))))
+                                  }}
+                                  placeholder="0"
+                                  style={{ width: '42px', padding: '4px', textAlign: 'center', background: '#0f172a', border: '1px solid #38bdf8', borderRadius: '6px', color: '#60a5fa', fontWeight: '800', fontSize: '13px' }}
+                                />
+                                <button type="button" className="pro-stepper-btn" onClick={() => handleScoreChange(liveMatch, keyA, Math.min(maxPts, valA + 1))}>+</button>
+                              </div>
+                              <div style={{ fontSize: '9px', color: '#64748b', margin: '2px 0' }}>vs</div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                <button type="button" className="pro-stepper-btn" onClick={() => handleScoreChange(liveMatch, keyB, Math.max(0, valB - 1))}>-</button>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={maxPts}
+                                  value={liveMatch[keyB] !== undefined ? liveMatch[keyB] : ''}
+                                  onChange={(e) => {
+                                    const raw = e.target.value
+                                    if (raw === '') handleScoreChange(liveMatch, keyB, '')
+                                    else handleScoreChange(liveMatch, keyB, Math.max(0, Math.min(maxPts, Number(raw))))
+                                  }}
+                                  placeholder="0"
+                                  style={{ width: '42px', padding: '4px', textAlign: 'center', background: '#0f172a', border: '1px solid #f43f5e', borderRadius: '6px', color: '#f43f5e', fontWeight: '800', fontSize: '13px' }}
+                                />
+                                <button type="button" className="pro-stepper-btn" onClick={() => handleScoreChange(liveMatch, keyB, Math.min(maxPts, valB + 1))}>+</button>
+                              </div>
+                            </>
+                          ) : (
+                            <div style={{ fontSize: '16px', fontWeight: '900', color: '#f8fafc', padding: '8px 0' }}>
+                              <span style={{ color: '#60a5fa' }}>{liveMatch[keyA] !== undefined && liveMatch[keyA] !== '' ? liveMatch[keyA] : '-'}</span>
+                              <span style={{ color: '#64748b', margin: '0 6px' }}>-</span>
+                              <span style={{ color: '#f43f5e' }}>{liveMatch[keyB] !== undefined && liveMatch[keyB] !== '' ? liveMatch[keyB] : '-'}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'flex-end', borderTop: '1px solid rgba(148, 163, 184, 0.2)', paddingTop: '16px' }}>
+                {!isPublicView && !isByeMatch && p1 && p2 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewingMatchDetails(null)
+                      handlePromptStartLive(liveMatch)
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                      border: 'none',
+                      color: '#ffffff',
+                      fontWeight: '800',
+                      fontSize: '12.5px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)',
+                    }}
+                  >
+                    <span>🚀 Launch to Live Scoring</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleOpenScoresheet(liveMatch)
+                  }}
+                  style={{
+                    padding: '10px 16px',
+                    borderRadius: '10px',
+                    background: 'rgba(56, 189, 248, 0.15)',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    color: '#38bdf8',
+                    fontWeight: '800',
+                    fontSize: '12.5px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <span>🖨️ Print Scoresheet</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setViewingMatchDetails(null)}
+                  style={{
+                    padding: '10px 18px',
+                    borderRadius: '10px',
+                    background: 'rgba(148, 163, 184, 0.1)',
+                    border: '1px solid rgba(148, 163, 184, 0.25)',
+                    color: '#94a3b8',
+                    fontWeight: '700',
+                    fontSize: '12.5px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Official Match Scoresheet Printable Modal */}
       <MatchScoresheetModal
         isOpen={!!scoresheetMatch}
         onClose={() => setScoresheetMatch(null)}
+        onPrint={handleScoresheetPrinted}
         match={scoresheetMatch}
         tournament={selectedMatch}
         category={selectedCategory}
@@ -6389,6 +7096,14 @@ export const BadmintonFixturesManager = ({
         onSaveAds={handleSaveAds}
         adSettings={adSettings}
         onSaveSettings={handleSaveAdSettings}
+      />
+
+      {/* Stadium Courts Configuration Modal */}
+      <CourtConfigModal
+        isOpen={isCourtConfigModalOpen}
+        initialConfig={courtConfig}
+        onClose={() => setIsCourtConfigModalOpen(false)}
+        onSave={(newCfg) => setCourtConfig(newCfg)}
       />
     </div>
   )

@@ -7,7 +7,10 @@ import { FixtureSeedingModal } from './components/FixtureSeedingModal'
 import { MatchEditModal } from './components/MatchEditModal'
 import { TournamentResultsModal } from './components/TournamentResultsModal'
 import { StadiumTvLiveCast } from './components/StadiumTvLiveCast'
+import { ConfirmDeleteModal } from './components/ConfirmDeleteModal'
+import { PublicSponsorShowcase } from './components/PublicSponsorShowcase'
 import { generateBadmintonDraw } from './utils/badmintonDrawEngine'
+import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from './utils/courtConfig'
 import { SupabaseService } from './utils/supabaseDb'
 import {
   BadmintonDatePicker,
@@ -160,8 +163,6 @@ function getStoredInitialFixtures(matchId, category) {
 const getFixtureStorageKey = (matchId, categoryName) => `${matchId}-${categoryName}`
 
 function App() {
-  const [authOpen, setAuthOpen] = useState(false)
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [authSession, setAuthSession] = useState(() => {
     try {
       const saved = localStorage.getItem('badminton-organizer-session')
@@ -170,6 +171,15 @@ function App() {
       return null
     }
   })
+  const [authOpen, setAuthOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem('badminton-organizer-session')
+      return Boolean(saved)
+    } catch {
+      return false
+    }
+  })
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [publicMenuOpen, setPublicMenuOpen] = useState(false)
   const [activePage, setActivePage] = useState('fixturesManagement')
@@ -237,20 +247,39 @@ function App() {
   const [winnerModalMatch, setWinnerModalMatch] = useState(null)
   const [winnerCategoryMap, setWinnerCategoryMap] = useState({})
   const [successToast, setSuccessToast] = useState('')
+  const [deleteConfirmState, setDeleteConfirmState] = useState(null)
   const [playerFilterSearch, setPlayerFilterSearch] = useState('')
   const [publicViewingFixturesMatch, setPublicViewingFixturesMatch] = useState(null)
   const [publicViewingCategory, setPublicViewingCategory] = useState(null)
   const [resultModalMatch, setResultModalMatch] = useState(null)
   const [isStadiumTvCastOpen, setIsStadiumTvCastOpen] = useState(false)
   const [isLiveStreamSetupModalOpen, setIsLiveStreamSetupModalOpen] = useState(false)
-  const [streamCourtsCount, setStreamCourtsCount] = useState(() => {
-    try {
-      const saved = localStorage.getItem('badminton-stadium-courts-count')
-      return saved ? parseInt(saved, 10) : 4
-    } catch {
-      return 4
+  const [streamCourtConfig, setStreamCourtConfig] = useState(() => getSavedCourtConfig())
+  const [streamCourtsCount, setStreamCourtsCount] = useState(() => streamCourtConfig.count || 4)
+  const [streamCourtFormat, setStreamCourtFormat] = useState(() => streamCourtConfig.format || 'numbers')
+  const [streamCourtPrefix, setStreamCourtPrefix] = useState(() => streamCourtConfig.prefix !== undefined ? streamCourtConfig.prefix : 'Court')
+  const [streamCourtCustomNames, setStreamCourtCustomNames] = useState(() => streamCourtConfig.customNames || '')
+
+  useEffect(() => {
+    if (isLiveStreamSetupModalOpen) {
+      const cfg = getSavedCourtConfig()
+      setStreamCourtConfig(cfg)
+      setStreamCourtsCount(cfg.count || 4)
+      setStreamCourtFormat(cfg.format || 'numbers')
+      setStreamCourtPrefix(cfg.prefix !== undefined ? cfg.prefix : 'Court')
+      setStreamCourtCustomNames(cfg.customNames || '')
     }
-  })
+  }, [isLiveStreamSetupModalOpen])
+
+  const streamPreviewCourts = useMemo(() => {
+    return generateCourtsList({
+      count: streamCourtsCount,
+      format: streamCourtFormat,
+      prefix: streamCourtPrefix,
+      customNames: streamCourtCustomNames,
+    })
+  }, [streamCourtsCount, streamCourtFormat, streamCourtPrefix, streamCourtCustomNames])
+
   const [isLiveStreamActive, setIsLiveStreamActive] = useState(() => {
     try {
       return localStorage.getItem('badminton-live-stream-active') === 'true'
@@ -341,6 +370,31 @@ function App() {
               try {
                 localStorage.setItem('badminton-tournament-draws', JSON.stringify(data.tournamentDraws))
               } catch (e) {}
+            }
+
+            if (data.temporaryCredentials && Array.isArray(data.temporaryCredentials)) {
+              try {
+                localStorage.setItem('badminton-temporary-credentials', JSON.stringify(data.temporaryCredentials))
+              } catch (e) {}
+            }
+
+            if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
+              try {
+                localStorage.setItem('badminton-reported-players', JSON.stringify(data.reportedPlayers))
+              } catch (e) {}
+            }
+
+            if (data.courtConfig && typeof data.courtConfig === 'object') {
+              try {
+                localStorage.setItem('badminton-stadium-court-config', JSON.stringify(data.courtConfig))
+              } catch (e) {}
+            }
+            if (data.systemSettings?.liveStreamActive !== undefined || data.liveStreamActive !== undefined) {
+              const serverVal = Boolean(data.systemSettings?.liveStreamActive ?? data.liveStreamActive)
+              const localVal = localStorage.getItem('badminton-live-stream-active')
+              if (localVal === null) {
+                setIsLiveStreamActive(serverVal)
+              }
             }
             return
           }
@@ -538,7 +592,9 @@ function App() {
     if (!isLiveStreamActive) {
       setIsLiveStreamSetupModalOpen(true)
     } else {
-      handleStopLiveStream()
+      // Live Stream stays permanently ON; second tap re-opens / views Live Cast without turning OFF
+      setIsStadiumTvCastOpen(true)
+      setSuccessToast('📺 Live Stream is active. To stop streaming, click "Stop Live Stream" inside the Live Cast screen.')
     }
   }
 
@@ -548,6 +604,7 @@ function App() {
     try {
       localStorage.setItem('badminton-live-stream-active', 'false')
       syncServerData({ liveStreamActive: false })
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
     setSuccessToast('⚪ Live Stream Broadcast is now stopped.')
   }
@@ -587,8 +644,16 @@ function App() {
     setSuccessToast(`📺 TV Live Broadcast opened in a new tab! This tab stays on your app for scoring & fixtures.`)
   }
 
-  const handleConfirmLiveStreamSetup = (selectedCourts) => {
-    handleLaunchPopoutBroadcast(selectedCourts)
+  const handleConfirmLiveStreamSetup = (countOverride) => {
+    const nextCfg = {
+      count: typeof countOverride === 'number' ? countOverride : streamCourtsCount,
+      format: streamCourtFormat,
+      prefix: streamCourtPrefix.trim(),
+      customNames: streamCourtCustomNames.trim(),
+    }
+    saveCourtConfig(nextCfg)
+    setStreamCourtConfig(nextCfg)
+    handleLaunchPopoutBroadcast(nextCfg.count)
   }
 
   const handleSelectMatchForManagement = (match) => {
@@ -613,7 +678,9 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(publishedMatches))
-      syncServerData({ matches: publishedMatches })
+      if (publishedMatches && publishedMatches.length > 0) {
+        syncServerData({ matches: publishedMatches })
+      }
     } catch (error) {
       console.error('Unable to save published matches', error)
     }
@@ -622,7 +689,9 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authenticators))
-      syncServerData({ authenticators })
+      if (authenticators && Object.keys(authenticators).length > 0) {
+        syncServerData({ authenticators })
+      }
     } catch (error) {
       console.error('Unable to save authenticators', error)
     }
@@ -631,7 +700,9 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('badminton-published-status', JSON.stringify(publishedStatusMap))
-      syncServerData({ publishedStatus: publishedStatusMap })
+      if (publishedStatusMap && Object.keys(publishedStatusMap).length > 0) {
+        syncServerData({ publishedStatus: publishedStatusMap })
+      }
     } catch (error) {
       console.error('Unable to save published status', error)
     }
@@ -1217,7 +1288,13 @@ function App() {
                   setPublicViewingFixturesMatch(null)
                   setPublicViewingCategory(null)
                 }}
-                onOpenOrganizerLogin={() => setIsAuthModalOpen(true)}
+                onOpenOrganizerLogin={() => {
+                  if (authSession) {
+                    setAuthOpen(true)
+                  } else {
+                    setIsAuthModalOpen(true)
+                  }
+                }}
               />
             </div>
           ) : selectedMatch ? (
@@ -1244,10 +1321,16 @@ function App() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => setIsAuthModalOpen(true)}
+                    onClick={() => {
+                      if (authSession) {
+                        setAuthOpen(true)
+                      } else {
+                        setIsAuthModalOpen(true)
+                      }
+                    }}
                     className="public-auth-btn icon-only"
-                    title={authSession ? 'Organizer Portal' : 'Organizer Login'}
-                    aria-label={authSession ? 'Organizer Portal' : 'Organizer Login'}
+                    title={authSession ? 'Organizer / Umpire Portal' : 'Organizer / Umpire Login'}
+                    aria-label={authSession ? 'Organizer / Umpire Portal' : 'Organizer / Umpire Login'}
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -1490,10 +1573,16 @@ function App() {
                 <div className="public-header-actions">
                   <button
                     type="button"
-                    onClick={() => setIsAuthModalOpen(true)}
+                    onClick={() => {
+                      if (authSession) {
+                        setAuthOpen(true)
+                      } else {
+                        setIsAuthModalOpen(true)
+                      }
+                    }}
                     className="public-auth-btn icon-only"
-                    title={authSession ? 'Organizer Portal' : 'Organizer Login'}
-                    aria-label={authSession ? 'Organizer Portal' : 'Organizer Login'}
+                    title={authSession ? 'Organizer / Umpire Portal' : 'Organizer / Umpire Login'}
+                    aria-label={authSession ? 'Organizer / Umpire Portal' : 'Organizer / Umpire Login'}
                   >
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
@@ -1878,7 +1967,7 @@ function App() {
                       gap: '7px',
                       cursor: 'pointer',
                     }}
-                    title={isLiveStreamActive ? 'Live Stream is ON. Click to Turn OFF.' : 'Live Stream is OFF. Click to Turn ON.'}
+                    title={isLiveStreamActive ? 'Live Stream is ON and active. Click to view Live Broadcast.' : 'Live Stream is OFF. Click to Start Live Stream.'}
                   >
                     <span
                       style={{
@@ -2540,7 +2629,12 @@ function App() {
                                 title="Delete match"
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  handleDeleteMatch(match.id)
+                                  setDeleteConfirmState({
+                                    title: 'Delete Tournament?',
+                                    message: 'Are you sure you want to permanently delete this tournament? All match draws, categories, seedings, and registered players will be deleted.',
+                                    itemName: match.matchName,
+                                    onConfirm: () => handleDeleteMatch(match.id),
+                                  })
                                 }}
                                 style={{
                                   width: '38px',
@@ -3440,7 +3534,14 @@ function App() {
                                         </button>
                                         <button
                                           type="button"
-                                          onClick={() => handleRemoveParticipant(selectedMatch.id, participant.id)}
+                                          onClick={() => {
+                                            setDeleteConfirmState({
+                                              title: 'Remove Registered Player?',
+                                              message: `Are you sure you want to remove "${participant.name}" from this tournament registration?`,
+                                              itemName: participant.name,
+                                              onConfirm: () => handleRemoveParticipant(selectedMatch.id, participant.id),
+                                            })
+                                          }}
                                           style={{
                                             padding: '6px 10px',
                                             background: 'rgba(239, 68, 68, 0.18)',
@@ -3982,68 +4083,234 @@ function App() {
               background: 'linear-gradient(180deg, #1e293b 0%, #0f172a 100%)',
               border: '2px solid rgba(56, 189, 248, 0.5)',
               borderRadius: '20px',
-              padding: '28px',
-              maxWidth: '460px',
+              padding: '24px 28px',
+              maxWidth: '520px',
               width: '100%',
               boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(56, 189, 248, 0.25)',
               color: '#f8fafc',
+              maxHeight: '92vh',
+              overflowY: 'auto',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-              <span style={{ fontSize: '24px' }}>📺</span>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '18px', color: '#f8fafc', fontWeight: '900' }}>
-                  Live Broadcast Setup
-                </h3>
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                  Set court capacity for TV & Spectator Live Cast
-                </span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '24px' }}>📺</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '18px', color: '#f8fafc', fontWeight: '900' }}>
+                    Live Broadcast Setup
+                  </h3>
+                  <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                    Configure stadium courts & naming for Live Cast
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLiveStreamSetupModalOpen(false)}
+                style={{
+                  background: 'rgba(148, 163, 184, 0.1)',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  borderRadius: '8px',
+                  color: '#94a3b8',
+                  width: '28px',
+                  height: '28px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 1. Court Count Manual Input */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#38bdf8', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                🏟️ 1. How Many Active Courts are In-Play? (Enter Court Count):
+              </label>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setStreamCourtsCount((prev) => Math.max(1, (Number(prev) || 1) - 1))}
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: 'rgba(30, 41, 59, 0.9)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                    color: '#38bdf8',
+                    fontSize: '18px',
+                    fontWeight: '900',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Decrease Court Count"
+                >
+                  −
+                </button>
+
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={streamCourtsCount}
+                    onChange={(e) => {
+                      const cleaned = e.target.value.replace(/[^0-9]/g, '')
+                      setStreamCourtsCount(cleaned)
+                    }}
+                    placeholder="Enter number of courts (e.g. 4)"
+                    style={{
+                      width: '100%',
+                      padding: '10px 14px',
+                      borderRadius: '10px',
+                      background: '#0f172a',
+                      border: '2px solid #38bdf8',
+                      color: '#ffffff',
+                      fontSize: '16px',
+                      fontWeight: '900',
+                      textAlign: 'center',
+                      boxSizing: 'border-box',
+                      boxShadow: '0 0 12px rgba(56, 189, 248, 0.25)',
+                    }}
+                  />
+                  <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#94a3b8', fontWeight: '800', pointerEvents: 'none' }}>
+                    Courts
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setStreamCourtsCount((prev) => (Number(prev) || 0) + 1)}
+                  style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: 'rgba(30, 41, 59, 0.9)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                    color: '#38bdf8',
+                    fontSize: '18px',
+                    fontWeight: '900',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Increase Court Count"
+                >
+                  +
+                </button>
               </div>
             </div>
 
-            <div style={{ margin: '20px 0' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '800', color: '#38bdf8', marginBottom: '10px' }}>
-                🏟️ How Many Active Courts are In-Play?
+            {/* 2. Court Naming Style Selector */}
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#38bdf8', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                🏷️ 2. Court Naming Style:
               </label>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '14px' }}>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((cnt) => (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '8px' }}>
+                {[
+                  { id: 'alphabet', label: '🔤 Alphabetical', sub: 'Court A, Court B...' },
+                  { id: 'numbers', label: '🔢 Numeric', sub: 'Court 1, Court 2...' },
+                  { id: 'roman', label: '🏛️ Roman Numerals', sub: 'Court I, Court II...' },
+                  { id: 'custom', label: '✏️ Custom Names', sub: 'Comma-separated names' },
+                ].map((fmt) => (
                   <button
-                    key={cnt}
+                    key={fmt.id}
                     type="button"
-                    onClick={() => setStreamCourtsCount(cnt)}
+                    onClick={() => setStreamCourtFormat(fmt.id)}
                     style={{
-                      padding: '12px 0',
-                      borderRadius: '12px',
-                      background: streamCourtsCount === cnt ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' : 'rgba(30, 41, 59, 0.8)',
-                      border: streamCourtsCount === cnt ? '2px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
-                      color: streamCourtsCount === cnt ? '#ffffff' : '#cbd5e1',
-                      fontWeight: '900',
-                      fontSize: '15px',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: streamCourtFormat === fmt.id ? 'rgba(56, 189, 248, 0.2)' : 'rgba(15, 23, 42, 0.65)',
+                      border: streamCourtFormat === fmt.id ? '2px solid #38bdf8' : '1px solid rgba(148, 163, 184, 0.2)',
+                      color: streamCourtFormat === fmt.id ? '#ffffff' : '#94a3b8',
+                      textAlign: 'left',
                       cursor: 'pointer',
-                      boxShadow: streamCourtsCount === cnt ? '0 0 16px rgba(56, 189, 248, 0.5)' : 'none',
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    {cnt} {cnt === 1 ? 'Court' : 'Courts'}
+                    <div style={{ fontWeight: '800', fontSize: '13px', color: streamCourtFormat === fmt.id ? '#38bdf8' : '#ffffff' }}>
+                      {fmt.label}
+                    </div>
+                    <div style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '2px' }}>
+                      {fmt.sub}
+                    </div>
                   </button>
                 ))}
               </div>
 
-              <div style={{
-                marginTop: '16px',
-                padding: '10px 14px',
-                background: 'rgba(2, 132, 199, 0.12)',
-                border: '1px solid rgba(56, 189, 248, 0.3)',
-                borderRadius: '10px',
-                fontSize: '11.5px',
-                color: '#38bdf8',
-                lineHeight: '1.45',
-              }}>
-                💡 <strong>Dual-Screen / Stream Privacy Tip:</strong> Choose <strong>"Pop-out TV Window"</strong> to project the Live Cast on your Stadium TV, Projector, or OBS Browser Source. You can freely score and update fixtures on this laptop screen without the audience seeing your admin work!
+              {/* Prefix or Custom Names Input */}
+              {streamCourtFormat !== 'custom' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(15, 23, 42, 0.5)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '700' }}>Prefix label:</span>
+                  <input
+                    type="text"
+                    value={streamCourtPrefix}
+                    onChange={(e) => setStreamCourtPrefix(e.target.value)}
+                    placeholder="e.g. Court, Table, Arena"
+                    style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: '6px', padding: '4px 8px', color: '#ffffff', fontSize: '12px', fontWeight: '700' }}
+                  />
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>(e.g. "{streamCourtPrefix ? `${streamCourtPrefix} ` : ''}{streamCourtFormat === 'alphabet' ? 'A' : streamCourtFormat === 'roman' ? 'I' : '1'}")</span>
+                </div>
+              ) : (
+                <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
+                  <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', fontWeight: '700', marginBottom: '4px' }}>
+                    Enter Custom Court Names (comma-separated):
+                  </label>
+                  <input
+                    type="text"
+                    value={streamCourtCustomNames}
+                    onChange={(e) => setStreamCourtCustomNames(e.target.value)}
+                    placeholder="e.g. Court A, Court B, Center Court, VIP Court"
+                    style={{ width: '100%', background: '#0f172a', border: '1px solid #38bdf8', borderRadius: '6px', padding: '6px 8px', color: '#ffffff', fontSize: '12px', fontWeight: '700', boxSizing: 'border-box' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Live Courts Preview */}
+            <div style={{ marginBottom: '16px', background: 'rgba(15, 23, 42, 0.7)', borderRadius: '12px', padding: '10px 14px', border: '1px solid rgba(56, 189, 248, 0.25)' }}>
+              <span style={{ display: 'block', fontSize: '11px', fontWeight: '800', color: '#38bdf8', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                👁️ Live Courts Preview:
+              </span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '75px', overflowY: 'auto' }}>
+                {streamPreviewCourts.map((court, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      padding: '3px 9px',
+                      borderRadius: '6px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.35)',
+                      color: '#e0f2fe',
+                      fontSize: '11.5px',
+                      fontWeight: '800',
+                    }}
+                  >
+                    {court}
+                  </span>
+                ))}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+
+            <div style={{
+              padding: '10px 14px',
+              background: 'rgba(2, 132, 199, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              borderRadius: '10px',
+              fontSize: '11.5px',
+              color: '#38bdf8',
+              lineHeight: '1.45',
+            }}>
+              💡 <strong>Dual-Screen Tip:</strong> Pop-out TV opens on your external display / projector, while your schedule list automatically reflects these configured courts!
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '18px' }}>
               <button
                 type="button"
                 onClick={() => setIsLiveStreamSetupModalOpen(false)}
@@ -4082,7 +4349,7 @@ function App() {
                   boxShadow: '0 4px 20px rgba(56, 189, 248, 0.4)',
                 }}
               >
-                <span>🚀 Launch TV Broadcast (Opens in New Tab)</span>
+                <span>🚀 Launch TV Broadcast</span>
               </button>
             </div>
           </div>
@@ -4099,6 +4366,18 @@ function App() {
           onStopStream={handleStopLiveStream}
         />
       )}
+
+      {/* Universal Delete Confirmation Warning Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteConfirmState}
+        title={deleteConfirmState?.title}
+        message={deleteConfirmState?.message}
+        itemName={deleteConfirmState?.itemName}
+        confirmText="🗑️ Yes, Delete"
+        cancelText="✕ Cancel"
+        onConfirm={deleteConfirmState?.onConfirm}
+        onClose={() => setDeleteConfirmState(null)}
+      />
     </div>
   )
 }

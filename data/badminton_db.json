@@ -44,7 +44,7 @@
     }
   ],
   "publishedStatus": {
-    "1788505193676-Men Doubles": true
+    "1788505193676-Men Doubles": false
   },
   "authenticators": {
     "1788505193676": [
@@ -548,36 +548,6 @@
     ],
     "1788534014043": []
   },
-  "temporaryCredentials": [
-    {
-      "id": "temp_1788420996139",
-      "username": "umpire_2",
-      "password": "1234",
-      "name": "Tf6tg",
-      "assignedMatchId": 1788418217332,
-      "assignedMatchName": "Dindugal Open Tournament",
-      "courtName": "Pushkaram",
-      "scope": "umpire",
-      "expiry": "24 Hours",
-      "role": "umpire",
-      "createdAt": "03/09/2026",
-      "status": "active"
-    },
-    {
-      "id": "temp_1788418392327",
-      "username": "umpire_1",
-      "password": "1234",
-      "name": "Santhosh",
-      "assignedMatchId": 1788418217332,
-      "assignedMatchName": "Dindugal Open Tournament",
-      "courtName": "Pushkaram",
-      "scope": "umpire",
-      "expiry": "24 Hours",
-      "role": "umpire",
-      "createdAt": "03/09/2026",
-      "status": "active"
-    }
-  ],
   "tournamentDraws": {
     "1788418217332-Men Singles": {
       "drawSize": 16,
@@ -1098,16 +1068,25 @@
             "line": 3,
             "hasByeWalkover": true
           },
-          "scoreSet1A": "",
-          "scoreSet1B": "",
+          "scoreSet1A": 0,
+          "scoreSet1B": 0,
           "scoreSet2A": "",
           "scoreSet2B": "",
           "scoreSet3A": "",
           "scoreSet3B": "",
           "totalScoreA": "",
           "totalScoreB": "",
-          "winner": null,
-          "status": "live",
+          "winner": {
+            "id": 1788418225563,
+            "name": "RAM",
+            "place": "",
+            "court": "",
+            "seed": 1,
+            "isSeed": true,
+            "line": 1,
+            "hasByeWalkover": true
+          },
+          "status": "completed",
           "court": "Court 1",
           "time": "",
           "venue": "Dindugal",
@@ -1115,7 +1094,9 @@
           "nextMatchSlot": "player1",
           "assignedUmpireUsername": "umpire_1",
           "assignedUmpireName": "Santhosh",
-          "scheduledTime": ""
+          "scheduledTime": "",
+          "liveScore": null,
+          "score": "0-0"
         },
         {
           "id": "R2-M2",
@@ -1242,7 +1223,16 @@
           "round": 3,
           "roundName": "Semi Finals",
           "indexInRound": 0,
-          "player1": null,
+          "player1": {
+            "id": 1788418225563,
+            "name": "RAM",
+            "place": "",
+            "court": "",
+            "seed": 1,
+            "isSeed": true,
+            "line": 1,
+            "hasByeWalkover": true
+          },
           "player2": null,
           "scoreSet1A": "",
           "scoreSet1B": "",
@@ -2171,26 +2161,37 @@
             "isSeed": false,
             "line": 4
           },
-          "scoreSet1A": "",
-          "scoreSet1B": "",
+          "scoreSet1A": 30,
+          "scoreSet1B": 15,
           "scoreSet2A": "",
           "scoreSet2B": "",
           "scoreSet3A": "",
           "scoreSet3B": "",
           "totalScoreA": "",
           "totalScoreB": "",
-          "winner": null,
-          "status": "live",
-          "court": "Court",
+          "winner": {
+            "id": 1788505952740,
+            "name": "SAM / NAVEEN",
+            "place": "Bodi",
+            "court": "",
+            "seed": null,
+            "isSeed": false,
+            "line": 3
+          },
+          "status": "completed",
+          "court": "Court A",
           "time": "",
           "venue": "Dindugal",
           "nextMatchId": "R2-M1",
           "nextMatchSlot": "player2",
           "line1": 3,
           "line2": 4,
-          "isLive": false,
+          "isLive": true,
           "assignedUmpireUsername": "umpire_1",
-          "assignedUmpireName": "Santhosh"
+          "assignedUmpireName": "Santhosh",
+          "assignedCourt": "Court A",
+          "liveScore": null,
+          "score": "30-15"
         },
         {
           "id": "R1-M3",
@@ -2216,8 +2217,8 @@
             "isSeed": false,
             "line": 6
           },
-          "scoreSet1A": "",
-          "scoreSet1B": "",
+          "scoreSet1A": 30,
+          "scoreSet1B": 29,
           "scoreSet2A": "",
           "scoreSet2B": "",
           "scoreSet3A": "",
@@ -2226,16 +2227,47 @@
           "totalScoreB": "",
           "winner": null,
           "status": "scheduled",
-          "court": "Court 1",
+          "court": "Court 2",
           "time": "",
           "venue": "Dindugal",
           "nextMatchId": "R2-M2",
           "nextMatchSlot": "player1",
           "line1": 5,
           "line2": 6,
-          "assignedUmpireUsername": "umpire_2",
-          "assignedUmpireName": "Tf6tg",
-          "isLive": false
+          "assignedUmpireUsername": "umpire_1",
+          "assignedUmpireName": "Santhosh",
+          "isLive": false,
+          "assignedCourt": "Court 2",
+          "liveScore": {
+            "set1": {
+              "p1": 30,
+              "p2": 29
+            },
+            "set2": {
+              "p1": 0,
+              "p2": 0
+            },
+            "set3": {
+              "p1": 0,
+              "p2": 0
+            },
+            "set4": {
+              "p1": 0,
+              "p2": 0
+            },
+            "set5": {
+              "p1": 0,
+              "p2": 0
+            },
+            "currentSet": 1,
+            "servingPlayer": "p2",
+            "matchPoints": 21,
+            "matchSets": 1
+          },
+          "scoreSet4A": "",
+          "scoreSet4B": "",
+          "scoreSet5A": "",
+          "scoreSet5B": ""
         },
         {
           "id": "R1-M4",
@@ -2261,25 +2293,37 @@
             "isSeed": true,
             "line": 8
           },
-          "scoreSet1A": "",
-          "scoreSet1B": "",
+          "scoreSet1A": 21,
+          "scoreSet1B": 9,
           "scoreSet2A": "",
           "scoreSet2B": "",
           "scoreSet3A": "",
           "scoreSet3B": "",
           "totalScoreA": "",
           "totalScoreB": "",
-          "winner": null,
-          "status": "scheduled",
-          "court": "Court",
+          "winner": {
+            "id": 1788505637910,
+            "name": "VISHAL / KISHORE",
+            "place": "Nilakottai",
+            "court": "Mvc",
+            "seed": null,
+            "isSeed": false,
+            "line": 7
+          },
+          "status": "completed",
+          "court": "Court A",
           "time": "",
           "venue": "Dindugal",
           "nextMatchId": "R2-M2",
           "nextMatchSlot": "player2",
           "line1": 7,
           "line2": 8,
-          "assignedUmpireUsername": "umpire_2",
-          "assignedUmpireName": "Tf6tg"
+          "assignedUmpireUsername": "umpire_1",
+          "assignedUmpireName": "Santhosh",
+          "isLive": false,
+          "assignedCourt": "Court A",
+          "matchSets": 1,
+          "matchPoints": 21
         },
         {
           "id": "R1-M5",
@@ -2305,10 +2349,10 @@
             "isSeed": false,
             "line": 10
           },
-          "scoreSet1A": "",
-          "scoreSet1B": "",
+          "scoreSet1A": 15,
+          "scoreSet1B": 6,
           "scoreSet2A": "",
-          "scoreSet2B": "",
+          "scoreSet2B": 15,
           "scoreSet3A": "",
           "scoreSet3B": "",
           "totalScoreA": "",
@@ -2321,7 +2365,14 @@
           "nextMatchId": "R2-M3",
           "nextMatchSlot": "player1",
           "line1": 9,
-          "line2": 10
+          "line2": 10,
+          "isLive": false,
+          "assignedCourt": "Court",
+          "assignedUmpireUsername": "umpire_1",
+          "assignedUmpireName": "Santhosh",
+          "matchSets": 3,
+          "matchPoints": 15,
+          "previousWinnerId": 1788505414782
         },
         {
           "id": "R1-M6",
@@ -2347,23 +2398,37 @@
             "isSeed": false,
             "line": 12
           },
-          "scoreSet1A": "",
-          "scoreSet1B": "",
-          "scoreSet2A": "",
-          "scoreSet2B": "",
-          "scoreSet3A": "",
-          "scoreSet3B": "",
+          "scoreSet1A": 21,
+          "scoreSet1B": 0,
+          "scoreSet2A": 1,
+          "scoreSet2B": 21,
+          "scoreSet3A": 21,
+          "scoreSet3B": 15,
           "totalScoreA": "",
           "totalScoreB": "",
-          "winner": null,
-          "status": "scheduled",
+          "winner": {
+            "id": 1788505688959,
+            "name": "ANAND / SIVA",
+            "place": "Madurai",
+            "court": "Templecity",
+            "seed": null,
+            "isSeed": false,
+            "line": 11
+          },
+          "status": "completed",
           "court": "Court",
           "time": "",
           "venue": "Dindugal",
           "nextMatchId": "R2-M3",
           "nextMatchSlot": "player2",
           "line1": 11,
-          "line2": 12
+          "line2": 12,
+          "isLive": false,
+          "assignedCourt": "Court",
+          "assignedUmpireUsername": "umpire_1",
+          "assignedUmpireName": "Santhosh",
+          "matchSets": 3,
+          "matchPoints": 30
         },
         {
           "id": "R1-M7",
@@ -2807,7 +2872,15 @@
             "line": 1,
             "hasByeWalkover": true
           },
-          "player2": null,
+          "player2": {
+            "id": 1788505952740,
+            "name": "SAM / NAVEEN",
+            "place": "Bodi",
+            "court": "",
+            "seed": null,
+            "isSeed": false,
+            "line": 3
+          },
           "scoreSet1A": "",
           "scoreSet1B": "",
           "scoreSet2A": "",
@@ -2831,7 +2904,15 @@
           "roundName": "Round of 16",
           "indexInRound": 1,
           "player1": null,
-          "player2": null,
+          "player2": {
+            "id": 1788505637910,
+            "name": "VISHAL / KISHORE",
+            "place": "Nilakottai",
+            "court": "Mvc",
+            "seed": null,
+            "isSeed": false,
+            "line": 7
+          },
           "scoreSet1A": "",
           "scoreSet1B": "",
           "scoreSet2A": "",
@@ -2855,7 +2936,15 @@
           "roundName": "Round of 16",
           "indexInRound": 2,
           "player1": null,
-          "player2": null,
+          "player2": {
+            "id": 1788505688959,
+            "name": "ANAND / SIVA",
+            "place": "Madurai",
+            "court": "Templecity",
+            "seed": null,
+            "isSeed": false,
+            "line": 11
+          },
           "scoreSet1A": "",
           "scoreSet1B": "",
           "scoreSet2A": "",
@@ -5836,6 +5925,42 @@
       }
     }
   },
-  "liveUmpireMode": true,
-  "liveStreamActive": true
+  "temporaryCredentials": [
+    {
+      "id": "temp_1788586260055",
+      "username": "umpire_1",
+      "password": "1234",
+      "name": "Santhosh",
+      "assignedMatchId": 1788505193676,
+      "assignedMatchName": "Gtn Trophy",
+      "courtName": "Pushkaram",
+      "scope": "umpire",
+      "expiry": "24 Hours",
+      "role": "umpire",
+      "createdAt": "05/09/2026",
+      "status": "active"
+    }
+  ],
+  "reportedPlayers": {},
+  "liveUmpireMode": false,
+  "liveStreamActive": true,
+  "systemSettings": {
+    "matchPoints": 30,
+    "matchSets": 3,
+    "liveUmpireMode": true,
+    "liveStreamActive": true,
+    "stadiumCourtsCount": "3",
+    "courtConfig": {
+      "count": "3",
+      "format": "alphabet",
+      "prefix": "Court",
+      "customNames": ""
+    }
+  },
+  "courtConfig": {
+    "count": "3",
+    "format": "alphabet",
+    "prefix": "Court",
+    "customNames": ""
+  }
 }

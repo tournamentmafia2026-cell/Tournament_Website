@@ -12,6 +12,7 @@ import { isDoublesCategory } from '../utils/badmintonCategories'
 export const MatchScoresheetModal = ({
   isOpen = false,
   onClose = () => {},
+  onPrint = () => {},
   match = null,
   tournament = null,
   category = 'Men Singles',
@@ -53,6 +54,7 @@ export const MatchScoresheetModal = ({
   const displayCategory = formatCategoryName(category)
 
   const handlePrint = () => {
+    onPrint?.(match)
     const printContent = document.getElementById('printable-scoresheet')
     if (!printContent) {
       window.print()
@@ -622,9 +624,11 @@ export const MatchScoresheetModal = ({
                     {match.scoreSet1A}-{match.scoreSet1B}
                     {match.scoreSet2A ? `, ${match.scoreSet2A}-${match.scoreSet2B}` : ''}
                     {match.scoreSet3A ? `, ${match.scoreSet3A}-${match.scoreSet3B}` : ''}
+                    {match.scoreSet4A ? `, ${match.scoreSet4A}-${match.scoreSet4B}` : ''}
+                    {match.scoreSet5A ? `, ${match.scoreSet5A}-${match.scoreSet5B}` : ''}
                   </strong>
                 ) : (
-                  '____ - ____ ,  ____ - ____ ,  ____ - ____'
+                  '____ - ____'
                 )}
               </span>
             </div>
