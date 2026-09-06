@@ -202,10 +202,21 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
   // -------------------------------------------------------------
   // 2. ADMIN: VERIFY PHONE & SET PASSWORD VIA GMAIL OTP
   // -------------------------------------------------------------
+  const generateSecureRandomOtp = () => {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      const arr = new Uint32Array(1)
+      window.crypto.getRandomValues(arr)
+      const code = (arr[0] % 900000) + 100000
+      return code.toString()
+    }
+    return Math.floor(100000 + Math.random() * 900000).toString()
+  }
+
   const handleSendAdminOtp = async (e) => {
     if (e) e.preventDefault()
     setErrorMessage('')
     setStatusNotification('')
+    setEnteredOtp('')
 
     const cleanInput = adminPhone.trim()
     if (!cleanInput || cleanInput.length < 5) {
@@ -214,7 +225,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     }
 
     setIsLoading(true)
-    const otp = Math.floor(100000 + Math.random() * 900000).toString()
+    const otp = generateSecureRandomOtp()
     setGeneratedOtp(otp)
 
     const creds = getSavedCreds()
@@ -225,18 +236,18 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         to_email: targetEmail,
         username: 'Chief Organizer',
         otp,
-        action: 'Phone Verification & Admin Password Setup',
-        customMessage: `Your 6-digit OTP to verify Mobile Number (${adminPhone}) and set your Admin Password is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes. Do not share with anyone)`,
+        action: 'Admin Phone Verification OTP',
+        customMessage: `Your fresh 6-digit verification OTP for Badminton Portal Admin is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes. Do not share with anyone)`,
       })
 
       setIsLoading(false)
       setAdminOtpStep(2)
       // NEVER show the OTP code on the UI!
-      setStatusNotification(`✓ Verification OTP sent to registered Gmail (${targetEmail}). Check your inbox!`)
+      setStatusNotification(`✓ A new 6-digit random OTP has been sent to your Gmail (${targetEmail}). Please check your inbox!`)
     } catch (err) {
       setIsLoading(false)
       setAdminOtpStep(2)
-      setStatusNotification(`✓ Verification OTP sent to registered Gmail. Check inbox and enter below.`)
+      setStatusNotification(`✓ Verification OTP sent to your registered Gmail. Check inbox and enter below.`)
     }
   }
 
@@ -246,15 +257,14 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setStatusNotification('')
 
     const cleanEnteredOtp = enteredOtp.trim()
-    const isMasterBypass =
-      cleanEnteredOtp === generatedOtp.trim() ||
-      cleanEnteredOtp === '984001' ||
-      cleanEnteredOtp === '123456' ||
-      cleanEnteredOtp === '984000' ||
-      cleanEnteredOtp === 'b4afad25'
 
-    if (!isMasterBypass) {
-      setErrorMessage('Invalid OTP code. Please check your Gmail (including Spam folder) or use Master Code.')
+    if (!cleanEnteredOtp || cleanEnteredOtp.length !== 6) {
+      setErrorMessage('Please enter the 6-digit OTP code received in your Gmail.')
+      return
+    }
+
+    if (cleanEnteredOtp !== generatedOtp.trim()) {
+      setErrorMessage('Incorrect OTP! Please enter the exact 6-digit code received in your latest Gmail message.')
       return
     }
 
