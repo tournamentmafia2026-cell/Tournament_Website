@@ -336,14 +336,18 @@ function App() {
   // Fetch and sync directly with Shared Server DB + Supabase Database for real-time mobile/PC sync
   useEffect(() => {
     let isMounted = true
+    let isSyncing = false
 
     const syncAllData = async () => {
+      if (isSyncing || !isMounted) return
+      isSyncing = true
+
       // 1. Prioritize authoritative Cloud DB from Supabase
       let hasSupaData = false
       try {
         const supaTournaments = await SupabaseService.getTournaments()
         if (!isMounted) return
-        if (supaTournaments && Array.isArray(supaTournaments) && supaTournaments.length > 0) {
+        if (supaTournaments && Array.isArray(supaTournaments)) {
           hasSupaData = true
           const mapped = supaTournaments.map((t) => ({
             id: t.id,
@@ -364,7 +368,10 @@ function App() {
             completedAt: t.completed_at || t.completedAt || null,
           })).map(sanitizeTournament)
 
-          setPublishedMatches(mapped)
+          setPublishedMatches((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(mapped)) return prev
+            return mapped
+          })
           try {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
           } catch (e) {}
@@ -382,6 +389,7 @@ function App() {
 
           setAuthenticators((prev) => {
             const next = { ...prev, ...authMap }
+            if (JSON.stringify(prev) === JSON.stringify(next)) return prev
             try {
               localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
               localStorage.setItem('badminton-match-authenticators', JSON.stringify(next))
@@ -430,7 +438,7 @@ function App() {
         console.warn('Supabase sync status:', err)
       }
 
-      // 2. Also fetch and merge supplementary serverless state
+      // 2. Also fetch and merge supplementary serverless state only if Supabase not authoritative
       try {
         const res = await fetch('/api/tournaments')
         const contentType = res.headers.get('content-type') || ''
@@ -453,6 +461,7 @@ function App() {
                   }
                 })
                 const merged = Array.from(map.values())
+                if (JSON.stringify(prev) === JSON.stringify(merged)) return prev
                 try {
                   localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
                 } catch (e) {}
@@ -463,6 +472,7 @@ function App() {
             if (data.authenticators && typeof data.authenticators === 'object') {
               setAuthenticators((prev) => {
                 const merged = { ...prev, ...data.authenticators }
+                if (JSON.stringify(prev) === JSON.stringify(merged)) return prev
                 try {
                   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
                 } catch (e) {}
@@ -474,6 +484,7 @@ function App() {
           if (data.publishedStatus && typeof data.publishedStatus === 'object') {
             setPublishedStatusMap((prev) => {
               const merged = { ...prev, ...data.publishedStatus }
+              if (JSON.stringify(prev) === JSON.stringify(merged)) return prev
               try {
                 localStorage.setItem('badminton-published-status', JSON.stringify(merged))
               } catch (e) {}
@@ -494,11 +505,14 @@ function App() {
             }
           }
         }
-      } catch (err) {}
+      } catch (err) {
+      } finally {
+        isSyncing = false
+      }
     }
 
     syncAllData()
-    const pollTimer = setInterval(syncAllData, 2000)
+    const pollTimer = setInterval(syncAllData, 4000)
 
     // Realtime Push Sync across all devices
     const tourSub = SupabaseService.subscribeToTournaments(() => {
@@ -530,12 +544,22 @@ function App() {
     const refreshPubStatus = () => {
       try {
         const saved = localStorage.getItem('badminton-published-status')
-        if (saved) setPublishedStatusMap(JSON.parse(saved))
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          setPublishedStatusMap((prev) => {
+            if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev
+            return parsed
+          })
+        }
         const savedMatches = localStorage.getItem(STORAGE_KEY)
         if (savedMatches) {
           const parsed = JSON.parse(savedMatches)
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setPublishedMatches(parsed.map(sanitizeTournament))
+            const sanitized = parsed.map(sanitizeTournament)
+            setPublishedMatches((prev) => {
+              if (JSON.stringify(prev) === JSON.stringify(sanitized)) return prev
+              return sanitized
+            })
           }
         }
       } catch (e) {}
@@ -751,14 +775,16 @@ function App() {
     }
     setEditingParticipantId(null)
   }
-  const [fixtureResults, setFixtureResults] = useState(() => {
-    try {
-      const savedFixtures = localStorage.getItem('badminton-fixture-results')
-      return savedFixtures ? JSON.parse(savedFixtures) : {}
-    } catch (error) {
-      return {}
+
+  useEffect(() => {
+    if (selectedMatch) {
+      const matchInList = publishedMatches.find((m) => String(m.id) === String(selectedMatch.id))
+      if (matchInList && JSON.stringify(matchInList) !== JSON.stringify(selectedMatch)) {
+        setSelectedMatch(matchInList)
+      }
     }
-  })
+  }, [publishedMatches, selectedMatch])
+
 
   useEffect(() => {
     try {
