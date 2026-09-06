@@ -17,6 +17,7 @@ import {
   getTodayDateString,
   addDaysToDateString,
 } from './components/BadmintonDatePicker'
+import initialBadmintonDb from '../data/badminton_db.json'
 
 const STORAGE_KEY = 'badminton-published-matches'
 const AUTH_STORAGE_KEY = 'badminton-authenticators'
@@ -189,7 +190,7 @@ function App() {
       const savedMatches = localStorage.getItem(STORAGE_KEY)
       if (savedMatches !== null) {
         const parsed = JSON.parse(savedMatches)
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed
             .filter((m) => m && m.id !== 1 && m.id !== 2 && !String(m.matchName || '').includes('Chennai Badminton Championship') && !String(m.matchName || '').includes('State Open Badminton'))
             .map(sanitizeTournament)
@@ -198,7 +199,9 @@ function App() {
     } catch (error) {
       // fallback
     }
-    return []
+    return (initialBadmintonDb?.matches || [])
+      .filter((m) => m && m.id !== 1 && m.id !== 2)
+      .map(sanitizeTournament)
   })
   const [formData, setFormData] = useState(getInitialFormData)
   const [imagePreview, setImagePreview] = useState('')
@@ -213,10 +216,9 @@ function App() {
       const savedAuthenticators = localStorage.getItem(AUTH_STORAGE_KEY)
       if (savedAuthenticators) {
         const parsed = JSON.parse(savedAuthenticators)
-        if (parsed && typeof parsed === 'object') {
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
           const sanitized = {}
           Object.keys(parsed).forEach((k) => {
-            // Remove hardcoded sample players (IDs 101-116 and 201-204)
             const list = Array.isArray(parsed[k]) ? parsed[k] : []
             sanitized[k] = list
               .filter((p) => !(p.id >= 101 && p.id <= 116) && !(p.id >= 201 && p.id <= 204))
@@ -228,7 +230,13 @@ function App() {
     } catch (error) {
       // fallback
     }
-    return {}
+    const initialAuth = initialBadmintonDb?.authenticators || {}
+    const sanitized = {}
+    Object.keys(initialAuth).forEach((k) => {
+      const list = Array.isArray(initialAuth[k]) ? initialAuth[k] : []
+      sanitized[k] = list.map(sanitizeParticipant)
+    })
+    return sanitized
   })
   const [participantForm, setParticipantForm] = useState({ name: '', name1: '', name2: '', court: '', place: '', category: 'Men Singles' })
   const [editingParticipantId, setEditingParticipantId] = useState(null)
@@ -297,7 +305,7 @@ function App() {
     } catch {
       // fallback
     }
-    return {}
+    return initialBadmintonDb?.publishedStatus || {}
   })
 
   // Auto-sync live stream broadcast active status with localStorage & storage events
