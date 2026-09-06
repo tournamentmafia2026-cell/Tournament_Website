@@ -86,36 +86,102 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setIsLoading(true)
 
     try {
-      // A. Check Supabase Cloud DB credentials (Real-time Cross-Device Sync)
       let cloudCreds = []
+      let cloudAdmin = null
+
+      // 1. Fetch from Netlify Serverless Cloud DB (/api/credentials)
+      try {
+        const credRes = await fetch('/api/credentials')
+        if (credRes.ok) {
+          const cData = await credRes.json()
+          if (cData && Array.isArray(cData.temporaryCredentials)) {
+            cloudCreds = cData.temporaryCredentials
+          }
+          if (cData && cData.organizerCredentials) {
+            cloudAdmin = cData.organizerCredentials
+          }
+        }
+      } catch {}
+
+      // 2. Fetch from Netlify Serverless Cloud DB (/api/tournaments)
+      try {
+        const tourRes = await fetch('/api/tournaments')
+        if (tourRes.ok) {
+          const tData = await tourRes.json()
+          if (tData && Array.isArray(tData.temporaryCredentials)) {
+            cloudCreds = [...cloudCreds, ...tData.temporaryCredentials]
+          }
+          if (tData && tData.organizerCredentials) {
+            cloudAdmin = { ...(cloudAdmin || {}), ...tData.organizerCredentials }
+          }
+        }
+      } catch {}
+
+      // 3. Fetch from Supabase Cloud DB if configured
       try {
         const supaCreds = await SupabaseService.getCredentials()
         if (supaCreds && Array.isArray(supaCreds) && supaCreds.length > 0) {
-          cloudCreds = supaCreds
+          cloudCreds = [...cloudCreds, ...supaCreds]
         }
-      } catch (err) {
-        console.warn('Could not load credentials from Supabase:', err)
-      }
+      } catch {}
 
-      // Merge with local fallback
+      // 4. Merge with local storage fallback
       const savedTemp = localStorage.getItem('badminton-temporary-credentials')
       if (savedTemp) {
         try {
           const localList = JSON.parse(savedTemp)
           if (Array.isArray(localList)) {
-            const map = new Map()
-            localList.forEach((t) => {
-              if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
-            })
-            cloudCreds.forEach((t) => {
-              if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
-            })
-            cloudCreds = Array.from(map.values())
+            cloudCreds = [...cloudCreds, ...localList]
           }
         } catch {}
       }
 
-      // Find matched credential in Cloud DB
+      // Check Admin Match against Cloud Admin data
+      if (cloudAdmin) {
+        const adminMobileDigits = String(cloudAdmin.mobile || '').replace(/[^0-9]/g, '')
+        const adminPass = String(cloudAdmin.password || '').trim()
+
+        const isCloudAdminIdMatch =
+          (inputDigits.length >= 7 && adminMobileDigits && (adminMobileDigits.endsWith(inputDigits) || inputDigits.endsWith(adminMobileDigits))) ||
+          cleanId === String(cloudAdmin.username || 'admin').toLowerCase() ||
+          cleanId === 'admin' ||
+          cleanId === 'organizer'
+
+        const isCloudAdminPassMatch =
+          cleanPass === adminPass ||
+          cleanPass.toLowerCase() === adminPass.toLowerCase()
+
+        if (isCloudAdminIdMatch && isCloudAdminPassMatch) {
+          localStorage.setItem(
+            ORGANIZER_CREDS_KEY,
+            JSON.stringify({
+              username: cloudAdmin.username || 'admin',
+              mobile: cloudAdmin.mobile || cleanId,
+              password: cleanPass,
+              email: 'tournamentmafia2026@gmail.com',
+            })
+          )
+
+          const adminSession = {
+            username: cloudAdmin.username || 'admin',
+            email: 'tournamentmafia2026@gmail.com',
+            mobile: cloudAdmin.mobile || cleanId,
+            name: 'Chief Organizer',
+            role: 'organizer',
+            scope: 'full',
+            token: `admin_auth_${Date.now()}`,
+            loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }
+
+          setLoginId('')
+          setPassword('')
+          setIsLoading(false)
+          onSuccess(adminSession)
+          return
+        }
+      }
+
+      // 5. Find matched credential in all combined credentials
       const matched = cloudCreds.find((c) => {
         if (!c || !c.username) return false
         const cUser = String(c.username).trim().toLowerCase()
@@ -202,7 +268,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         }
       }
 
-      // B. Check LocalStorage fallback for Admin credentials
+      // 6. Check LocalStorage fallback for Admin credentials
       const creds = getSavedCreds()
       const cleanMobile = (creds.mobile || '9840012345').replace(/[^0-9]/g, '')
 
@@ -338,7 +404,47 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     }
     localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updated))
 
-    // 2. Save directly into Supabase Cloud DB so Mobile, Laptop, Tablet and all devices sync immediately!
+    // 2. Save directly into Netlify Cloud DB endpoints so all devices sync instantly!
+    try {
+      await fetch('/api/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizerCredentials: {
+            username: 'admin',
+            mobile: cleanPhone,
+            password: cleanPass,
+            email: 'tournamentmafia2026@gmail.com',
+          },
+          credential: {
+            id: 'admin_' + cleanPhone.replace(/[^0-9]/g, ''),
+            username: cleanPhone,
+            password: cleanPass,
+            name: 'Chief Organizer',
+            scope: 'full',
+            role: 'organizer',
+            status: 'active',
+          },
+        }),
+      })
+
+      await fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizerCredentials: {
+            username: 'admin',
+            mobile: cleanPhone,
+            password: cleanPass,
+            email: 'tournamentmafia2026@gmail.com',
+          },
+        }),
+      })
+    } catch (apiErr) {
+      console.warn('Error saving to /api/credentials:', apiErr)
+    }
+
+    // 3. Save to Supabase Cloud DB as well
     try {
       await SupabaseService.upsertCredential({
         id: 'admin_' + cleanPhone.replace(/[^0-9]/g, ''),
@@ -351,7 +457,6 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         courtName: 'All Courts',
         assignedMatchName: 'All Tournaments',
       })
-      // Also update default 'admin' username in Supabase
       await SupabaseService.upsertCredential({
         id: 'admin_master',
         username: 'admin',

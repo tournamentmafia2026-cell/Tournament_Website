@@ -7,6 +7,16 @@
   node_bundler = "esbuild"
 
 [[redirects]]
+  from = "/api/tournaments"
+  to = "/.netlify/functions/tournaments"
+  status = 200
+
+[[redirects]]
+  from = "/api/credentials"
+  to = "/.netlify/functions/credentials"
+  status = 200
+
+[[redirects]]
   from = "/api/send-email"
   to = "/.netlify/functions/send-email"
   status = 200
