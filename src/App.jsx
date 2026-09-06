@@ -981,6 +981,7 @@ function App() {
         try {
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
         } catch (err) {}
+        syncServerData({ authenticators: next })
         return next
       })
       setSuccessToast(`✓ Updated ${isDoubles ? 'doubles pair' : 'player'} "${formatPersonName(finalName)}" in ${targetCategory}!`)
@@ -1013,6 +1014,7 @@ function App() {
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
       } catch (err) {}
+      syncServerData({ authenticators: next })
       return next
     })
 
