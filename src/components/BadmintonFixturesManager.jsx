@@ -631,6 +631,7 @@ export const BadmintonFixturesManager = ({
   const publishedCategoryList = (categories || []).filter(
     (cat) => Boolean(publishedStatusMap[`${selectedMatch?.id}-${cat}`])
   )
+  const visibleCategories = isPublicView ? publishedCategoryList : (categories || [])
 
   // In spectator/public view, auto-select first published category
   useEffect(() => {
@@ -2082,64 +2083,74 @@ export const BadmintonFixturesManager = ({
         </div>
 
         {/* Categories Grid */}
-        <div className="fixtures-categories-grid">
-          {categories.map((cat) => {
-            const count = (authenticators[selectedMatch.id] || []).filter(
-              (p) => (p.category || 'Men Singles') === cat
-            ).length
-            const isDrawActive = !!tournamentDraws[`${selectedMatch.id}-${cat}`]
-            const activeDrawObj = tournamentDraws[`${selectedMatch.id}-${cat}`]
+        {isPublicView && visibleCategories.length === 0 ? (
+          <div className="empty-draw-card" style={{ border: '1.5px dashed rgba(239, 68, 68, 0.4)', background: 'rgba(15, 23, 42, 0.85)', padding: '50px 20px', textAlign: 'center', borderRadius: '16px', margin: '20px auto', maxWidth: '600px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+            <h3 style={{ color: '#f8fafc', margin: '0 0 10px 0', fontSize: '20px', fontWeight: '800' }}>Fixtures Not Published Yet</h3>
+            <p style={{ color: '#94a3b8', margin: 0, fontSize: '14px', lineHeight: '1.6' }}>
+              The official fixture draw has not been published yet by the organizers. Please check back once the draw is released.
+            </p>
+          </div>
+        ) : (
+          <div className="fixtures-categories-grid">
+            {visibleCategories.map((cat) => {
+              const count = (authenticators[selectedMatch.id] || []).filter(
+                (p) => (p.category || 'Men Singles') === cat
+              ).length
+              const isDrawActive = !!tournamentDraws[`${selectedMatch.id}-${cat}`]
+              const activeDrawObj = tournamentDraws[`${selectedMatch.id}-${cat}`]
 
-            return (
-              <div
-                key={cat}
-                className={`fixtures-category-card ${isDrawActive ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedCategory(cat)
-                  setViewMode('official')
-                  setFixturesLevel('draw')
-                }}
-              >
-                <div>
-                  <div className="fixtures-category-header">
-                    <h3 className="fixtures-category-title">{cat}</h3>
-                    {isDrawActive ? (
-                      <span className="category-draw-status-badge active">
-                        ✓ {activeDrawObj.drawSize} Draw Active
-                      </span>
-                    ) : (
-                      <span className="category-draw-status-badge pending">
-                        Draw Pending
-                      </span>
-                    )}
+              return (
+                <div
+                  key={cat}
+                  className={`fixtures-category-card ${isDrawActive ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedCategory(cat)
+                    setViewMode('official')
+                    setFixturesLevel('draw')
+                  }}
+                >
+                  <div>
+                    <div className="fixtures-category-header">
+                      <h3 className="fixtures-category-title">{cat}</h3>
+                      {isDrawActive ? (
+                        <span className="category-draw-status-badge active">
+                          ✓ {activeDrawObj.drawSize} Draw Active
+                        </span>
+                      ) : (
+                        <span className="category-draw-status-badge pending">
+                          Draw Pending
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ color: '#94a3b8', fontSize: '12px', margin: '4px 0 0 0' }}>
+                      {count > 0 ? `${count} player(s) registered in this category.` : 'No players added yet (Auto-fill supported).'}
+                    </p>
                   </div>
-                  <p style={{ color: '#94a3b8', fontSize: '12px', margin: '4px 0 0 0' }}>
-                    {count > 0 ? `${count} player(s) registered in this category.` : 'No players added yet (Auto-fill supported).'}
-                  </p>
-                </div>
 
-                <div className="fixtures-category-meta">
-                  <span className="category-player-count-badge">
-                    👥 {count} Players
-                  </span>
-                  <button
-                    type="button"
-                    className="btn-primary-gradient"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedCategory(cat)
-                      setViewMode('official')
-                      setFixturesLevel('draw')
-                    }}
-                    style={{ marginLeft: 'auto', padding: '7px 14px', fontSize: '11.5px', cursor: 'pointer', textAlign: 'center' }}
-                  >
-                    ⚡ Open Draw →
-                  </button>
+                  <div className="fixtures-category-meta">
+                    <span className="category-player-count-badge">
+                      👥 {count} Players
+                    </span>
+                    <button
+                      type="button"
+                      className="btn-primary-gradient"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedCategory(cat)
+                        setViewMode('official')
+                        setFixturesLevel('draw')
+                      }}
+                      style={{ marginLeft: 'auto', padding: '7px 14px', fontSize: '11.5px', cursor: 'pointer', textAlign: 'center' }}
+                    >
+                      ⚡ Open Draw →
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Master Tournament Multi-Category Scheduling Modal */}
         <TournamentMasterScheduleModal
@@ -2546,7 +2557,7 @@ export const BadmintonFixturesManager = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-              {categories.map((cat) => (
+              {visibleCategories.map((cat) => (
                 <button
                   key={cat}
                   type="button"
@@ -2699,6 +2710,7 @@ export const BadmintonFixturesManager = ({
                     <span>Swipe sideways to view bracket rounds & finals 🏆</span>
                   </div>
                 )}
+                <div className="official-draw-sheet-scroll-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '16px', boxSizing: 'border-box' }}>
                 <div className={`official-draw-sheet-wrapper ${sheetTheme === 'dark' ? 'dark-theme' : ''}`}>
                 {/* Framed Top Box Header from Photo */}
                 <div className="official-sheet-header-box">
@@ -3015,6 +3027,7 @@ export const BadmintonFixturesManager = ({
                   <p className="official-sheet-note">
                     Note: It may Please be noted that the matches will be held on {selectedMatch?.startDate || ''} and {selectedMatch?.endDate || ''}.
                   </p>
+                </div>
                 </div>
                 </div>
               </>

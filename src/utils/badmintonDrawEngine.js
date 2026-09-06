@@ -507,18 +507,18 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     }
   }
 
-  // Fill any remaining unfilled open slots with placeholders
+  // Fill any remaining unfilled open slots with BYEs
   while (orderedOpenSlots.length > 0) {
     const emptySlot = orderedOpenSlots.shift()
     slots[emptySlot] = {
-      id: `p-${emptySlot + 1}`,
-      name: `PLAYER ${emptySlot + 1}`,
+      id: `bye-${emptySlot + 1}`,
+      name: 'BYE',
       place: '',
       court: '',
       seed: null,
       isSeed: false,
+      isBye: true,
       line: emptySlot + 1,
-      isPlaceholder: true,
     }
   }
 
@@ -533,7 +533,7 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
       const pA = slots[slotA]
       const pB = slots[slotB]
 
-      if (pA && pB && areFromSameCourtOrClub(pA, pB)) {
+      if (pA && pB && !pA.isBye && !pB.isBye && areFromSameCourtOrClub(pA, pB)) {
         clashFound = true
         // Swap non-seed player with another non-seed player in a different match
         const slotToSwap = (!pB.isSeed && !pB.isBye) ? slotB : ((!pA.isSeed && !pA.isBye) ? slotA : null)
@@ -559,8 +559,8 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
             const currOpponent = slots[currOppSlot]
 
             // Check if swap resolves match m clash AND doesn't create clash in otherM
-            const candValidInM = !areFromSameCourtOrClub(candPlayer, currOpponent)
-            const pToSwapValidInOther = !areFromSameCourtOrClub(pToSwap, otherOpponent)
+            const candValidInM = otherOpponent && otherOpponent.isBye ? true : !areFromSameCourtOrClub(candPlayer, currOpponent)
+            const pToSwapValidInOther = currOpponent && currOpponent.isBye ? true : !areFromSameCourtOrClub(pToSwap, otherOpponent)
 
             if (candValidInM && pToSwapValidInOther) {
               // Perform swap!
@@ -591,23 +591,23 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     }
   }
 
-  // Second pass: for non-seeded slots, if the player was already placed as a seed or earlier in the draw, replace with placeholder
+  // Second pass: for non-seeded slots, if the player was already placed as a seed or earlier in the draw, replace with BYE
   for (let i = 0; i < drawSize; i++) {
     const slot = slots[i]
-    if (slot && !slot.isSeed && !slot.isBye && !slot.isPlaceholder) {
+    if (slot && !slot.isSeed && !slot.isBye) {
       const nameKey = slot.name ? slot.name.trim().toLowerCase() : ''
       const idKey = slot.id ? String(slot.id).trim().toLowerCase() : ''
 
       if ((nameKey && finalSeenNames.has(nameKey)) || (idKey && finalSeenIds.has(idKey))) {
         slots[i] = {
-          id: `p-${i + 1}`,
-          name: `Player ${i + 1}`,
+          id: `bye-${i + 1}`,
+          name: 'BYE',
           place: '',
           court: '',
           seed: null,
           isSeed: false,
+          isBye: true,
           line: i + 1,
-          isPlaceholder: true,
         }
       } else {
         if (nameKey) finalSeenNames.add(nameKey)
@@ -745,13 +745,13 @@ export const sanitizeBadmintonDraw = (draw) => {
         if ((nameKey && seenNames.has(nameKey)) || (idKey && seenIds.has(idKey))) {
           hasDuplicates = true
           m[slotKey] = {
-            id: `p-${m.id}-${slotKey}`,
-            name: `Player ${slotKey === 'player1' ? (m.line1 || 1) : (m.line2 || 2)}`,
+            id: `bye-${m.id}-${slotKey}`,
+            name: 'BYE',
             place: '',
             court: '',
             seed: null,
             isSeed: false,
-            isPlaceholder: true,
+            isBye: true,
             line: slotKey === 'player1' ? m.line1 : m.line2,
           }
         } else {
