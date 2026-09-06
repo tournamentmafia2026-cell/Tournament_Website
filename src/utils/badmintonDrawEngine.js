@@ -689,20 +689,110 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
   // Propagate completed Round 1 BYE winners to subsequent rounds
   propagateWinners(matches)
 
-  return {
+  const drawObj = {
     drawSize,
     totalRounds,
     totalByes,
     seedsCount: seedsToPlace.length,
     seeds: seedsToPlace,
     matches,
+    showTimings: options.showTimings !== undefined ? Boolean(options.showTimings) : true,
+    startTime: options.startTime || '09:00',
+    matchDuration: Number(options.matchDuration || options.matchDurationMinutes) || 30,
+    numberOfCourts: Number(options.numberOfCourts || options.stadiumCourtsCount) || 4,
     config: {
       ...options,
+      showTimings: options.showTimings !== undefined ? Boolean(options.showTimings) : true,
+      startTime: options.startTime || '09:00',
+      matchDuration: Number(options.matchDuration || options.matchDurationMinutes) || 30,
+      numberOfCourts: Number(options.numberOfCourts || options.stadiumCourtsCount) || 4,
       drawSize,
       seedsCount: seedsToPlace.length,
       seeds: seedsToPlace,
     },
   }
+
+  // Auto-schedule Court & Match Times across available courts when showTimings is enabled
+  applyMatchTimingsToDraw(drawObj, options)
+
+  return drawObj
+}
+
+/**
+ * Apply or recalculate Court & Match Timings across rounds for any draw object
+ */
+export const applyMatchTimingsToDraw = (draw, options = {}) => {
+  if (!draw || !Array.isArray(draw.matches) || draw.matches.length === 0) return draw
+
+  const cfg = { ...draw.config, ...options }
+  const showTimings = draw.showTimings !== undefined
+    ? Boolean(draw.showTimings)
+    : (cfg.showTimings !== undefined ? Boolean(cfg.showTimings) : true)
+
+  if (!showTimings) {
+    draw.matches.forEach((m) => {
+      m.time = ''
+      m.scheduledTime = ''
+    })
+    return draw
+  }
+
+  const startTime = draw.startTime || cfg.startTime || '09:00'
+  const matchDuration = Number(draw.matchDuration || cfg.matchDuration || cfg.matchDurationMinutes) || 30
+  const numberOfCourts = Number(draw.numberOfCourts || cfg.numberOfCourts || cfg.stadiumCourtsCount) || 4
+
+  let courtNames = []
+  if (Array.isArray(cfg.courts) && cfg.courts.length > 0) {
+    courtNames = cfg.courts
+  } else if (Array.isArray(draw.courts) && draw.courts.length > 0) {
+    courtNames = draw.courts
+  } else {
+    for (let c = 1; c <= numberOfCourts; c++) {
+      courtNames.push(`Court ${c}`)
+    }
+  }
+  const numCourts = Math.max(1, courtNames.length)
+  const courtAvailableMinutes = new Array(numCourts).fill(0)
+
+  const totalRounds = draw.totalRounds || Math.max(...draw.matches.map((m) => m.round || 1))
+
+  for (let round = 1; round <= totalRounds; round++) {
+    const rMatches = draw.matches.filter((m) => m.round === round)
+    rMatches.forEach((m) => {
+      const isByeMatch = (m.player1?.isBye || m.player2?.isBye) && m.status === 'completed'
+      if (isByeMatch) {
+        m.court = 'BYE'
+        m.time = ''
+        m.scheduledTime = ''
+        return
+      }
+
+      let earliestCourtIdx = 0
+      let earliestTime = courtAvailableMinutes[0]
+      for (let c = 1; c < numCourts; c++) {
+        if (courtAvailableMinutes[c] < earliestTime) {
+          earliestTime = courtAvailableMinutes[c]
+          earliestCourtIdx = c
+        }
+      }
+
+      const assignedCourt = courtNames[earliestCourtIdx]
+      const matchStartMins = courtAvailableMinutes[earliestCourtIdx]
+      const formattedTime = format12HourTime(matchStartMins, startTime)
+
+      m.court = assignedCourt
+      m.time = formattedTime
+      m.scheduledTime = formattedTime
+      courtAvailableMinutes[earliestCourtIdx] += matchDuration
+    })
+  }
+
+  draw.showTimings = true
+  draw.startTime = startTime
+  draw.matchDuration = matchDuration
+  draw.numberOfCourts = numberOfCourts
+
+  return draw
 }
 
 /**
@@ -800,6 +890,18 @@ export const sanitizeBadmintonDraw = (draw) => {
 
   if (hasDuplicates || sameCourtClashesResolved) {
     propagateWinners(draw.matches)
+  }
+
+  // Ensure match timings are populated if showTimings is enabled
+  const isTimingsOn = draw.showTimings !== undefined
+    ? Boolean(draw.showTimings)
+    : (draw.config?.showTimings !== undefined ? Boolean(draw.config.showTimings) : true)
+
+  if (isTimingsOn) {
+    const hasAnyTime = draw.matches.some((m) => m.time && m.time !== '')
+    if (!hasAnyTime) {
+      applyMatchTimingsToDraw(draw)
+    }
   }
 
   return draw
