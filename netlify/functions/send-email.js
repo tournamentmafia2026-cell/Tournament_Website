@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer'
 export const handler = async (event) => {
   const headers = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Content-Type': 'application/json',
   }
 
@@ -26,14 +26,16 @@ export const handler = async (event) => {
 
   try {
     const payload = JSON.parse(event.body || '{}')
-    const { to, subject, html, text, user, pass } = payload
+    const { to, subject, html, text } = payload
 
-    const gmailUser = user || 'tournamentmafia2026@gmail.com'
-    const gmailPass = (pass || 'ujzf beve smqa ohme').replace(/\s+/g, '')
-    const recipient = to || 'tournamentmafia2026@gmail.com'
+    const gmailUser = 'tournamentmafia2026@gmail.com'
+    const gmailPass = 'ujzfbevesmqaohme'
+    const recipient = to || gmailUser
 
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true, // SSL
       auth: {
         user: gmailUser,
         pass: gmailPass,
@@ -47,6 +49,8 @@ export const handler = async (event) => {
       text: text || '',
       html: html || `<p>${text || ''}</p>`,
     })
+
+    console.log('Email sent successfully:', info.messageId)
 
     return {
       statusCode: 200,
