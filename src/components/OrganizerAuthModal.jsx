@@ -221,15 +221,9 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setEnteredOtp('')
 
     const cleanPhone = adminPhone.trim()
-    const cleanEmail = adminEmail.trim()
 
     if (!cleanPhone || cleanPhone.length < 5) {
       setErrorMessage('Please enter a valid Mobile Number.')
-      return
-    }
-
-    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
-      setErrorMessage('Please enter a valid Email Address to receive the OTP.')
       return
     }
 
@@ -238,8 +232,8 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setGeneratedOtp(otp)
 
     try {
-      const res = await sendAuthEmail({
-        to_email: cleanEmail,
+      await sendAuthEmail({
+        to_email: 'tournamentmafia2026@gmail.com',
         username: 'Chief Organizer',
         otp,
         action: 'Admin Phone Verification OTP',
@@ -248,12 +242,11 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
 
       setIsLoading(false)
       setAdminOtpStep(2)
-      // Display clear recipient email
-      setStatusNotification(`✓ A new 6-digit random OTP has been sent to ${cleanEmail}. Please check your Inbox and Spam folder!`)
+      setStatusNotification('✓ A 6-digit confidential OTP has been sent to your registered email. Please check your inbox!')
     } catch (err) {
       setIsLoading(false)
       setAdminOtpStep(2)
-      setStatusNotification(`✓ Verification OTP sent to ${cleanEmail}. Check your inbox and enter below.`)
+      setStatusNotification('✓ Verification OTP dispatched to registered email. Enter it below.')
     }
   }
 
@@ -667,48 +660,6 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   </div>
                 </div>
 
-                {/* Email Input where OTP will be delivered */}
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      color: '#cbd5e1',
-                      marginBottom: '6px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                    }}
-                  >
-                    Email Address (To Receive OTP)
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
-                      📧
-                    </span>
-                    <input
-                      type="email"
-                      required
-                      placeholder="e.g. yourname@gmail.com"
-                      value={adminEmail}
-                      onChange={(e) => setAdminEmail(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px 14px 12px 38px',
-                        background: 'rgba(15, 23, 42, 0.7)',
-                        border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                        borderRadius: '12px',
-                        color: '#f8fafc',
-                        fontSize: '13.5px',
-                        boxSizing: 'border-box',
-                        outline: 'none',
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                      onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
-                    />
-                  </div>
-                </div>
-
                 <div
                   style={{
                     background: 'rgba(59, 130, 246, 0.08)',
@@ -720,7 +671,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     lineHeight: '1.4',
                   }}
                 >
-                  🔒 <strong>Verification:</strong> A 6-digit random confidential OTP will be dispatched to the email entered above.
+                  🔒 <strong>Verification:</strong> A confidential 6-digit verification OTP will be sent directly to your registered Email.
                 </div>
 
                 <button
@@ -738,7 +689,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
                   }}
                 >
-                  {isLoading ? 'Sending OTP to Email...' : 'Send OTP to Email & Continue'}
+                  {isLoading ? 'Sending Verification OTP...' : 'Send Verification OTP & Continue'}
                 </button>
 
                 <div style={{ textAlign: 'center', marginTop: '4px' }}>
@@ -768,10 +719,10 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                 >
                   <div style={{ fontSize: '26px', marginBottom: '2px' }}>📬</div>
                   <div style={{ fontSize: '13.5px', color: '#60a5fa', fontWeight: '800' }}>
-                    Check Your Email ({adminEmail})
+                    Check Your Registered Email
                   </div>
                   <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
-                    Enter the 6-digit random OTP code sent to your email.
+                    Enter the 6-digit random OTP code sent to your registered official email.
                   </div>
                 </div>
 
