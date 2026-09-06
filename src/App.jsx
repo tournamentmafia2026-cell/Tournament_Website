@@ -388,25 +388,31 @@ function App() {
           })
 
           setAuthenticators((prev) => {
-            const next = { ...prev, ...authMap }
-            if (JSON.stringify(prev) === JSON.stringify(next)) return prev
+            if (JSON.stringify(prev) === JSON.stringify(authMap)) return prev
             try {
-              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
-              localStorage.setItem('badminton-match-authenticators', JSON.stringify(next))
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authMap))
+              localStorage.setItem('badminton-match-authenticators', JSON.stringify(authMap))
             } catch (e) {}
-            return next
+            return authMap
           })
         }
 
         // Sync Tournament Draws from Supabase
         const supaDraws = await SupabaseService.getAllTournamentDraws()
-        if (supaDraws && Array.isArray(supaDraws) && supaDraws.length > 0) {
+        if (supaDraws && Array.isArray(supaDraws)) {
           try {
-            const existingDraws = JSON.parse(localStorage.getItem('badminton-tournament-draws') || '{}')
-            const mergedDraws = { ...existingDraws }
+            const validTourIds = new Set(
+              hasSupaData
+                ? (supaTournaments || []).map((t) => String(t.id))
+                : publishedMatches.map((m) => String(m.id))
+            )
+            const mergedDraws = {}
             supaDraws.forEach((row) => {
               if (row.id && row.draw_data) {
-                mergedDraws[row.id] = row.draw_data
+                const drawTourId = String(row.tournament_id || row.id.split('-')[0])
+                if (validTourIds.has(drawTourId)) {
+                  mergedDraws[row.id] = row.draw_data
+                }
               }
             })
             localStorage.setItem('badminton-tournament-draws', JSON.stringify(mergedDraws))
@@ -789,7 +795,7 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(publishedMatches))
-      if (publishedMatches && publishedMatches.length > 0) {
+      if (Array.isArray(publishedMatches)) {
         syncServerData({ matches: publishedMatches })
       }
     } catch (error) {
@@ -800,7 +806,7 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authenticators))
-      if (authenticators && Object.keys(authenticators).length > 0) {
+      if (authenticators && typeof authenticators === 'object') {
         syncServerData({ authenticators })
       }
     } catch (error) {
@@ -811,7 +817,7 @@ function App() {
   useEffect(() => {
     try {
       localStorage.setItem('badminton-published-status', JSON.stringify(publishedStatusMap))
-      if (publishedStatusMap && Object.keys(publishedStatusMap).length > 0) {
+      if (publishedStatusMap && typeof publishedStatusMap === 'object') {
         syncServerData({ publishedStatus: publishedStatusMap })
       }
     } catch (error) {
@@ -1295,7 +1301,7 @@ function App() {
     setSuccessToast(`✓ Player removed.`)
   }
 
-  const handleDeleteMatch = (matchId) => {
+  const handleDeleteMatch = async (matchId) => {
     const targetIdStr = String(matchId)
     const updatedMatches = publishedMatches.filter((match) => String(match.id) !== targetIdStr)
     setPublishedMatches(updatedMatches)
@@ -1309,11 +1315,12 @@ function App() {
     setAuthenticators(updatedAuth)
     try {
       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedAuth))
+      localStorage.setItem('badminton-match-authenticators', JSON.stringify(updatedAuth))
     } catch (e) {}
 
     const updatedPubStatus = { ...publishedStatusMap }
     Object.keys(updatedPubStatus).forEach((key) => {
-      if (key.startsWith(`${matchId}-`)) {
+      if (key.startsWith(`${matchId}-`) || key.startsWith(`${targetIdStr}-`)) {
         delete updatedPubStatus[key]
       }
     })
@@ -1322,10 +1329,11 @@ function App() {
       localStorage.setItem('badminton-published-status', JSON.stringify(updatedPubStatus))
     } catch (e) {}
 
+    let draws = {}
     try {
-      const draws = JSON.parse(localStorage.getItem('badminton-tournament-draws') || '{}')
+      draws = JSON.parse(localStorage.getItem('badminton-tournament-draws') || '{}')
       Object.keys(draws).forEach((key) => {
-        if (key.startsWith(`${matchId}-`)) {
+        if (key.startsWith(`${matchId}-`) || key.startsWith(`${targetIdStr}-`)) {
           delete draws[key]
         }
       })
@@ -1341,8 +1349,9 @@ function App() {
       matches: updatedMatches,
       authenticators: updatedAuth,
       publishedStatus: updatedPubStatus,
+      tournamentDraws: draws,
     })
-    SupabaseService.deleteTournament(matchId).catch(() => {})
+    await SupabaseService.deleteTournament(matchId).catch(() => {})
 
     setSuccessToast('🗑️ Tournament deleted successfully!')
   }

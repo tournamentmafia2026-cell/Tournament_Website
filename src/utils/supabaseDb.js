@@ -99,16 +99,57 @@ export const SupabaseService = {
   },
 
   async deleteTournament(tournamentId) {
-    if (!supabase) return false;
+    if (!supabase || !tournamentId) return false;
     try {
-      const { error } = await supabase
+      const strId = String(tournamentId);
+      await supabase
         .from('tournaments')
         .delete()
-        .eq('id', tournamentId);
-      if (error) throw error;
+        .eq('id', strId);
+
+      const numId = Number(tournamentId);
+      if (!isNaN(numId)) {
+        await supabase
+          .from('tournaments')
+          .delete()
+          .eq('id', numId);
+      }
+
+      await supabase
+        .from('tournament_draws')
+        .delete()
+        .eq('tournament_id', strId);
+
+      if (!isNaN(numId)) {
+        await supabase
+          .from('tournament_draws')
+          .delete()
+          .eq('tournament_id', numId);
+      }
+
+      await supabase
+        .from('credentials')
+        .delete()
+        .eq('assigned_match_id', strId);
+
       return true;
     } catch (err) {
       console.warn('Supabase Delete sync status:', err.message);
+      return false;
+    }
+  },
+
+  async deleteTournamentDraw(drawId) {
+    if (!supabase || !drawId) return false;
+    try {
+      const strId = String(drawId);
+      await supabase
+        .from('tournament_draws')
+        .delete()
+        .eq('id', strId);
+      return true;
+    } catch (err) {
+      console.warn('Supabase Draw Delete status:', err.message);
       return false;
     }
   },
@@ -275,13 +316,17 @@ export const SupabaseService = {
   },
 
   async deleteCredential(idOrUsername) {
-    if (!supabase) return false;
+    if (!supabase || !idOrUsername) return false;
     try {
-      const { error } = await supabase
+      const target = String(idOrUsername);
+      await supabase
         .from('credentials')
         .delete()
-        .or(`id.eq.${idOrUsername},username.eq.${idOrUsername}`);
-      if (error) throw error;
+        .eq('id', target);
+      await supabase
+        .from('credentials')
+        .delete()
+        .eq('username', target);
       return true;
     } catch (err) {
       console.warn('Supabase Credential delete status:', err.message);

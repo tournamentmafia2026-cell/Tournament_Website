@@ -60,10 +60,8 @@ export default async function handler(req, res) {
 
       Object.keys(payload).forEach((key) => {
         if (key === 'matches') {
-          if (Array.isArray(payload.matches) && payload.matches.length > 0) {
+          if (Array.isArray(payload.matches)) {
             dbState.matches = sanitizeMatchesData(payload.matches)
-          } else if (Array.isArray(payload.matches) && payload.matches.length === 0 && dbState.matches.length === 0) {
-            dbState.matches = []
           }
           return
         }
@@ -82,6 +80,20 @@ export default async function handler(req, res) {
           return
         }
 
+        if (key === 'publishedStatus') {
+          if (payload.publishedStatus && typeof payload.publishedStatus === 'object') {
+            dbState.publishedStatus = payload.publishedStatus
+          }
+          return
+        }
+
+        if (key === 'tournamentDraws') {
+          if (payload.tournamentDraws && typeof payload.tournamentDraws === 'object') {
+            dbState.tournamentDraws = payload.tournamentDraws
+          }
+          return
+        }
+
         if (key === 'organizerCredentials') {
           if (payload.organizerCredentials && typeof payload.organizerCredentials === 'object') {
             dbState.organizerCredentials = { ...(dbState.organizerCredentials || {}), ...payload.organizerCredentials }
@@ -89,18 +101,7 @@ export default async function handler(req, res) {
           return
         }
 
-        if (
-          typeof payload[key] === 'object' &&
-          payload[key] !== null &&
-          !Array.isArray(payload[key]) &&
-          typeof dbState[key] === 'object' &&
-          dbState[key] !== null &&
-          !Array.isArray(dbState[key])
-        ) {
-          dbState[key] = { ...dbState[key], ...payload[key] }
-        } else {
-          dbState[key] = payload[key]
-        }
+        dbState[key] = payload[key]
       })
 
       return res.status(200).json(dbState)
