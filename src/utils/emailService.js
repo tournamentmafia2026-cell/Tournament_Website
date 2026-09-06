@@ -99,33 +99,38 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
     </div>
   `
 
-  // 1. Send via local /api/send-email (Gmail SMTP with App Password)
-  try {
-    const res = await fetch('/api/send-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: targetEmail,
-        subject,
-        html,
-        text: customMessage || `Username: ${username}\nPassword: ${password}\nOTP: ${otp}`,
-        user: config.gmailUser || 'tournamentmafia2026@gmail.com',
-        pass: config.gmailAppPassword || 'ujzfbevesmqaohme',
-      }),
-    })
+  // 1. Send via local /api/send-email or Netlify Serverless Function
+  const endpoints = ['/api/send-email', '/.netlify/functions/send-email']
+  
+  for (const endpoint of endpoints) {
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: targetEmail,
+          subject,
+          html,
+          text: customMessage || `Username: ${username}\nPassword: ${password}\nOTP: ${otp}`,
+          user: config.gmailUser || 'tournamentmafia2026@gmail.com',
+          pass: (config.gmailAppPassword || 'ujzf beve smqa ohme').replace(/\s+/g, ''),
+        }),
+      })
 
-    if (res.ok) {
-      const json = await res.json()
-      if (json.success) {
-        return {
-          success: true,
-          isSimulated: false,
-          message: `✓ Real email delivered directly to ${targetEmail}!`,
+      const contentType = res.headers.get('content-type') || ''
+      if (res.ok && contentType.includes('application/json')) {
+        const json = await res.json()
+        if (json.success) {
+          return {
+            success: true,
+            isSimulated: false,
+            message: `✓ Real email delivered directly to ${targetEmail}!`,
+          }
         }
       }
+    } catch (err) {
+      console.warn(`Attempt on ${endpoint} failed:`, err)
     }
-  } catch (err) {
-    console.warn('Local SMTP endpoint call failed, attempting fallback:', err)
   }
 
   // 2. Fallback / Simulator if offline
