@@ -70,7 +70,7 @@ export default async function handler(req, res) {
 
         if (key === 'authenticators') {
           if (payload.authenticators && typeof payload.authenticators === 'object') {
-            dbState.authenticators = { ...(dbState.authenticators || {}), ...payload.authenticators }
+            dbState.authenticators = payload.authenticators
           }
           return
         }

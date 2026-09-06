@@ -398,13 +398,7 @@ function App() {
 
           if (Object.keys(authMap).length > 0) {
             setAuthenticators((prev) => {
-              const merged = { ...prev }
-              Object.keys(authMap).forEach((k) => {
-                const existing = merged[k] || []
-                const existingIds = new Set(existing.map((p) => String(p.id)))
-                const newOnes = authMap[k].filter((p) => !existingIds.has(String(p.id)))
-                merged[k] = [...existing, ...newOnes]
-              })
+              const merged = { ...prev, ...authMap }
               try {
                 localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
               } catch (e) {}
@@ -494,16 +488,7 @@ function App() {
 
           if (data.authenticators && typeof data.authenticators === 'object') {
             setAuthenticators((prev) => {
-              const merged = { ...prev }
-              Object.keys(data.authenticators).forEach((k) => {
-                const incoming = data.authenticators[k] || []
-                if (Array.isArray(incoming) && incoming.length > 0) {
-                  const existing = merged[k] || []
-                  const existingIds = new Set(existing.map((p) => String(p.id)))
-                  const extras = incoming.filter((p) => !existingIds.has(String(p.id)))
-                  merged[k] = [...existing, ...extras]
-                }
-              })
+              const merged = { ...prev, ...data.authenticators }
               try {
                 localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
               } catch (e) {}
@@ -1239,14 +1224,36 @@ function App() {
 
   const handleRemoveParticipant = (matchId, participantId) => {
     const matchIdStr = String(matchId)
-    let filteredList = []
+    const targetMatch = publishedMatches.find((m) => String(m.id) === matchIdStr) || selectedMatch
+
+    const currentList = [
+      ...(authenticators[matchId] || []),
+      ...(authenticators[matchIdStr] || []),
+      ...(targetMatch?.participants || []),
+      ...(targetMatch?.authenticators || []),
+    ]
+
+    const filteredList = currentList.filter((p) => {
+      if (!p) return false
+      if (String(p.id) === String(participantId)) return false
+      return true
+    })
+
+    const uniqueFiltered = []
+    const seen = new Set()
+    filteredList.forEach((p) => {
+      const k = p.id ? String(p.id) : (p.name ? String(p.name).toLowerCase() : null)
+      if (k && !seen.has(k)) {
+        seen.add(k)
+        uniqueFiltered.push(p)
+      }
+    })
+
     setAuthenticators((prev) => {
-      const matchPlayers = prev[matchId] || prev[matchIdStr] || []
-      filteredList = matchPlayers.filter((p) => String(p.id) !== String(participantId))
       const next = {
         ...prev,
-        [matchId]: filteredList,
-        [matchIdStr]: filteredList,
+        [matchId]: uniqueFiltered,
+        [matchIdStr]: uniqueFiltered,
       }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
@@ -1255,18 +1262,26 @@ function App() {
       return next
     })
 
-    if (selectedMatch && String(selectedMatch.id) === matchIdStr) {
-      const updatedMatchObj = {
-        ...selectedMatch,
-        authenticators: filteredList,
-        participants: filteredList,
-      }
-      setSelectedMatch(updatedMatchObj)
-      setPublishedMatches((prev) =>
-        prev.map((m) => (String(m.id) === matchIdStr ? updatedMatchObj : m))
-      )
-      SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
+    const updatedMatchObj = {
+      ...(targetMatch || selectedMatch),
+      authenticators: uniqueFiltered,
+      participants: uniqueFiltered,
     }
+
+    if (selectedMatch && String(selectedMatch.id) === matchIdStr) {
+      setSelectedMatch(updatedMatchObj)
+    }
+
+    setPublishedMatches((prev) => {
+      const next = prev.map((m) => (String(m.id) === matchIdStr ? updatedMatchObj : m))
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      } catch (e) {}
+      return next
+    })
+
+    SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
+    setSuccessToast(`✓ Player removed.`)
   }
 
   const handleDeleteMatch = (matchId) => {
