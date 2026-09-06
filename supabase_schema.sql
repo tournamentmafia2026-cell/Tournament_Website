@@ -5,11 +5,13 @@
 
 -- 1. Tournaments Table
 CREATE TABLE IF NOT EXISTS public.tournaments (
-    id BIGSERIAL PRIMARY KEY,
+    id TEXT PRIMARY KEY,
     match_name TEXT NOT NULL,
     match_address TEXT,
     court_name TEXT,
     categories JSONB DEFAULT '[]'::jsonb,
+    participants JSONB DEFAULT '[]'::jsonb,
+    authenticators JSONB DEFAULT '[]'::jsonb,
     start_date DATE,
     end_date DATE,
     total_days INT DEFAULT 1,
@@ -26,7 +28,7 @@ CREATE TABLE IF NOT EXISTS public.tournaments (
 -- 2. Tournament Draws & Fixtures Table
 CREATE TABLE IF NOT EXISTS public.tournament_draws (
     id TEXT PRIMARY KEY, -- e.g. "1-Men Singles" or tournament_id
-    tournament_id BIGINT REFERENCES public.tournaments(id) ON DELETE CASCADE,
+    tournament_id TEXT,
     category TEXT,
     draw_data JSONB DEFAULT '{}'::jsonb,
     is_published BOOLEAN DEFAULT false,
@@ -36,7 +38,7 @@ CREATE TABLE IF NOT EXISTS public.tournament_draws (
 -- 3. Live Match Scores & Courts Status Table
 CREATE TABLE IF NOT EXISTS public.live_matches (
     match_id TEXT PRIMARY KEY,
-    tournament_id BIGINT REFERENCES public.tournaments(id) ON DELETE CASCADE,
+    tournament_id TEXT,
     category TEXT,
     round_name TEXT,
     court_name TEXT,
@@ -51,13 +53,13 @@ CREATE TABLE IF NOT EXISTS public.live_matches (
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 4. Temporary Credentials / Umpire Logins Table
+-- 4. Temporary Credentials / Umpire & Admin Logins Table
 CREATE TABLE IF NOT EXISTS public.credentials (
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     name TEXT,
-    assigned_match_id BIGINT,
+    assigned_match_id TEXT,
     assigned_match_name TEXT,
     court_name TEXT,
     scope TEXT DEFAULT 'umpire',
@@ -89,7 +91,8 @@ BEGIN
     CREATE POLICY "Anon public access credentials" ON public.credentials FOR ALL USING (true) WITH CHECK (true);
 END $$;
 
--- Enable Realtime for live score broadcasting
+-- Enable Realtime for live score and tournament broadcasting
 ALTER PUBLICATION supabase_realtime ADD TABLE public.live_matches;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.tournaments;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.tournament_draws;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.credentials;

@@ -59,7 +59,7 @@ export const SupabaseService = {
   async upsertTournament(tournament) {
     if (!supabase || !tournament) return null;
     try {
-      const numId = Number(tournament.id) || tournament.id;
+      const strId = String(tournament.id);
       const startDate = sanitizeDate(tournament.startDate || tournament.start_date);
       const endDate = sanitizeDate(tournament.endDate || tournament.end_date);
       const totalDays = Number(tournament.totalDays || tournament.total_days) || 1;
@@ -68,11 +68,13 @@ export const SupabaseService = {
       const { data, error } = await supabase
         .from('tournaments')
         .upsert({
-          id: numId,
+          id: strId,
           match_name: tournament.matchName || tournament.match_name || 'Badminton Championship',
           match_address: tournament.matchAddress || tournament.match_address || '',
           court_name: tournament.courtName || tournament.court_name || '',
           categories: Array.isArray(tournament.categories) ? tournament.categories : ['Men Singles'],
+          participants: Array.isArray(tournament.participants) ? tournament.participants : [],
+          authenticators: Array.isArray(tournament.authenticators) ? tournament.authenticators : [],
           start_date: startDate,
           end_date: endDate,
           total_days: totalDays,
