@@ -12,19 +12,22 @@ const DEFAULT_CREDS = {
 }
 
 export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
-  // Mode: 'admin-otp' | 'umpire-login' | 'forgot-password'
-  const [authMode, setAuthMode] = useState('admin-otp') // 'admin-otp' | 'umpire-login'
-  
-  // Admin OTP states
-  const [adminPhoneOrEmail, setAdminPhoneOrEmail] = useState('9840012345')
-  const [adminOtpStep, setAdminOtpStep] = useState(1) // 1: Enter Phone -> Send OTP, 2: Enter OTP -> Sign In
-  const [enteredAdminOtp, setEnteredAdminOtp] = useState('')
-  const [generatedAdminOtp, setGeneratedAdminOtp] = useState('')
+  // Views: 'login' | 'admin-verify-phone'
+  const [view, setView] = useState('login')
 
-  // Umpire / Password Login states
-  const [username, setUsername] = useState('')
+  // Unified Login fields (Username or Mobile Number + Password)
+  const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+
+  // Admin Phone Verification & Set Password states
+  const [adminPhone, setAdminPhone] = useState('9840012345')
+  const [adminOtpStep, setAdminOtpStep] = useState(1) // 1: Send OTP, 2: Enter OTP & Set Password
+  const [enteredOtp, setEnteredOtp] = useState('')
+  const [generatedOtp, setGeneratedOtp] = useState('')
+  const [newAdminPassword, setNewAdminPassword] = useState('')
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('')
+  const [showNewPassword, setShowNewPassword] = useState(false)
 
   // Status & loading
   const [errorMessage, setErrorMessage] = useState('')
@@ -44,125 +47,52 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
   // Reset modal state on open
   useEffect(() => {
     if (isOpen) {
-      setAuthMode('admin-otp')
-      setAdminOtpStep(1)
-      setEnteredAdminOtp('')
-      setGeneratedAdminOtp('')
-      setUsername('')
+      setView('login')
+      setLoginId('')
       setPassword('')
       setShowPassword(false)
+      setAdminOtpStep(1)
+      setEnteredOtp('')
+      setGeneratedOtp('')
+      setNewAdminPassword('')
+      setConfirmAdminPassword('')
+      setShowNewPassword(false)
       setErrorMessage('')
       setStatusNotification('')
       const creds = getSavedCreds()
-      setAdminPhoneOrEmail(creds.mobile || '9840012345')
+      setAdminPhone(creds.mobile || '9840012345')
     }
   }, [isOpen])
 
   // -------------------------------------------------------------
-  // 1. ADMIN LOGIN VIA PHONE / EMAIL OTP
+  // 1. UNIFIED LOGIN HANDLER (Admin via Mobile/User + Umpire via User)
   // -------------------------------------------------------------
-  const handleSendAdminOtp = async (e) => {
-    if (e) e.preventDefault()
-    setErrorMessage('')
-    setStatusNotification('')
-
-    const cleanInput = adminPhoneOrEmail.trim()
-    if (!cleanInput || cleanInput.length < 5) {
-      setErrorMessage('Please enter a valid registered Mobile Number or Email.')
-      return
-    }
-
-    setIsLoading(true)
-    const otp = Math.floor(100000 + Math.random() * 900000).toString()
-    setGeneratedAdminOtp(otp)
-
-    const creds = getSavedCreds()
-    const targetEmail = creds.email || 'tournamentmafia2026@gmail.com'
-
-    try {
-      await sendAuthEmail({
-        to_email: targetEmail,
-        username: 'Chief Organizer / Admin',
-        otp,
-        action: 'Admin Sign-In Verification',
-        customMessage: `Your 6-digit OTP for Badminton Tournament Portal Admin Sign-in is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes. Do not share with anyone)`,
-      })
-
-      setIsLoading(false)
-      setAdminOtpStep(2)
-      // NEVER show OTP on website screen/alerts!
-      setStatusNotification(`✓ 6-Digit OTP sent to your registered Gmail (${targetEmail}). Please check your inbox!`)
-    } catch (err) {
-      setIsLoading(false)
-      setAdminOtpStep(2)
-      setStatusNotification(`✓ Verification code sent to your registered Gmail. Check inbox and enter below.`)
-    }
-  }
-
-  const handleVerifyAdminOtp = (e) => {
-    e.preventDefault()
-    setErrorMessage('')
-
-    const cleanEntered = enteredAdminOtp.trim()
-    if (!cleanEntered || cleanEntered.length !== 6) {
-      setErrorMessage('Please enter the 6-digit OTP code received in your Gmail.')
-      return
-    }
-
-    if (cleanEntered !== generatedAdminOtp.trim()) {
-      setErrorMessage('Invalid OTP code. Please verify the code from your Gmail inbox or request a new OTP.')
-      return
-    }
-
-    // Success: Login as Chief Organizer / Admin
-    const creds = getSavedCreds()
-    const adminSession = {
-      username: creds.username || 'admin',
-      email: creds.email || 'tournamentmafia2026@gmail.com',
-      mobile: adminPhoneOrEmail,
-      name: 'Chief Organizer',
-      role: 'organizer',
-      scope: 'full',
-      token: `admin_auth_${Date.now()}`,
-      loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }
-
-    setEnteredAdminOtp('')
-    setGeneratedAdminOtp('')
-    onSuccess(adminSession)
-  }
-
-  // -------------------------------------------------------------
-  // 2. UMPIRE & CREDENTIAL LOGIN (Direct DB Verification)
-  // -------------------------------------------------------------
-  const handleUmpireLogin = async (e) => {
+  const handleUnifiedLogin = async (e) => {
     e.preventDefault()
     setErrorMessage('')
     setStatusNotification('')
 
-    const cleanUser = username.trim().toLowerCase()
+    const cleanId = loginId.trim().toLowerCase()
     const cleanPass = password.trim()
 
-    if (!cleanUser || !cleanPass) {
-      setErrorMessage('Please enter both Username and Password.')
+    if (!cleanId || !cleanPass) {
+      setErrorMessage('Please enter both Login ID and Password.')
       return
     }
 
     setIsLoading(true)
 
     try {
-      // Step A: Fetch latest credentials from Supabase Cloud DB
-      let credsList = []
+      // A. Check Umpire / Temporary Credentials in Supabase Cloud DB
+      let tempList = []
       try {
         const supaCreds = await SupabaseService.getCredentials()
         if (supaCreds && Array.isArray(supaCreds) && supaCreds.length > 0) {
-          credsList = supaCreds
+          tempList = supaCreds
         }
-      } catch (err) {
-        console.warn('Supabase fetch during auth:', err)
-      }
+      } catch (err) {}
 
-      // Step B: Merge with LocalStorage fallback
+      // Merge with LocalStorage fallback
       const savedTemp = localStorage.getItem('badminton-temporary-credentials')
       if (savedTemp) {
         try {
@@ -172,95 +102,186 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             localList.forEach((t) => {
               if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
             })
-            credsList.forEach((t) => {
+            tempList.forEach((t) => {
               if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
             })
-            credsList = Array.from(map.values())
+            tempList = Array.from(map.values())
           }
         } catch {}
       }
 
-      // Step C: Match Umpire / Temporary user against DB
-      const matchedCred = credsList.find(
+      // Check if Umpire/Temporary user matches
+      const matchedUmpire = tempList.find(
         (t) =>
           t &&
           t.username &&
-          t.username.trim().toLowerCase() === cleanUser &&
+          t.username.trim().toLowerCase() === cleanId &&
           (String(t.password).trim() === cleanPass ||
             String(t.password).trim().toLowerCase() === cleanPass.toLowerCase())
       )
 
-      if (matchedCred) {
+      if (matchedUmpire) {
         const isUmpire =
-          matchedCred.scope === 'umpire' ||
-          matchedCred.role === 'umpire' ||
-          matchedCred.username.toLowerCase().includes('umpire') ||
-          matchedCred.username.toLowerCase().includes('ref')
+          matchedUmpire.scope === 'umpire' ||
+          matchedUmpire.role === 'umpire' ||
+          matchedUmpire.username.toLowerCase().includes('umpire') ||
+          matchedUmpire.username.toLowerCase().includes('ref')
 
         const courtAssigned =
-          matchedCred.court_name ||
-          matchedCred.courtName ||
-          matchedCred.assignedCourt ||
+          matchedUmpire.court_name ||
+          matchedUmpire.courtName ||
+          matchedUmpire.assignedCourt ||
           'Court 1'
 
         const tempSession = {
-          username: matchedCred.username,
-          name: matchedCred.name || matchedCred.authName || matchedCred.username,
+          username: matchedUmpire.username,
+          name: matchedUmpire.name || matchedUmpire.authName || matchedUmpire.username,
           role: isUmpire ? 'umpire' : 'temporary_authenticator',
-          assignedMatchId: matchedCred.assigned_match_id || matchedCred.assignedMatchId,
-          assignedMatchName: matchedCred.assigned_match_name || matchedCred.assignedMatchName,
-          scope: isUmpire ? 'umpire' : (matchedCred.scope || 'full'),
+          assignedMatchId: matchedUmpire.assigned_match_id || matchedUmpire.assignedMatchId,
+          assignedMatchName: matchedUmpire.assigned_match_name || matchedUmpire.assignedMatchName,
+          scope: isUmpire ? 'umpire' : (matchedUmpire.scope || 'full'),
           courtName: courtAssigned,
           assignedCourt: courtAssigned,
           token: `auth_temp_${Date.now()}`,
           loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }
 
-        setUsername('')
+        setLoginId('')
         setPassword('')
         setIsLoading(false)
         onSuccess(tempSession)
         return
       }
 
-      // Step D: Check Admin fallback credentials
-      const savedAdmin = getSavedCreds()
-      const isAdminUser =
-        cleanUser === savedAdmin.username.toLowerCase() ||
-        cleanUser === (savedAdmin.email || '').toLowerCase() ||
-        cleanUser === 'admin' ||
-        cleanUser === 'organizer' ||
-        cleanUser === 'tournamentmafia2026@gmail.com'
+      // B. Check Chief Admin Credentials (Mobile Number or Admin Username + Password)
+      const creds = getSavedCreds()
+      const cleanMobile = (creds.mobile || '9840012345').replace(/[^0-9]/g, '')
+      const inputDigits = cleanId.replace(/[^0-9]/g, '')
 
-      const isAdminPass =
-        cleanPass === savedAdmin.password ||
-        cleanPass.toLowerCase() === (savedAdmin.password || '').toLowerCase() ||
+      const isAdminMatch =
+        (inputDigits.length >= 7 && (cleanMobile.includes(inputDigits) || inputDigits.includes(cleanMobile))) ||
+        cleanId === (creds.username || 'admin').toLowerCase() ||
+        cleanId === (creds.email || '').toLowerCase() ||
+        cleanId === 'admin' ||
+        cleanId === 'organizer'
+
+      const isPassMatch =
+        cleanPass === creds.password ||
+        cleanPass.toLowerCase() === (creds.password || '').toLowerCase() ||
         cleanPass === 'password123' ||
         cleanPass === 'admin123' ||
         cleanPass === 'admin'
 
-      if (isAdminUser && isAdminPass) {
-        const session = {
-          username: savedAdmin.username || 'admin',
-          email: savedAdmin.email || 'tournamentmafia2026@gmail.com',
+      if (isAdminMatch && isPassMatch) {
+        const adminSession = {
+          username: creds.username || 'admin',
+          email: creds.email || 'tournamentmafia2026@gmail.com',
+          mobile: creds.mobile || '9840012345',
+          name: 'Chief Organizer',
           role: 'organizer',
-          token: `auth_token_${Date.now()}`,
+          scope: 'full',
+          token: `admin_auth_${Date.now()}`,
           loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         }
 
-        setUsername('')
+        setLoginId('')
         setPassword('')
         setIsLoading(false)
-        onSuccess(session)
+        onSuccess(adminSession)
         return
       }
 
       setIsLoading(false)
-      setErrorMessage('Invalid Username or Password. Please check your credentials or ask the Organizer.')
+      setErrorMessage('Invalid Mobile Number/Username or Password. Please check your details.')
     } catch (err) {
       setIsLoading(false)
-      setErrorMessage('Authentication error. Please try again.')
+      setErrorMessage('Login error. Please try again.')
     }
+  }
+
+  // -------------------------------------------------------------
+  // 2. ADMIN: VERIFY PHONE & SET PASSWORD VIA GMAIL OTP
+  // -------------------------------------------------------------
+  const handleSendAdminOtp = async (e) => {
+    if (e) e.preventDefault()
+    setErrorMessage('')
+    setStatusNotification('')
+
+    const cleanInput = adminPhone.trim()
+    if (!cleanInput || cleanInput.length < 5) {
+      setErrorMessage('Please enter a valid Mobile Number.')
+      return
+    }
+
+    setIsLoading(true)
+    const otp = Math.floor(100000 + Math.random() * 900000).toString()
+    setGeneratedOtp(otp)
+
+    const creds = getSavedCreds()
+    const targetEmail = creds.email || 'tournamentmafia2026@gmail.com'
+
+    try {
+      await sendAuthEmail({
+        to_email: targetEmail,
+        username: 'Chief Organizer',
+        otp,
+        action: 'Phone Verification & Admin Password Setup',
+        customMessage: `Your 6-digit OTP to verify Mobile Number (${adminPhone}) and set your Admin Password is:\n\nOTP: ${otp}\n\n(Valid for 10 minutes. Do not share with anyone)`,
+      })
+
+      setIsLoading(false)
+      setAdminOtpStep(2)
+      // NEVER show the OTP code on the UI!
+      setStatusNotification(`✓ Verification OTP sent to registered Gmail (${targetEmail}). Check your inbox!`)
+    } catch (err) {
+      setIsLoading(false)
+      setAdminOtpStep(2)
+      setStatusNotification(`✓ Verification OTP sent to registered Gmail. Check inbox and enter below.`)
+    }
+  }
+
+  const handleVerifyOtpAndSetPassword = (e) => {
+    e.preventDefault()
+    setErrorMessage('')
+    setStatusNotification('')
+
+    if (enteredOtp.trim() !== generatedOtp.trim()) {
+      setErrorMessage('Invalid OTP code. Please check your Gmail inbox or request a new OTP.')
+      return
+    }
+
+    if (!newAdminPassword || newAdminPassword.length < 4) {
+      setErrorMessage('New password must be at least 4 characters.')
+      return
+    }
+
+    if (newAdminPassword !== confirmAdminPassword) {
+      setErrorMessage('Passwords do not match.')
+      return
+    }
+
+    // Save verified mobile number and password
+    const currentCreds = getSavedCreds()
+    const updated = {
+      ...currentCreds,
+      mobile: adminPhone.trim(),
+      password: newAdminPassword.trim(),
+    }
+    localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updated))
+
+    // Automatically log in as Admin
+    const adminSession = {
+      username: updated.username || 'admin',
+      email: updated.email || 'tournamentmafia2026@gmail.com',
+      mobile: updated.mobile,
+      name: 'Chief Organizer',
+      role: 'organizer',
+      scope: 'full',
+      token: `admin_auth_${Date.now()}`,
+      loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }
+
+    onSuccess(adminSession)
   }
 
   if (!isOpen) return null
@@ -290,7 +311,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
           background: 'linear-gradient(165deg, #1e293b 0%, #0f172a 100%)',
           border: '1.5px solid rgba(59, 130, 246, 0.4)',
           borderRadius: '24px',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(59, 130, 246, 0.25)',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(59, 130, 246, 0.25)',
           padding: '28px 24px',
           boxSizing: 'border-box',
           position: 'relative',
@@ -319,16 +340,13 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            transition: 'background 0.15s ease',
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)')}
         >
           ✕
         </button>
 
         {/* Modal Header */}
-        <div style={{ textAlign: 'center', marginBottom: '18px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
           <div
             style={{
               width: '54px',
@@ -343,86 +361,18 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               boxShadow: '0 8px 20px rgba(37, 99, 235, 0.35)',
             }}
           >
-            {authMode === 'admin-otp' ? '📱' : '🏸'}
+            {view === 'login' ? '🏸' : '📱'}
           </div>
 
           <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '800', color: '#f8fafc' }}>
-            {authMode === 'admin-otp' ? 'Admin Portal Sign-In' : 'Umpire / Official Sign-In'}
+            {view === 'login' ? 'Tournament Portal Sign-In' : 'Admin: Verify Phone & Set Password'}
           </h2>
 
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
-            {authMode === 'admin-otp'
-              ? 'Mobile Number & Gmail OTP Verification'
-              : 'Direct Database Login for Umpires & Scorekeepers'}
+            {view === 'login'
+              ? 'Admin Login (Phone/Password) & Umpire Login'
+              : 'Verify your Mobile Number via Gmail OTP to set your Admin Password'}
           </p>
-        </div>
-
-        {/* Navigation Tabs (Admin vs Umpire) */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            background: 'rgba(15, 23, 42, 0.6)',
-            padding: '4px',
-            borderRadius: '14px',
-            border: '1px solid rgba(148, 163, 184, 0.15)',
-            marginBottom: '18px',
-            gap: '4px',
-          }}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMode('admin-otp')
-              setErrorMessage('')
-              setStatusNotification('')
-            }}
-            style={{
-              padding: '9px 12px',
-              borderRadius: '10px',
-              border: 'none',
-              background: authMode === 'admin-otp' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'transparent',
-              color: authMode === 'admin-otp' ? '#ffffff' : '#94a3b8',
-              fontWeight: '700',
-              fontSize: '12.5px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <span>👑</span>
-            <span>Admin Sign-In</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMode('umpire-login')
-              setErrorMessage('')
-              setStatusNotification('')
-            }}
-            style={{
-              padding: '9px 12px',
-              borderRadius: '10px',
-              border: 'none',
-              background: authMode === 'umpire-login' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'transparent',
-              color: authMode === 'umpire-login' ? '#ffffff' : '#94a3b8',
-              fontWeight: '700',
-              fontSize: '12.5px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.15s ease',
-            }}
-          >
-            <span>⚖️</span>
-            <span>Umpire Login</span>
-          </button>
         </div>
 
         {/* Alert Messages */}
@@ -462,199 +412,11 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         )}
 
         {/* ==================================================================== */}
-        {/* TAB 1: ADMIN MOBILE + GMAIL OTP SIGN IN */}
+        {/* VIEW 1: UNIFIED SINGLE LOGIN PAGE (ADMIN & UMPIRE) */}
         {/* ==================================================================== */}
-        {authMode === 'admin-otp' && (
-          <div>
-            {adminOtpStep === 1 ? (
-              <form onSubmit={handleSendAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      color: '#cbd5e1',
-                      marginBottom: '6px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                    }}
-                  >
-                    Organizer Registered Mobile / Email
-                  </label>
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
-                      📱
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. 9840012345 or tournamentmafia2026@gmail.com"
-                      value={adminPhoneOrEmail}
-                      onChange={(e) => setAdminPhoneOrEmail(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '12px 14px 12px 38px',
-                        background: 'rgba(15, 23, 42, 0.7)',
-                        border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                        borderRadius: '12px',
-                        color: '#f8fafc',
-                        fontSize: '13.5px',
-                        boxSizing: 'border-box',
-                        outline: 'none',
-                      }}
-                      onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                      onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
-                    />
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    border: '1px solid rgba(59, 130, 246, 0.2)',
-                    borderRadius: '10px',
-                    padding: '10px 12px',
-                    fontSize: '11.5px',
-                    color: '#93c5fd',
-                    lineHeight: '1.4',
-                  }}
-                >
-                  🔒 <strong>Security Policy:</strong> For Admin access, a 6-digit confidential OTP will be delivered directly to registered Gmail.
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  style={{
-                    padding: '13px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '14px',
-                    cursor: isLoading ? 'not-allowed' : 'pointer',
-                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  <span>✉️</span>
-                  <span>{isLoading ? 'Sending OTP to Gmail...' : 'Get OTP on Gmail & Sign In'}</span>
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div
-                  style={{
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    border: '1.5px solid rgba(59, 130, 246, 0.3)',
-                    borderRadius: '14px',
-                    padding: '14px',
-                    textAlign: 'center',
-                  }}
-                >
-                  <div style={{ fontSize: '26px', marginBottom: '2px' }}>📬</div>
-                  <div style={{ fontSize: '13.5px', color: '#60a5fa', fontWeight: '800' }}>
-                    Check Your Gmail Inbox
-                  </div>
-                  <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
-                    Enter the 6-digit OTP code sent to your registered Gmail.
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      color: '#60a5fa',
-                      marginBottom: '6px',
-                      textAlign: 'center',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    ENTER 6-DIGIT OTP
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    autoFocus
-                    placeholder="• • • • • •"
-                    value={enteredAdminOtp}
-                    onChange={(e) => setEnteredAdminOtp(e.target.value.replace(/[^0-9]/g, ''))}
-                    style={{
-                      width: '100%',
-                      padding: '12px',
-                      background: 'rgba(15, 23, 42, 0.85)',
-                      border: '2px solid #3b82f6',
-                      borderRadius: '12px',
-                      color: '#60a5fa',
-                      fontSize: '22px',
-                      fontWeight: '900',
-                      letterSpacing: '0.3em',
-                      textAlign: 'center',
-                      boxSizing: 'border-box',
-                      outline: 'none',
-                    }}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  style={{
-                    padding: '13px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
-                  }}
-                >
-                  ✓ Verify OTP & Enter Admin Portal
-                </button>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAdminOtpStep(1)
-                      setErrorMessage('')
-                      setStatusNotification('')
-                    }}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
-                  >
-                    ← Change Mobile Number
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={handleSendAdminOtp}
-                    style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: isLoading ? 'not-allowed' : 'pointer', padding: 0, fontWeight: '700' }}
-                  >
-                    Resend OTP 🔄
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-
-        {/* ==================================================================== */}
-        {/* TAB 2: UMPIRE & TEMPORARY USER LOGIN (Direct Username/Password) */}
-        {/* ==================================================================== */}
-        {authMode === 'umpire-login' && (
-          <form onSubmit={handleUmpireLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            {/* Username Input */}
+        {view === 'login' && (
+          <form onSubmit={handleUnifiedLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            {/* Login ID Input */}
             <div>
               <label
                 style={{
@@ -667,7 +429,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   letterSpacing: '0.04em',
                 }}
               >
-                Umpire / Referee Username
+                Mobile Number (Admin) or Username (Umpire)
               </label>
               <div style={{ position: 'relative' }}>
                 <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
@@ -680,12 +442,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck="false"
-                  placeholder="e.g. umpire_c1_24"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. 9840012345 or umpire_c1"
+                  value={loginId}
+                  onChange={(e) => setLoginId(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '11px 14px 11px 38px',
+                    padding: '12px 14px 12px 38px',
                     background: 'rgba(15, 23, 42, 0.7)',
                     border: '1.5px solid rgba(148, 163, 184, 0.25)',
                     borderRadius: '12px',
@@ -694,7 +456,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     boxSizing: 'border-box',
                     outline: 'none',
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = '#10b981')}
+                  onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
                   onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
                 />
               </div>
@@ -723,15 +485,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck="false"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '11px 38px 11px 38px',
+                    padding: '12px 38px 12px 38px',
                     background: 'rgba(15, 23, 42, 0.7)',
                     border: '1.5px solid rgba(148, 163, 184, 0.25)',
                     borderRadius: '12px',
@@ -740,7 +499,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     boxSizing: 'border-box',
                     outline: 'none',
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = '#10b981')}
+                  onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
                   onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
                 />
                 <button
@@ -763,40 +522,334 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               </div>
             </div>
 
-            <div
-              style={{
-                background: 'rgba(16, 185, 129, 0.08)',
-                border: '1px solid rgba(16, 185, 129, 0.2)',
-                borderRadius: '10px',
-                padding: '10px 12px',
-                fontSize: '11.5px',
-                color: '#6ee7b7',
-                lineHeight: '1.4',
-              }}
-            >
-              🏸 <strong>Umpire Access:</strong> Enter the credentials assigned to you by the tournament organizer to start live court scoring.
-            </div>
-
-            {/* Login Button */}
+            {/* Sign In Button */}
             <button
               type="submit"
               disabled={isLoading}
               style={{
                 padding: '13px',
                 borderRadius: '12px',
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
                 border: 'none',
                 color: '#ffffff',
                 fontWeight: '800',
                 fontSize: '14px',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
                 marginTop: '4px',
               }}
             >
-              {isLoading ? 'Verifying...' : 'Sign In to Scoring Court'}
+              {isLoading ? 'Verifying...' : 'Sign In'}
             </button>
+
+            {/* Quick Admin Set/Reset Password Link */}
+            <div
+              style={{
+                background: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                textAlign: 'center',
+                marginTop: '6px',
+              }}
+            >
+              <div style={{ fontSize: '11.5px', color: '#94a3b8', marginBottom: '6px' }}>
+                Admin 1st time Sign-in or forgot password?
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setView('admin-verify-phone')
+                  setErrorMessage('')
+                  setStatusNotification('')
+                  setAdminOtpStep(1)
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#60a5fa',
+                  fontSize: '12.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                }}
+              >
+                👑 Verify Mobile & Set Admin Password via Gmail OTP →
+              </button>
+            </div>
           </form>
+        )}
+
+        {/* ==================================================================== */}
+        {/* VIEW 2: ADMIN VERIFY MOBILE & SET PASSWORD VIA GMAIL OTP */}
+        {/* ==================================================================== */}
+        {view === 'admin-verify-phone' && (
+          <div>
+            {adminOtpStep === 1 ? (
+              <form onSubmit={handleSendAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: '#cbd5e1',
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    Enter Admin Mobile Number
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
+                      📱
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 9840012345"
+                      value={adminPhone}
+                      onChange={(e) => setAdminPhone(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '12px 14px 12px 38px',
+                        background: 'rgba(15, 23, 42, 0.7)',
+                        border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                        borderRadius: '12px',
+                        color: '#f8fafc',
+                        fontSize: '13.5px',
+                        boxSizing: 'border-box',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
+                      onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    borderRadius: '10px',
+                    padding: '10px 12px',
+                    fontSize: '11.5px',
+                    color: '#93c5fd',
+                    lineHeight: '1.4',
+                  }}
+                >
+                  🔒 <strong>Verification:</strong> A 6-digit confidential OTP will be delivered directly to your registered Gmail (`tournamentmafia2026@gmail.com`).
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  style={{
+                    padding: '13px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
+                  }}
+                >
+                  {isLoading ? 'Sending OTP to Gmail...' : 'Send OTP to Gmail & Continue'}
+                </button>
+
+                <div style={{ textAlign: 'center', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setView('login')
+                      setErrorMessage('')
+                      setStatusNotification('')
+                    }}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '12.5px', cursor: 'pointer' }}
+                  >
+                    ← Back to Sign In
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyOtpAndSetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    border: '1.5px solid rgba(59, 130, 246, 0.3)',
+                    borderRadius: '14px',
+                    padding: '14px',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: '26px', marginBottom: '2px' }}>📬</div>
+                  <div style={{ fontSize: '13.5px', color: '#60a5fa', fontWeight: '800' }}>
+                    Check Your Gmail Inbox
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
+                    Enter the 6-digit OTP code sent to your registered Gmail.
+                  </div>
+                </div>
+
+                {/* 6-Digit OTP Box */}
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: '#60a5fa',
+                      marginBottom: '6px',
+                      textAlign: 'center',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    ENTER 6-DIGIT OTP FROM GMAIL
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    autoFocus
+                    placeholder="• • • • • •"
+                    value={enteredOtp}
+                    onChange={(e) => setEnteredOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: 'rgba(15, 23, 42, 0.85)',
+                      border: '2px solid #3b82f6',
+                      borderRadius: '12px',
+                      color: '#60a5fa',
+                      fontSize: '22px',
+                      fontWeight: '900',
+                      letterSpacing: '0.3em',
+                      textAlign: 'center',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Set New Password for this Phone Number */}
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: '#cbd5e1',
+                      marginBottom: '5px',
+                    }}
+                  >
+                    SET NEW ADMIN PASSWORD
+                  </label>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Enter password for this mobile number"
+                    value={newAdminPassword}
+                    onChange={(e) => setNewAdminPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 14px',
+                      background: 'rgba(15, 23, 42, 0.7)',
+                      border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                      borderRadius: '12px',
+                      color: '#f8fafc',
+                      fontSize: '13.5px',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      color: '#cbd5e1',
+                      marginBottom: '5px',
+                    }}
+                  >
+                    CONFIRM PASSWORD
+                  </label>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Re-enter password"
+                    value={confirmAdminPassword}
+                    onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '11px 14px',
+                      background: 'rgba(15, 23, 42, 0.7)',
+                      border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                      borderRadius: '12px',
+                      color: '#f8fafc',
+                      fontSize: '13.5px',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="checkbox"
+                    id="showNewPassCheck"
+                    checked={showNewPassword}
+                    onChange={(e) => setShowNewPassword(e.target.checked)}
+                    style={{ accentColor: '#3b82f6', cursor: 'pointer' }}
+                  />
+                  <label htmlFor="showNewPassCheck" style={{ fontSize: '12px', color: '#94a3b8', cursor: 'pointer' }}>
+                    Show password
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  style={{
+                    padding: '13px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
+                  }}
+                >
+                  ✓ Verify OTP & Save Password
+                </button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAdminOtpStep(1)}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                  >
+                    ← Change Mobile Number
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={handleSendAdminOtp}
+                    style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: isLoading ? 'not-allowed' : 'pointer', padding: 0, fontWeight: '700' }}
+                  >
+                    Resend OTP 🔄
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         )}
       </div>
     </div>
