@@ -76,6 +76,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
 
     const cleanId = loginId.trim().toLowerCase()
     const cleanPass = password.trim()
+    const inputDigits = cleanId.replace(/[^0-9]/g, '')
 
     if (!cleanId || !cleanPass) {
       setErrorMessage('Please enter both Login ID and Password.')
@@ -85,16 +86,18 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     setIsLoading(true)
 
     try {
-      // A. Check Umpire / Temporary Credentials in Supabase Cloud DB
-      let tempList = []
+      // A. Check Supabase Cloud DB credentials (Real-time Cross-Device Sync)
+      let cloudCreds = []
       try {
         const supaCreds = await SupabaseService.getCredentials()
         if (supaCreds && Array.isArray(supaCreds) && supaCreds.length > 0) {
-          tempList = supaCreds
+          cloudCreds = supaCreds
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn('Could not load credentials from Supabase:', err)
+      }
 
-      // Merge with LocalStorage fallback
+      // Merge with local fallback
       const savedTemp = localStorage.getItem('badminton-temporary-credentials')
       if (savedTemp) {
         try {
@@ -104,66 +107,108 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             localList.forEach((t) => {
               if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
             })
-            tempList.forEach((t) => {
+            cloudCreds.forEach((t) => {
               if (t && t.username) map.set(t.username.trim().toLowerCase(), t)
             })
-            tempList = Array.from(map.values())
+            cloudCreds = Array.from(map.values())
           }
         } catch {}
       }
 
-      // Check if Umpire/Temporary user matches
-      const matchedUmpire = tempList.find(
-        (t) =>
-          t &&
-          t.username &&
-          t.username.trim().toLowerCase() === cleanId &&
-          (String(t.password).trim() === cleanPass ||
-            String(t.password).trim().toLowerCase() === cleanPass.toLowerCase())
-      )
+      // Find matched credential in Cloud DB
+      const matched = cloudCreds.find((c) => {
+        if (!c || !c.username) return false
+        const cUser = String(c.username).trim().toLowerCase()
+        const cPass = String(c.password || '').trim()
+        const cDigits = cUser.replace(/[^0-9]/g, '')
 
-      if (matchedUmpire) {
-        const isUmpire =
-          matchedUmpire.scope === 'umpire' ||
-          matchedUmpire.role === 'umpire' ||
-          matchedUmpire.username.toLowerCase().includes('umpire') ||
-          matchedUmpire.username.toLowerCase().includes('ref')
+        // Check password match
+        const passMatch = cPass === cleanPass || cPass.toLowerCase() === cleanPass.toLowerCase()
+        if (!passMatch) return false
 
-        const courtAssigned =
-          matchedUmpire.court_name ||
-          matchedUmpire.courtName ||
-          matchedUmpire.assignedCourt ||
-          'Court 1'
+        // 1. Exact username match
+        if (cUser === cleanId) return true
 
-        const tempSession = {
-          username: matchedUmpire.username,
-          name: matchedUmpire.name || matchedUmpire.authName || matchedUmpire.username,
-          role: isUmpire ? 'umpire' : 'temporary_authenticator',
-          assignedMatchId: matchedUmpire.assigned_match_id || matchedUmpire.assignedMatchId,
-          assignedMatchName: matchedUmpire.assigned_match_name || matchedUmpire.assignedMatchName,
-          scope: isUmpire ? 'umpire' : (matchedUmpire.scope || 'full'),
-          courtName: courtAssigned,
-          assignedCourt: courtAssigned,
-          token: `auth_temp_${Date.now()}`,
-          loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        // 2. Phone number match (handles +91, 0, spaces, etc.)
+        if (inputDigits.length >= 7 && cDigits.length >= 7) {
+          if (cDigits.endsWith(inputDigits) || inputDigits.endsWith(cDigits)) return true
         }
 
-        setLoginId('')
-        setPassword('')
-        setIsLoading(false)
-        onSuccess(tempSession)
-        return
+        return false
+      })
+
+      if (matched) {
+        const isOrganizer =
+          matched.role === 'organizer' ||
+          matched.scope === 'full' ||
+          matched.username === 'admin' ||
+          String(matched.name || '').toLowerCase().includes('organizer') ||
+          String(matched.name || '').toLowerCase().includes('admin')
+
+        if (isOrganizer) {
+          // Sync to device's localStorage so offline works
+          localStorage.setItem(
+            ORGANIZER_CREDS_KEY,
+            JSON.stringify({
+              username: matched.username,
+              mobile: matched.username,
+              password: cleanPass,
+              email: 'tournamentmafia2026@gmail.com',
+            })
+          )
+
+          const adminSession = {
+            username: matched.username,
+            email: 'tournamentmafia2026@gmail.com',
+            mobile: matched.username,
+            name: matched.name || 'Chief Organizer',
+            role: 'organizer',
+            scope: 'full',
+            token: `admin_auth_${Date.now()}`,
+            loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }
+
+          setLoginId('')
+          setPassword('')
+          setIsLoading(false)
+          onSuccess(adminSession)
+          return
+        } else {
+          // Umpire / Referee Account
+          const courtAssigned =
+            matched.court_name ||
+            matched.courtName ||
+            matched.assignedCourt ||
+            'Court 1'
+
+          const tempSession = {
+            username: matched.username,
+            name: matched.name || matched.authName || matched.username,
+            role: 'umpire',
+            assignedMatchId: matched.assigned_match_id || matched.assignedMatchId,
+            assignedMatchName: matched.assigned_match_name || matched.assignedMatchName,
+            scope: 'umpire',
+            courtName: courtAssigned,
+            assignedCourt: courtAssigned,
+            token: `auth_temp_${Date.now()}`,
+            loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }
+
+          setLoginId('')
+          setPassword('')
+          setIsLoading(false)
+          onSuccess(tempSession)
+          return
+        }
       }
 
-      // B. Check Chief Admin Credentials (Mobile Number or Admin Username + Password)
+      // B. Check LocalStorage fallback for Admin credentials
       const creds = getSavedCreds()
       const cleanMobile = (creds.mobile || '9840012345').replace(/[^0-9]/g, '')
-      const inputDigits = cleanId.replace(/[^0-9]/g, '')
 
       const isAdminMatch =
-        (inputDigits.length >= 7 && (cleanMobile.includes(inputDigits) || inputDigits.includes(cleanMobile))) ||
+        (inputDigits.length >= 7 && (cleanMobile.endsWith(inputDigits) || inputDigits.endsWith(cleanMobile))) ||
         cleanId === (creds.username || 'admin').toLowerCase() ||
-        cleanId === (creds.email || '').toLowerCase() ||
         cleanId === 'admin' ||
         cleanId === 'organizer'
 
@@ -177,7 +222,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       if (isAdminMatch && isPassMatch) {
         const adminSession = {
           username: creds.username || 'admin',
-          email: creds.email || 'tournamentmafia2026@gmail.com',
+          email: 'tournamentmafia2026@gmail.com',
           mobile: creds.mobile || '9840012345',
           name: 'Chief Organizer',
           role: 'organizer',
@@ -250,7 +295,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     }
   }
 
-  const handleVerifyOtpAndSetPassword = (e) => {
+  const handleVerifyOtpAndSetPassword = async (e) => {
     e.preventDefault()
     setErrorMessage('')
     setStatusNotification('')
@@ -277,34 +322,58 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       return
     }
 
-    // Save verified mobile number, email, and password
+    setIsLoading(true)
+
+    const cleanPhone = adminPhone.trim()
+    const cleanPass = newAdminPassword.trim()
+
+    // 1. Save verified mobile number & password to LocalStorage
     const currentCreds = getSavedCreds()
     const updated = {
       ...currentCreds,
-      mobile: adminPhone.trim(),
-      email: adminEmail.trim(),
-      password: newAdminPassword.trim(),
+      mobile: cleanPhone,
+      email: 'tournamentmafia2026@gmail.com',
+      password: cleanPass,
+      username: 'admin',
     }
     localStorage.setItem(ORGANIZER_CREDS_KEY, JSON.stringify(updated))
 
-    // Save to Supabase Cloud DB credentials table as well!
-    SupabaseService.upsertCredential({
-      id: 'admin_' + adminPhone.trim(),
-      username: adminPhone.trim(),
-      password: newAdminPassword.trim(),
-      name: 'Chief Organizer',
-      scope: 'full',
-      role: 'organizer',
-      status: 'active',
-      courtName: 'All Courts',
-      assignedMatchName: 'All Tournaments'
-    }).catch(() => {})
+    // 2. Save directly into Supabase Cloud DB so Mobile, Laptop, Tablet and all devices sync immediately!
+    try {
+      await SupabaseService.upsertCredential({
+        id: 'admin_' + cleanPhone.replace(/[^0-9]/g, ''),
+        username: cleanPhone,
+        password: cleanPass,
+        name: 'Chief Organizer',
+        scope: 'full',
+        role: 'organizer',
+        status: 'active',
+        courtName: 'All Courts',
+        assignedMatchName: 'All Tournaments',
+      })
+      // Also update default 'admin' username in Supabase
+      await SupabaseService.upsertCredential({
+        id: 'admin_master',
+        username: 'admin',
+        password: cleanPass,
+        name: 'Chief Organizer',
+        scope: 'full',
+        role: 'organizer',
+        status: 'active',
+        courtName: 'All Courts',
+        assignedMatchName: 'All Tournaments',
+      })
+    } catch (supaErr) {
+      console.warn('Could not sync admin creds to Supabase:', supaErr)
+    }
+
+    setIsLoading(false)
 
     // Automatically log in as Admin
     const adminSession = {
-      username: updated.username || 'admin',
-      email: updated.email,
-      mobile: updated.mobile,
+      username: cleanPhone,
+      email: 'tournamentmafia2026@gmail.com',
+      mobile: cleanPhone,
       name: 'Chief Organizer',
       role: 'organizer',
       scope: 'full',
