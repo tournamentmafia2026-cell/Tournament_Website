@@ -45,6 +45,44 @@ import {
   compareTournamentsRecentCompleted,
 } from './utils/textFormatters'
 
+const areTournamentsEqual = (a, b) => {
+  if (a === b) return true
+  if (!Array.isArray(a) || !Array.isArray(b)) return false
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const itemA = a[i]
+    const itemB = b[i]
+    if (!itemA || !itemB) return false
+    if (String(itemA.id) !== String(itemB.id)) return false
+    if (String(itemA.matchName || '').trim() !== String(itemB.matchName || '').trim()) return false
+    if (String(itemA.courtName || '').trim() !== String(itemB.courtName || '').trim()) return false
+    if (String(itemA.startDate || '') !== String(itemB.startDate || '')) return false
+    if (String(itemA.endDate || '') !== String(itemB.endDate || '')) return false
+    if (String(itemA.winner || '') !== String(itemB.winner || '')) return false
+    if (String(itemA.completedAt || '') !== String(itemB.completedAt || '')) return false
+    if (JSON.stringify(itemA.categories || []) !== JSON.stringify(itemB.categories || [])) return false
+    if (JSON.stringify(itemA.categoryWinners || {}) !== JSON.stringify(itemB.categoryWinners || {})) return false
+    const countA = (itemA.participants || itemA.authenticators || []).length
+    const countB = (itemB.participants || itemB.authenticators || []).length
+    if (countA !== countB) return false
+  }
+  return true
+}
+
+const areAuthEqual = (a, b) => {
+  if (a === b) return true
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false
+  const keysA = Object.keys(a)
+  const keysB = Object.keys(b)
+  if (keysA.length !== keysB.length) return false
+  for (const k of keysA) {
+    const listA = Array.isArray(a[k]) ? a[k] : []
+    const listB = Array.isArray(b[k]) ? b[k] : []
+    if (listA.length !== listB.length) return false
+  }
+  return true
+}
+
 const getInitialFormData = () => {
   const today = getTodayDateString()
   const defaultDays = 3
@@ -369,7 +407,7 @@ function App() {
           })).map(sanitizeTournament)
 
           setPublishedMatches((prev) => {
-            if (JSON.stringify(prev) === JSON.stringify(mapped)) return prev
+            if (areTournamentsEqual(prev, mapped)) return prev
             return mapped
           })
           try {
@@ -388,7 +426,7 @@ function App() {
           })
 
           setAuthenticators((prev) => {
-            if (JSON.stringify(prev) === JSON.stringify(authMap)) return prev
+            if (areAuthEqual(prev, authMap)) return prev
             try {
               localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authMap))
               localStorage.setItem('badminton-match-authenticators', JSON.stringify(authMap))
@@ -563,7 +601,7 @@ function App() {
           if (Array.isArray(parsed) && parsed.length > 0) {
             const sanitized = parsed.map(sanitizeTournament)
             setPublishedMatches((prev) => {
-              if (JSON.stringify(prev) === JSON.stringify(sanitized)) return prev
+              if (areTournamentsEqual(prev, sanitized)) return prev
               return sanitized
             })
           }
@@ -792,33 +830,39 @@ function App() {
   }, [publishedMatches, selectedMatch])
 
 
+  const lastMatchesRef = useRef('')
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(publishedMatches))
-      if (Array.isArray(publishedMatches)) {
-        syncServerData({ matches: publishedMatches })
+      const serialized = JSON.stringify(publishedMatches)
+      if (lastMatchesRef.current !== serialized) {
+        lastMatchesRef.current = serialized
+        localStorage.setItem(STORAGE_KEY, serialized)
       }
     } catch (error) {
       console.error('Unable to save published matches', error)
     }
   }, [publishedMatches])
 
+  const lastAuthRef = useRef('')
   useEffect(() => {
     try {
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authenticators))
-      if (authenticators && typeof authenticators === 'object') {
-        syncServerData({ authenticators })
+      const serialized = JSON.stringify(authenticators)
+      if (lastAuthRef.current !== serialized) {
+        lastAuthRef.current = serialized
+        localStorage.setItem(AUTH_STORAGE_KEY, serialized)
       }
     } catch (error) {
       console.error('Unable to save authenticators', error)
     }
   }, [authenticators])
 
+  const lastPubStatusRef = useRef('')
   useEffect(() => {
     try {
-      localStorage.setItem('badminton-published-status', JSON.stringify(publishedStatusMap))
-      if (publishedStatusMap && typeof publishedStatusMap === 'object') {
-        syncServerData({ publishedStatus: publishedStatusMap })
+      const serialized = JSON.stringify(publishedStatusMap)
+      if (lastPubStatusRef.current !== serialized) {
+        lastPubStatusRef.current = serialized
+        localStorage.setItem('badminton-published-status', serialized)
       }
     } catch (error) {
       console.error('Unable to save published status', error)
