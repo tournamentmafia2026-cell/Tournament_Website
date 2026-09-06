@@ -118,7 +118,7 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
       })
 
       const contentType = res.headers.get('content-type') || ''
-      if (res.ok && contentType.includes('application/json')) {
+      if (contentType.includes('application/json')) {
         const json = await res.json()
         if (json.success) {
           return {
@@ -126,6 +126,8 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
             isSimulated: false,
             message: `✓ Real email delivered directly to ${targetEmail}!`,
           }
+        } else if (json.error) {
+          console.error(`Email dispatch error from ${endpoint}:`, json.error)
         }
       }
     } catch (err) {
@@ -133,13 +135,10 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
     }
   }
 
-  // 2. Fallback / Simulator if offline
+  // If both endpoints failed
   return {
-    success: true,
-    isSimulated: true,
-    message: `✉️ Email prepared for ${targetEmail}!`,
-    otp,
-    username,
-    password,
+    success: false,
+    isSimulated: false,
+    error: 'Email server connection failed. Please check network or try again.',
   }
 }

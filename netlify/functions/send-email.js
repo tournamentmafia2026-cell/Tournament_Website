@@ -26,31 +26,37 @@ export const handler = async (event) => {
 
   try {
     const payload = JSON.parse(event.body || '{}')
-    const { to, subject, html, text } = payload
+    const { to, subject, html, text, otp } = payload
 
     const gmailUser = 'tournamentmafia2026@gmail.com'
     const gmailPass = 'ujzfbevesmqaohme'
-    const recipient = to || gmailUser
+    const recipient = (to || gmailUser).trim()
 
+    // Configure resilient SMTP Transporter
     const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true, // SSL
+      service: 'gmail',
       auth: {
         user: gmailUser,
         pass: gmailPass,
       },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
     })
 
-    const info = await transporter.sendMail({
+    const mailOptions = {
       from: `"Badminton Tournament Portal" <${gmailUser}>`,
       to: recipient,
-      subject: subject || '🔐 Badminton Portal - Verification OTP',
-      text: text || '',
-      html: html || `<p>${text || ''}</p>`,
-    })
+      subject: subject || (otp ? `🔐 Badminton Portal OTP: ${otp}` : '🔐 Badminton Portal Verification'),
+      text: text || (otp ? `Your 6-Digit OTP: ${otp}` : ''),
+      html: html || (otp ? `<h2>Your OTP: <b>${otp}</b></h2>` : `<p>${text || ''}</p>`),
+    }
 
-    console.log('Email sent successfully:', info.messageId)
+    const info = await transporter.sendMail(mailOptions)
+
+    console.log(`[Netlify Function] Email successfully dispatched to ${recipient}, MessageId: ${info.messageId}`)
 
     return {
       statusCode: 200,
@@ -58,17 +64,18 @@ export const handler = async (event) => {
       body: JSON.stringify({
         success: true,
         messageId: info.messageId,
-        message: `Real email delivered directly to ${recipient}`,
+        recipient: recipient,
+        message: `Email successfully delivered to ${recipient}`,
       }),
     }
   } catch (err) {
-    console.error('Netlify Function Email Error:', err)
+    console.error('[Netlify Function] Email dispatch error:', err)
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         success: false,
-        error: err.message || 'Failed to dispatch email via SMTP',
+        error: err.message || 'SMTP Connection Error',
       }),
     }
   }
