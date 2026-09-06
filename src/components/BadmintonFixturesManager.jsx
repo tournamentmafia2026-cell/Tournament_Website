@@ -1088,8 +1088,13 @@ export const BadmintonFixturesManager = ({
     }
 
     fetch('/api/tournaments')
-      .then((r) => r.json())
+      .then((r) => {
+        const ct = r.headers.get('content-type') || ''
+        if (r.ok && ct.includes('application/json')) return r.json()
+        return null
+      })
       .then((d) => {
+        if (!d) return
         if (d?.temporaryCredentials && Array.isArray(d.temporaryCredentials)) {
           const serverList = d.temporaryCredentials.filter(
             (c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role
