@@ -344,110 +344,7 @@ function App() {
     let isMounted = true
 
     const syncAllData = async () => {
-      // 1. Fetch authoritative data from Local/Network Shared DB
-      try {
-        const res = await fetch('/api/tournaments')
-        const contentType = res.headers.get('content-type') || ''
-        if (res.ok && contentType.includes('application/json')) {
-          const data = await res.json()
-          if (!isMounted) return
-
-          if (data && Array.isArray(data.matches)) {
-            const sanitized = data.matches
-              .filter((m) => m && m.id !== 1 && m.id !== 2 && !String(m.matchName || '').includes('Chennai Badminton Championship') && !String(m.matchName || '').includes('State Open Badminton'))
-              .map(sanitizeTournament)
-
-            setPublishedMatches((prev) => {
-              const map = new Map()
-              sanitized.forEach((m) => map.set(String(m.id), m))
-              prev.forEach((m) => {
-                if (!map.has(String(m.id))) {
-                  map.set(String(m.id), m)
-                }
-              })
-              const merged = Array.from(map.values())
-              try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
-              } catch (e) {}
-              return merged
-            })
-
-            if (data.publishedStatus && typeof data.publishedStatus === 'object') {
-              setPublishedStatusMap((prev) => {
-                const merged = { ...prev, ...data.publishedStatus }
-                try {
-                  localStorage.setItem('badminton-published-status', JSON.stringify(merged))
-                } catch (e) {}
-                return merged
-              })
-            }
-
-            if (data.authenticators && typeof data.authenticators === 'object') {
-              setAuthenticators((prev) => {
-                const merged = { ...data.authenticators }
-                Object.keys(prev || {}).forEach((k) => {
-                  if (!merged[k] || merged[k].length === 0) {
-                    merged[k] = prev[k]
-                  } else {
-                    const existingIds = new Set(merged[k].map((p) => String(p.id)))
-                    const extras = (prev[k] || []).filter((p) => !existingIds.has(String(p.id)))
-                    merged[k] = [...merged[k], ...extras]
-                  }
-                })
-                try {
-                  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
-                } catch (e) {}
-                return merged
-              })
-            }
-
-            if (data.tournamentDraws && typeof data.tournamentDraws === 'object') {
-              try {
-                const local = JSON.parse(localStorage.getItem('badminton-tournament-draws') || '{}')
-                const merged = { ...local, ...data.tournamentDraws }
-                localStorage.setItem('badminton-tournament-draws', JSON.stringify(merged))
-              } catch (e) {}
-            }
-
-            if (data.temporaryCredentials && Array.isArray(data.temporaryCredentials)) {
-              try {
-                const local = JSON.parse(localStorage.getItem('badminton-temporary-credentials') || '[]')
-                const map = new Map()
-                if (Array.isArray(local)) local.forEach((c) => map.set(c.username, c))
-                data.temporaryCredentials.forEach((c) => map.set(c.username, c))
-                const merged = Array.from(map.values())
-                localStorage.setItem('badminton-temporary-credentials', JSON.stringify(merged))
-              } catch (e) {}
-            }
-
-            if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
-              try {
-                const local = JSON.parse(localStorage.getItem('badminton-reported-players') || '{}')
-                const merged = { ...local, ...data.reportedPlayers }
-                localStorage.setItem('badminton-reported-players', JSON.stringify(merged))
-              } catch (e) {}
-            }
-
-            if (data.courtConfig && typeof data.courtConfig === 'object') {
-              try {
-                localStorage.setItem('badminton-stadium-court-config', JSON.stringify(data.courtConfig))
-              } catch (e) {}
-            }
-            if (data.systemSettings?.liveStreamActive !== undefined || data.liveStreamActive !== undefined) {
-              const serverVal = Boolean(data.systemSettings?.liveStreamActive ?? data.liveStreamActive)
-              const localVal = localStorage.getItem('badminton-live-stream-active')
-              if (localVal === null) {
-                setIsLiveStreamActive(serverVal)
-              }
-            }
-            return
-          }
-        }
-      } catch (err) {
-        // Fall through to Supabase fallback
-      }
-
-      // 2. Fallback to Supabase Cloud DB if server API is unavailable
+      // 1. Prioritize authoritative Cloud DB from Supabase
       try {
         const supaTournaments = await SupabaseService.getTournaments()
         if (!isMounted) return
@@ -458,6 +355,8 @@ function App() {
             matchAddress: t.match_address || t.matchAddress,
             courtName: t.court_name || t.courtName,
             categories: t.categories || ['Men Singles'],
+            participants: Array.isArray(t.participants) ? t.participants : (Array.isArray(t.authenticators) ? t.authenticators : []),
+            authenticators: Array.isArray(t.authenticators) ? t.authenticators : (Array.isArray(t.participants) ? t.participants : []),
             startDate: t.start_date || t.startDate,
             endDate: t.end_date || t.endDate,
             totalDays: t.total_days || t.totalDays || 1,
@@ -469,10 +368,49 @@ function App() {
             completedAt: t.completed_at || t.completedAt || null,
           })).map(sanitizeTournament)
 
-          setPublishedMatches(mapped)
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
-          } catch (e) {}
+          setPublishedMatches((prev) => {
+            const map = new Map()
+            mapped.forEach((m) => map.set(String(m.id), m))
+            prev.forEach((m) => {
+              if (!map.has(String(m.id))) {
+                map.set(String(m.id), m)
+              }
+            })
+            const merged = Array.from(map.values())
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+            } catch (e) {}
+            return merged
+          })
+
+          // Extract and merge participants from Supabase tournaments
+          const authMap = {}
+          supaTournaments.forEach((t) => {
+            const tId = String(t.id)
+            const pList = Array.isArray(t.authenticators) && t.authenticators.length > 0
+              ? t.authenticators
+              : (Array.isArray(t.participants) && t.participants.length > 0 ? t.participants : [])
+            if (pList.length > 0) {
+              authMap[tId] = pList
+              authMap[t.id] = pList
+            }
+          })
+
+          if (Object.keys(authMap).length > 0) {
+            setAuthenticators((prev) => {
+              const merged = { ...prev }
+              Object.keys(authMap).forEach((k) => {
+                const existing = merged[k] || []
+                const existingIds = new Set(existing.map((p) => String(p.id)))
+                const newOnes = authMap[k].filter((p) => !existingIds.has(String(p.id)))
+                merged[k] = [...existing, ...newOnes]
+              })
+              try {
+                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
+              } catch (e) {}
+              return merged
+            })
+          }
         }
 
         // Sync Tournament Draws from Supabase
@@ -510,6 +448,81 @@ function App() {
             }))
             localStorage.setItem('badminton-temporary-credentials', JSON.stringify(mappedCreds))
           } catch (e) {}
+        }
+      } catch (err) {
+        console.warn('Supabase sync status:', err)
+      }
+
+      // 2. Also fetch and merge supplementary serverless state
+      try {
+        const res = await fetch('/api/tournaments')
+        const contentType = res.headers.get('content-type') || ''
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json()
+          if (!isMounted) return
+
+          if (data && Array.isArray(data.matches) && data.matches.length > 0) {
+            const sanitized = data.matches
+              .filter((m) => m && m.id !== 1 && m.id !== 2 && !String(m.matchName || '').includes('Chennai Badminton Championship') && !String(m.matchName || '').includes('State Open Badminton'))
+              .map(sanitizeTournament)
+
+            setPublishedMatches((prev) => {
+              const map = new Map()
+              sanitized.forEach((m) => map.set(String(m.id), m))
+              prev.forEach((m) => {
+                if (!map.has(String(m.id))) {
+                  map.set(String(m.id), m)
+                }
+              })
+              const merged = Array.from(map.values())
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+              } catch (e) {}
+              return merged
+            })
+          }
+
+          if (data.publishedStatus && typeof data.publishedStatus === 'object') {
+            setPublishedStatusMap((prev) => {
+              const merged = { ...prev, ...data.publishedStatus }
+              try {
+                localStorage.setItem('badminton-published-status', JSON.stringify(merged))
+              } catch (e) {}
+              return merged
+            })
+          }
+
+          if (data.authenticators && typeof data.authenticators === 'object') {
+            setAuthenticators((prev) => {
+              const merged = { ...prev }
+              Object.keys(data.authenticators).forEach((k) => {
+                const incoming = data.authenticators[k] || []
+                if (Array.isArray(incoming) && incoming.length > 0) {
+                  const existing = merged[k] || []
+                  const existingIds = new Set(existing.map((p) => String(p.id)))
+                  const extras = incoming.filter((p) => !existingIds.has(String(p.id)))
+                  merged[k] = [...existing, ...extras]
+                }
+              })
+              try {
+                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
+              } catch (e) {}
+              return merged
+            })
+          }
+
+          if (data.courtConfig && typeof data.courtConfig === 'object') {
+            try {
+              localStorage.setItem('badminton-stadium-court-config', JSON.stringify(data.courtConfig))
+            } catch (e) {}
+          }
+          if (data.systemSettings?.liveStreamActive !== undefined || data.liveStreamActive !== undefined) {
+            const serverVal = Boolean(data.systemSettings?.liveStreamActive ?? data.liveStreamActive)
+            const localVal = localStorage.getItem('badminton-live-stream-active')
+            if (localVal === null) {
+              setIsLiveStreamActive(serverVal)
+            }
+          }
         }
       } catch (err) {}
     }
@@ -1038,13 +1051,17 @@ function App() {
       category: targetCategory,
     }))
 
+    const matchKey = selectedMatch.id
+    const matchKeyStr = String(matchKey)
+    let updatedPlayersList = []
+
     setAuthenticators((prev) => {
-      const matchKey = selectedMatch.id
-      const matchPlayers = prev[matchKey] || prev[String(matchKey)] || []
+      const matchPlayers = prev[matchKey] || prev[matchKeyStr] || selectedMatch.authenticators || selectedMatch.participants || []
+      updatedPlayersList = [...matchPlayers, ...newPlayers]
       const next = {
         ...prev,
-        [matchKey]: [...matchPlayers, ...newPlayers],
-        [String(matchKey)]: [...matchPlayers, ...newPlayers],
+        [matchKey]: updatedPlayersList,
+        [matchKeyStr]: updatedPlayersList,
       }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
@@ -1052,6 +1069,18 @@ function App() {
       syncServerData({ authenticators: next })
       return next
     })
+
+    const updatedMatchObj = {
+      ...selectedMatch,
+      authenticators: updatedPlayersList.length > 0 ? updatedPlayersList : [...(selectedMatch.authenticators || []), ...newPlayers],
+      participants: updatedPlayersList.length > 0 ? updatedPlayersList : [...(selectedMatch.participants || []), ...newPlayers],
+    }
+
+    setSelectedMatch(updatedMatchObj)
+    setPublishedMatches((prev) =>
+      prev.map((m) => (String(m.id) === matchKeyStr ? updatedMatchObj : m))
+    )
+    SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
 
     if (activeCategory !== 'ALL') {
       setActiveCategory(targetCategory)
@@ -1209,13 +1238,15 @@ function App() {
   }
 
   const handleRemoveParticipant = (matchId, participantId) => {
+    const matchIdStr = String(matchId)
+    let filteredList = []
     setAuthenticators((prev) => {
-      const matchPlayers = prev[matchId] || prev[String(matchId)] || []
-      const filtered = matchPlayers.filter((p) => p.id !== participantId)
+      const matchPlayers = prev[matchId] || prev[matchIdStr] || []
+      filteredList = matchPlayers.filter((p) => String(p.id) !== String(participantId))
       const next = {
         ...prev,
-        [matchId]: filtered,
-        [String(matchId)]: filtered,
+        [matchId]: filteredList,
+        [matchIdStr]: filteredList,
       }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
@@ -1223,6 +1254,19 @@ function App() {
       syncServerData({ authenticators: next })
       return next
     })
+
+    if (selectedMatch && String(selectedMatch.id) === matchIdStr) {
+      const updatedMatchObj = {
+        ...selectedMatch,
+        authenticators: filteredList,
+        participants: filteredList,
+      }
+      setSelectedMatch(updatedMatchObj)
+      setPublishedMatches((prev) =>
+        prev.map((m) => (String(m.id) === matchIdStr ? updatedMatchObj : m))
+      )
+      SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
+    }
   }
 
   const handleDeleteMatch = (matchId) => {
@@ -2940,7 +2984,7 @@ function App() {
                         }}
                       >
                         <div style={{ fontSize: '18px', fontWeight: '900', color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>
-                          {(authenticators[selectedMatch.id] || []).length}
+                          {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).length}
                         </div>
                         <div style={{ fontSize: '10px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.04em' }}>
                           Registered Players
@@ -2955,7 +2999,7 @@ function App() {
                         🏸 Add Players to Match
                       </h4>
                       <span style={{ fontSize: '12px', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(96, 165, 250, 0.3)', padding: '4px 10px', borderRadius: '999px', fontWeight: '600' }}>
-                        Total Registered: {(authenticators[selectedMatch.id] || []).length} Players
+                        Total Registered: {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).length} Players
                       </span>
                     </div>
 
@@ -2983,12 +3027,12 @@ function App() {
                       >
                         <span>🌐 All Categories</span>
                         <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 6px', borderRadius: '999px', fontSize: '10px' }}>
-                          {(authenticators[selectedMatch.id] || []).length}
+                          {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).length}
                         </span>
                       </button>
 
                       {selectedMatchCategories.map((category) => {
-                        const count = (authenticators[selectedMatch.id] || []).filter(
+                        const count = (authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).filter(
                           (p) => (p.category || selectedMatchCategories[0]) === category
                         ).length
                         const isCatActive = (activeCategory || selectedMatchCategories[0]) === category
@@ -3391,7 +3435,7 @@ function App() {
                           <span>📋</span>
                           <span>Registered Players</span>
                           <span style={{ background: 'rgba(56, 189, 248, 0.18)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.35)', padding: '2px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '800' }}>
-                            {(authenticators[selectedMatch.id] || []).filter((p) => activeCategory === 'ALL' || (p.category || selectedMatchCategories[0]) === (activeCategory || selectedMatchCategories[0])).length}
+                            {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).filter((p) => activeCategory === 'ALL' || (p.category || selectedMatchCategories[0]) === (activeCategory || selectedMatchCategories[0])).length}
                           </span>
                         </h4>
                         <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
@@ -3409,17 +3453,13 @@ function App() {
                             onChange={(e) => setPlayerFilterSearch(e.target.value)}
                             style={{
                               width: '100%',
-                              padding: '8px 14px',
-                              paddingRight: playerFilterSearch ? '30px' : '14px',
+                              padding: '8px 30px 8px 12px',
                               borderRadius: '8px',
-                              background: '#ffffff',
-                              border: '1.5px solid #cbd5e1',
-                              color: '#0f172a',
+                              border: '1px solid rgba(148, 163, 184, 0.3)',
+                              background: 'rgba(15, 23, 42, 0.8)',
+                              color: '#fff',
                               fontSize: '12.5px',
-                              fontWeight: '600',
                               outline: 'none',
-                              boxSizing: 'border-box',
-                              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
                             }}
                           />
                           {playerFilterSearch && (
@@ -3456,7 +3496,14 @@ function App() {
 
                     {/* Table of Players */}
                     {(() => {
-                      const allList = authenticators[selectedMatch.id] || []
+                      const matchKey = selectedMatch?.id
+                      const allList = (matchKey !== undefined && matchKey !== null)
+                        ? (
+                            (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
+                            (selectedMatch && (selectedMatch.authenticators || selectedMatch.participants)) ||
+                            []
+                          )
+                        : []
                       const categoryOrderMap = {}
                       selectedMatchCategories.forEach((cat, idx) => {
                         categoryOrderMap[cat] = idx
@@ -3465,8 +3512,8 @@ function App() {
                       // Filter & Sort neatly
                       const filtered = allList
                         .filter((participant) => {
-                          const cat = participant.category || selectedMatchCategories[0] || 'Men Singles'
-                          const matchesCat = activeCategory === 'ALL' || cat === activeCategory
+                          const cat = (participant.category || selectedMatchCategories[0] || 'Men Singles').trim()
+                          const matchesCat = activeCategory === 'ALL' || cat.toLowerCase() === activeCategory.trim().toLowerCase()
                           if (!matchesCat) return false
 
                           if (!playerFilterSearch.trim()) return true
