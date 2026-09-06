@@ -356,40 +356,75 @@ function App() {
             const sanitized = data.matches
               .filter((m) => m && m.id !== 1 && m.id !== 2 && !String(m.matchName || '').includes('Chennai Badminton Championship') && !String(m.matchName || '').includes('State Open Badminton'))
               .map(sanitizeTournament)
-            setPublishedMatches(sanitized)
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized))
-            } catch (e) {}
+
+            setPublishedMatches((prev) => {
+              const map = new Map()
+              sanitized.forEach((m) => map.set(String(m.id), m))
+              prev.forEach((m) => {
+                if (!map.has(String(m.id))) {
+                  map.set(String(m.id), m)
+                }
+              })
+              const merged = Array.from(map.values())
+              try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
+              } catch (e) {}
+              return merged
+            })
 
             if (data.publishedStatus && typeof data.publishedStatus === 'object') {
-              setPublishedStatusMap(data.publishedStatus)
-              try {
-                localStorage.setItem('badminton-published-status', JSON.stringify(data.publishedStatus))
-              } catch (e) {}
+              setPublishedStatusMap((prev) => {
+                const merged = { ...prev, ...data.publishedStatus }
+                try {
+                  localStorage.setItem('badminton-published-status', JSON.stringify(merged))
+                } catch (e) {}
+                return merged
+              })
             }
 
             if (data.authenticators && typeof data.authenticators === 'object') {
-              setAuthenticators(data.authenticators)
-              try {
-                localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data.authenticators))
-              } catch (e) {}
+              setAuthenticators((prev) => {
+                const merged = { ...data.authenticators }
+                Object.keys(prev || {}).forEach((k) => {
+                  if (!merged[k] || merged[k].length === 0) {
+                    merged[k] = prev[k]
+                  } else {
+                    const existingIds = new Set(merged[k].map((p) => String(p.id)))
+                    const extras = (prev[k] || []).filter((p) => !existingIds.has(String(p.id)))
+                    merged[k] = [...merged[k], ...extras]
+                  }
+                })
+                try {
+                  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(merged))
+                } catch (e) {}
+                return merged
+              })
             }
 
             if (data.tournamentDraws && typeof data.tournamentDraws === 'object') {
               try {
-                localStorage.setItem('badminton-tournament-draws', JSON.stringify(data.tournamentDraws))
+                const local = JSON.parse(localStorage.getItem('badminton-tournament-draws') || '{}')
+                const merged = { ...local, ...data.tournamentDraws }
+                localStorage.setItem('badminton-tournament-draws', JSON.stringify(merged))
               } catch (e) {}
             }
 
             if (data.temporaryCredentials && Array.isArray(data.temporaryCredentials)) {
               try {
-                localStorage.setItem('badminton-temporary-credentials', JSON.stringify(data.temporaryCredentials))
+                const local = JSON.parse(localStorage.getItem('badminton-temporary-credentials') || '[]')
+                const map = new Map()
+                if (Array.isArray(local)) local.forEach((c) => map.set(c.username, c))
+                data.temporaryCredentials.forEach((c) => map.set(c.username, c))
+                const merged = Array.from(map.values())
+                localStorage.setItem('badminton-temporary-credentials', JSON.stringify(merged))
               } catch (e) {}
             }
 
             if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
               try {
-                localStorage.setItem('badminton-reported-players', JSON.stringify(data.reportedPlayers))
+                const local = JSON.parse(localStorage.getItem('badminton-reported-players') || '{}')
+                const merged = { ...local, ...data.reportedPlayers }
+                localStorage.setItem('badminton-reported-players', JSON.stringify(merged))
               } catch (e) {}
             }
 
