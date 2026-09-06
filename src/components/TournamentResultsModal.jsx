@@ -12,12 +12,11 @@ export const TournamentResultsModal = ({
   onClose,
   publishedStatusMap = {},
 }) => {
-  if (!isOpen || !tournament) return null
-
   const [allDraws, setAllDraws] = useState({})
 
   // Load draws from localStorage
   useEffect(() => {
+    if (!isOpen || !tournament?.id) return
     try {
       const raw = localStorage.getItem('badminton-tournament-draws')
       if (raw) {
@@ -26,10 +25,11 @@ export const TournamentResultsModal = ({
     } catch (e) {
       console.error('Failed to load draws', e)
     }
-  }, [tournament.id])
+  }, [isOpen, tournament?.id])
 
   // Extract category podium data (Winner, Runner, Semi-Finalists)
   const categoryResults = useMemo(() => {
+    if (!tournament) return []
     const cats = tournament.categories || ['Men Singles', 'Women Singles']
     return cats
       .map((cat) => {
@@ -86,6 +86,8 @@ export const TournamentResultsModal = ({
       // Only show categories whose results are updated
       .filter((r) => r.isCompleted)
   }, [tournament, allDraws])
+
+  if (!isOpen || !tournament) return null
 
   // Handle Official A4 Horizontal Print (Winner, Runner, Semi-Finalists)
   const handlePrint = () => {

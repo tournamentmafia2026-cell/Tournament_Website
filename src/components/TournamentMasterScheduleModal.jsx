@@ -12,17 +12,15 @@ export const TournamentMasterScheduleModal = ({
   categories = [],
   onSaveMasterSchedule,
 }) => {
-  if (!isOpen || !tournament) return null
-
   // Check if any existing draw in this tournament has scheduleConfig active
   const initialIsActive = useMemo(() => {
-    return Object.values(allCategoryDraws).some(
+    return Object.values(allCategoryDraws || {}).some(
       (draw) => draw?.scheduleConfig?.isTimingsActive
     )
   }, [allCategoryDraws])
 
   const existingConfig = useMemo(() => {
-    for (const draw of Object.values(allCategoryDraws)) {
+    for (const draw of Object.values(allCategoryDraws || {})) {
       if (draw?.scheduleConfig?.isTimingsActive) {
         return draw.scheduleConfig
       }
@@ -32,15 +30,15 @@ export const TournamentMasterScheduleModal = ({
 
   // Form State
   const [isTimingsActive, setIsTimingsActive] = useState(initialIsActive)
-  const [startDate, setStartDate] = useState(tournament.startDate || '')
+  const [startDate, setStartDate] = useState(tournament?.startDate || '')
   const [startTime, setStartTime] = useState(existingConfig?.startTime || '09:00')
   const [matchDuration, setMatchDuration] = useState(existingConfig?.matchDuration || 20)
   const [intervalBuffer, setIntervalBuffer] = useState(existingConfig?.intervalBuffer || 5)
   const [numberOfCourts, setNumberOfCourts] = useState(
-    existingConfig?.courts?.length || (tournament.courtCount ? Number(tournament.courtCount) : 2)
+    existingConfig?.courts?.length || (tournament?.courtCount ? Number(tournament.courtCount) : 2)
   )
   const [selectedCategories, setSelectedCategories] = useState(
-    categories.length > 0 ? categories : Object.keys(allCategoryDraws)
+    categories.length > 0 ? categories : Object.keys(allCategoryDraws || {})
   )
 
   // Custom court names list derived from numberOfCourts
@@ -54,7 +52,7 @@ export const TournamentMasterScheduleModal = ({
 
   // Compute multi-category schedule in real-time
   const computedSchedule = useMemo(() => {
-    if (!isTimingsActive) return { updatedDrawsMap: {}, scheduledMatchesList: [] }
+    if (!isTimingsActive || !allCategoryDraws) return { updatedDrawsMap: {}, scheduledMatchesList: [] }
 
     return scheduleMultiCategoryTournamentDraws({
       categoryDrawsMap: allCategoryDraws,
@@ -74,6 +72,8 @@ export const TournamentMasterScheduleModal = ({
     intervalBuffer,
     courtList,
   ])
+
+  if (!isOpen || !tournament) return null
 
   // Stats
   const realMatchesList = computedSchedule.scheduledMatchesList.filter((s) => !s.isBye)
