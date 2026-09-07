@@ -87,6 +87,13 @@ export default async function handler(req, res) {
           return
         }
 
+        if (key === 'reportedPlayers') {
+          if (payload.reportedPlayers && typeof payload.reportedPlayers === 'object') {
+            dbState.reportedPlayers = payload.reportedPlayers
+          }
+          return
+        }
+
         if (key === 'tournamentDraws') {
           if (payload.tournamentDraws && typeof payload.tournamentDraws === 'object') {
             dbState.tournamentDraws = payload.tournamentDraws

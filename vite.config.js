@@ -73,6 +73,13 @@ function saveDbData(data) {
         return
       }
 
+      if (key === 'reportedPlayers') {
+        if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
+          merged.reportedPlayers = data.reportedPlayers
+        }
+        return
+      }
+
       if (key === 'temporaryCredentials') {
         if (Array.isArray(data.temporaryCredentials)) {
           merged.temporaryCredentials = data.temporaryCredentials

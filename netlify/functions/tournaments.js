@@ -87,6 +87,13 @@ export const handler = async (event) => {
           return
         }
 
+        if (key === 'reportedPlayers') {
+          if (payload.reportedPlayers && typeof payload.reportedPlayers === 'object') {
+            dbState.reportedPlayers = payload.reportedPlayers
+          }
+          return
+        }
+
         if (key === 'temporaryCredentials') {
           if (Array.isArray(payload.temporaryCredentials)) {
             dbState.temporaryCredentials = payload.temporaryCredentials
