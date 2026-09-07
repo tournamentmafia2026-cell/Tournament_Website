@@ -1276,6 +1276,30 @@ function App() {
       console.error('Error syncing modified name with draws:', err)
     }
 
+    const matchKeyStr = String(selectedMatch.id)
+    setPublishedMatches((prev) => {
+      const next = prev.map((m) => {
+        if (String(m.id) === matchKeyStr) {
+          const parts = (m.participants || m.authenticators || []).map((p) =>
+            String(p.id) === String(participantId)
+              ? { ...p, name: finalName, court: courtVal, place: placeVal, category: targetCategory }
+              : p
+          )
+          const updatedM = { ...m, participants: parts, authenticators: parts }
+          if (selectedMatch && String(selectedMatch.id) === matchKeyStr) {
+            setSelectedMatch(updatedM)
+          }
+          SupabaseService.upsertTournament(updatedM).catch(() => {})
+          return updatedM
+        }
+        return m
+      })
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      } catch (e) {}
+      return next
+    })
+
     setModifyingParticipant(null)
     setSuccessToast(`✓ Successfully modified "${finalName}" in ${targetCategory}!`)
   }
@@ -2760,32 +2784,101 @@ function App() {
                 onSelectMatch={setSelectedMatch}
                 onAddParticipant={(matchId, newParticipant) => {
                   const cleanParticipant = sanitizeParticipant(newParticipant)
-                  setAuthenticators((prev) => ({
-                    ...prev,
-                    [matchId]: [
-                      ...(prev[matchId] || []),
-                      {
-                        id: Date.now(),
-                        ...cleanParticipant,
-                      }
-                    ]
-                  }))
-                }}
-                onUpdateParticipant={(matchId, updatedParticipant) => {
-                  const cleanParticipant = sanitizeParticipant(updatedParticipant)
+                  const matchKey = matchId
+                  const matchKeyStr = String(matchKey)
+                  const newId = cleanParticipant.id || Date.now()
+                  const fullPlayer = { id: newId, ...cleanParticipant }
+
+                  let updatedPlayersList = []
                   setAuthenticators((prev) => {
-                    const matchKey = matchId
-                    const currentList = prev[matchKey] || prev[String(matchKey)] || []
-                    const nextList = currentList.map((p) =>
-                      String(p.id) === String(cleanParticipant.id) ? { ...p, ...cleanParticipant } : p
-                    )
-                    const next = { ...prev, [matchKey]: nextList, [String(matchKey)]: nextList }
+                    const currentList = prev[matchKey] || prev[matchKeyStr] || []
+                    updatedPlayersList = [...currentList, fullPlayer]
+                    const next = {
+                      ...prev,
+                      [matchKey]: updatedPlayersList,
+                      [matchKeyStr]: updatedPlayersList,
+                    }
                     try {
                       localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
                     } catch (e) {}
+                    syncServerData({ authenticators: next })
                     return next
                   })
+
+                  setPublishedMatches((prev) => {
+                    const next = prev.map((m) => {
+                      if (String(m.id) === matchKeyStr) {
+                        const existingParts = m.participants || m.authenticators || []
+                        const updatedParts = [...existingParts, fullPlayer]
+                        const updatedM = {
+                          ...m,
+                          participants: updatedParts,
+                          authenticators: updatedParts,
+                        }
+                        if (selectedMatch && String(selectedMatch.id) === matchKeyStr) {
+                          setSelectedMatch(updatedM)
+                        }
+                        SupabaseService.upsertTournament(updatedM).catch(() => {})
+                        return updatedM
+                      }
+                      return m
+                    })
+                    try {
+                      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+                    } catch (e) {}
+                    return next
+                  })
+
+                  setSuccessToast(`✓ Successfully added player "${cleanParticipant.name}" to ${cleanParticipant.category || ''}!`)
+                }}
+                onUpdateParticipant={(matchId, updatedParticipant) => {
+                  const cleanParticipant = sanitizeParticipant(updatedParticipant)
+                  const matchKey = matchId
+                  const matchKeyStr = String(matchKey)
+                  let updatedList = []
+                  setAuthenticators((prev) => {
+                    const currentList = prev[matchKey] || prev[matchKeyStr] || []
+                    updatedList = currentList.map((p) =>
+                      String(p.id) === String(cleanParticipant.id) ? { ...p, ...cleanParticipant } : p
+                    )
+                    const next = { ...prev, [matchKey]: updatedList, [matchKeyStr]: updatedList }
+                    try {
+                      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+                    } catch (e) {}
+                    syncServerData({ authenticators: next })
+                    return next
+                  })
+
+                  setPublishedMatches((prev) => {
+                    const next = prev.map((m) => {
+                      if (String(m.id) === matchKeyStr) {
+                        const existingParts = m.participants || m.authenticators || []
+                        const nextParts = existingParts.map((p) =>
+                          String(p.id) === String(cleanParticipant.id) ? { ...p, ...cleanParticipant } : p
+                        )
+                        const updatedM = {
+                          ...m,
+                          participants: nextParts,
+                          authenticators: nextParts,
+                        }
+                        if (selectedMatch && String(selectedMatch.id) === matchKeyStr) {
+                          setSelectedMatch(updatedM)
+                        }
+                        SupabaseService.upsertTournament(updatedM).catch(() => {})
+                        return updatedM
+                      }
+                      return m
+                    })
+                    try {
+                      localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+                    } catch (e) {}
+                    return next
+                  })
+
                   setSuccessToast(`✓ Updated player "${cleanParticipant.name}"!`)
+                }}
+                onDeleteParticipant={(matchId, participantId) => {
+                  handleRemoveParticipant(matchId, participantId)
                 }}
                 onBackToMatchManagement={() => setActivePage('matchManagement')}
               />

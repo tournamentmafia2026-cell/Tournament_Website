@@ -47,6 +47,7 @@ export const BadmintonFixturesManager = ({
   onSelectMatch = () => {},
   onAddParticipant = () => {},
   onUpdateParticipant = () => {},
+  onDeleteParticipant = () => {},
   onBackToMatchManagement = null,
   isPublicView = false,
   onBackToPublicFeed = null,
@@ -1597,19 +1598,59 @@ export const BadmintonFixturesManager = ({
     }
 
     const newParticipant = {
+      id: Date.now(),
       name: finalName,
       place: formatPlaceOrClub(quickPlayerPlace),
       court: formatCourtName(quickPlayerCourt, ''),
       category: formatCategoryName(selectedCategory),
     }
 
-    onAddParticipant(selectedMatch.id, newParticipant)
+    if (onAddParticipant) {
+      onAddParticipant(selectedMatch.id, newParticipant)
+    }
+
+    // Direct synchronous local storage update
+    try {
+      const matchKey = selectedMatch.id
+      const matchKeyStr = String(matchKey)
+      const savedAuth = localStorage.getItem('badminton-match-authenticators') || localStorage.getItem('badminton-authenticators')
+      let parsedAuth = {}
+      if (savedAuth) {
+        try { parsedAuth = JSON.parse(savedAuth) } catch (err) {}
+      }
+      const currentList = parsedAuth[matchKey] || parsedAuth[matchKeyStr] || []
+      const updatedList = [...currentList, newParticipant]
+      parsedAuth[matchKey] = updatedList
+      parsedAuth[matchKeyStr] = updatedList
+      localStorage.setItem('badminton-match-authenticators', JSON.stringify(parsedAuth))
+      localStorage.setItem('badminton-authenticators', JSON.stringify(parsedAuth))
+
+      const savedPub = localStorage.getItem('badminton-published-matches')
+      if (savedPub) {
+        try {
+          const parsedPub = JSON.parse(savedPub)
+          if (Array.isArray(parsedPub)) {
+            const nextPub = parsedPub.map((m) => {
+              if (String(m.id) === matchKeyStr) {
+                const parts = [...(m.participants || m.authenticators || []), newParticipant]
+                return { ...m, participants: parts, authenticators: parts }
+              }
+              return m
+            })
+            localStorage.setItem('badminton-published-matches', JSON.stringify(nextPub))
+          }
+        } catch (err) {}
+      }
+    } catch (err) {}
+
     setQuickPlayerName('')
     setQuickPlayer1Name('')
     setQuickPlayer2Name('')
     setQuickPlayerPlace('')
     setQuickPlayerCourt('')
     setShowQuickAdd(false)
+    setSwapToast(`✓ Successfully added "${finalName}" to ${selectedCategory}!`)
+    setTimeout(() => setSwapToast(null), 3500)
   }
 
   const handleOpenEditDeskPlayer = (player) => {
@@ -1714,8 +1755,8 @@ export const BadmintonFixturesManager = ({
     }
 
     setEditingDeskPlayer(null)
-    setAddSuccessToast(`✓ Updated details for "${finalName}"!`)
-    setTimeout(() => setAddSuccessToast(null), 3000)
+    setSwapToast(`✓ Updated details for "${finalName}"!`)
+    setTimeout(() => setSwapToast(null), 3000)
   }
 
   const handlePrintDraw = () => {
@@ -5779,29 +5820,61 @@ export const BadmintonFixturesManager = ({
                             <td>
                               <span className="category-pill-tag">{formatCategoryName(selectedCategory)}</span>
                             </td>
-                            <td style={{ textAlign: 'right' }}>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenEditDeskPlayer(player)}
-                                style={{
-                                  padding: '5px 12px',
-                                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(37, 99, 235, 0.25) 100%)',
-                                  border: '1px solid rgba(96, 165, 250, 0.5)',
-                                  color: '#93c5fd',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: '700',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-                                  transition: 'all 0.15s ease',
-                                }}
-                                title="Modify player or doubles pair details"
-                              >
-                                ✏️ Modify
-                              </button>
+                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditDeskPlayer(player)}
+                                  style={{
+                                    padding: '5px 12px',
+                                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(37, 99, 235, 0.25) 100%)',
+                                    border: '1px solid rgba(96, 165, 250, 0.5)',
+                                    color: '#93c5fd',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                  title="Modify player or doubles pair details"
+                                >
+                                  ✏️ Modify
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (window.confirm(`Are you sure you want to remove "${player.name}" from ${selectedCategory}?`)) {
+                                      if (onDeleteParticipant) {
+                                        onDeleteParticipant(selectedMatch.id, player.id || player.name)
+                                      }
+                                      setSwapToast(`✓ Removed "${player.name}" from ${selectedCategory}!`)
+                                      setTimeout(() => setSwapToast(null), 3000)
+                                    }
+                                  }}
+                                  style={{
+                                    padding: '5px 10px',
+                                    background: 'rgba(239, 68, 68, 0.15)',
+                                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                                    color: '#fca5a5',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                  title="Delete player from tournament category"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         )
