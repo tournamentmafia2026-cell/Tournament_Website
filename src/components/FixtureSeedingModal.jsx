@@ -80,11 +80,17 @@ export const FixtureSeedingModal = ({
         setTotalMembers(existingDraw.drawSize)
         setActivePlayersCount(existingDraw.totalPlayers || count || existingDraw.drawSize)
         setSeedsCount(existingDraw.seedsCount || existingDraw.seeds?.length || 4)
-        if (existingDraw.showTimings !== undefined) setShowTimingsOnPublic(Boolean(existingDraw.showTimings))
-        if (existingDraw.startTime) setStartTime(existingDraw.startTime)
-        if (existingDraw.matchDuration) setMatchDuration(existingDraw.matchDuration)
-        if (existingDraw.numberOfCourts) setNumberOfCourts(existingDraw.numberOfCourts)
-        if (existingDraw.courtName) setCourtName(existingDraw.courtName)
+        if (existingDraw.showTimings !== undefined) {
+          setShowTimingsOnPublic(Boolean(existingDraw.showTimings))
+        } else if (existingDraw.config?.showTimings !== undefined) {
+          setShowTimingsOnPublic(Boolean(existingDraw.config.showTimings))
+        } else {
+          setShowTimingsOnPublic(true)
+        }
+        if (existingDraw.startTime || existingDraw.config?.startTime) setStartTime(existingDraw.startTime || existingDraw.config.startTime)
+        if (existingDraw.matchDuration || existingDraw.config?.matchDuration) setMatchDuration(existingDraw.matchDuration || existingDraw.config.matchDuration)
+        if (existingDraw.numberOfCourts || existingDraw.config?.numberOfCourts) setNumberOfCourts(existingDraw.numberOfCourts || existingDraw.config.numberOfCourts)
+        if (existingDraw.courtName || existingDraw.config?.courtName) setCourtName(existingDraw.courtName || existingDraw.config.courtName)
       } else if (count > 0) {
         setActivePlayersCount(count)
         if (count <= 4) setTotalMembers(4)

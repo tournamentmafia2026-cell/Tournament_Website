@@ -725,11 +725,15 @@ export const applyMatchTimingsToDraw = (draw, options = {}) => {
   if (!draw || !Array.isArray(draw.matches) || draw.matches.length === 0) return draw
 
   const cfg = { ...draw.config, ...options }
-  const showTimings = draw.showTimings !== undefined
-    ? Boolean(draw.showTimings)
-    : (cfg.showTimings !== undefined ? Boolean(cfg.showTimings) : true)
+  const showTimings = options.showTimings !== undefined
+    ? Boolean(options.showTimings)
+    : (draw.showTimings !== undefined
+        ? Boolean(draw.showTimings)
+        : (cfg.showTimings !== undefined ? Boolean(cfg.showTimings) : true))
 
   if (!showTimings) {
+    draw.showTimings = false
+    if (draw.config) draw.config.showTimings = false
     draw.matches.forEach((m) => {
       m.time = ''
       m.scheduledTime = ''
@@ -737,12 +741,14 @@ export const applyMatchTimingsToDraw = (draw, options = {}) => {
     return draw
   }
 
-  const startTime = draw.startTime || cfg.startTime || '09:00'
-  const matchDuration = Number(draw.matchDuration || cfg.matchDuration || cfg.matchDurationMinutes) || 30
-  const numberOfCourts = Number(draw.numberOfCourts || cfg.numberOfCourts || cfg.stadiumCourtsCount) || 4
+  const startTime = options.startTime || draw.startTime || cfg.startTime || '09:00'
+  const matchDuration = Number(options.matchDuration || options.matchDurationMinutes || draw.matchDuration || cfg.matchDuration || cfg.matchDurationMinutes) || 30
+  const numberOfCourts = Number(options.numberOfCourts || options.stadiumCourtsCount || draw.numberOfCourts || cfg.numberOfCourts || cfg.stadiumCourtsCount) || 4
 
   let courtNames = []
-  if (Array.isArray(cfg.courts) && cfg.courts.length > 0) {
+  if (Array.isArray(options.courts) && options.courts.length > 0) {
+    courtNames = options.courts
+  } else if (Array.isArray(cfg.courts) && cfg.courts.length > 0) {
     courtNames = cfg.courts
   } else if (Array.isArray(draw.courts) && draw.courts.length > 0) {
     courtNames = draw.courts
@@ -788,6 +794,7 @@ export const applyMatchTimingsToDraw = (draw, options = {}) => {
   }
 
   draw.showTimings = true
+  if (draw.config) draw.config.showTimings = true
   draw.startTime = startTime
   draw.matchDuration = matchDuration
   draw.numberOfCourts = numberOfCourts
@@ -898,10 +905,24 @@ export const sanitizeBadmintonDraw = (draw) => {
     : (draw.config?.showTimings !== undefined ? Boolean(draw.config.showTimings) : true)
 
   if (isTimingsOn) {
+    draw.showTimings = true
+    if (draw.config) draw.config.showTimings = true
+    // Cross-populate time and scheduledTime
+    draw.matches.forEach((m) => {
+      if (!m.time && m.scheduledTime) m.time = m.scheduledTime
+      if (!m.scheduledTime && m.time) m.scheduledTime = m.time
+    })
     const hasAnyTime = draw.matches.some((m) => m.time && m.time !== '')
     if (!hasAnyTime) {
-      applyMatchTimingsToDraw(draw)
+      applyMatchTimingsToDraw(draw, { showTimings: true })
     }
+  } else {
+    draw.showTimings = false
+    if (draw.config) draw.config.showTimings = false
+    draw.matches.forEach((m) => {
+      m.time = ''
+      m.scheduledTime = ''
+    })
   }
 
   return draw

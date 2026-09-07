@@ -568,6 +568,7 @@ export const BadmintonFixturesManager = ({
             venue: selectedMatch?.matchAddress || 'Badminton Arena',
             startTime: '09:00',
             matchDurationMinutes: 30,
+            showTimings: true,
           })
         : (categoryPlayers.length === 1
             ? generateBadmintonDraw(categoryPlayers, {
@@ -578,6 +579,7 @@ export const BadmintonFixturesManager = ({
                 venue: selectedMatch?.matchAddress || 'Badminton Arena',
                 startTime: '09:00',
                 matchDurationMinutes: 30,
+                showTimings: true,
               })
             : null))
 
@@ -797,8 +799,9 @@ export const BadmintonFixturesManager = ({
         seeds: autoSeeds,
         courtName: selectedMatch?.courtName || 'Court 1',
         venue: selectedMatch?.matchAddress || 'Badminton Arena',
-        startTime: '09:00',
-        matchDurationMinutes: 30,
+        startTime: existingDraw?.startTime || existingDraw?.config?.startTime || '09:00',
+        matchDurationMinutes: existingDraw?.matchDuration || existingDraw?.config?.matchDuration || 30,
+        showTimings: existingDraw?.showTimings !== undefined ? Boolean(existingDraw.showTimings) : (existingDraw?.config?.showTimings !== undefined ? Boolean(existingDraw.config.showTimings) : true),
       })
 
       if (newDraw) {
@@ -1050,8 +1053,9 @@ export const BadmintonFixturesManager = ({
       seeds: explicitSeeds,
       courtName: selectedMatch.courtName || 'Court 1',
       venue: selectedMatch.matchAddress || 'Badminton Arena',
-      startTime: '09:00',
-      matchDurationMinutes: 30,
+      startTime: currentDraw?.startTime || currentDraw?.config?.startTime || '09:00',
+      matchDurationMinutes: currentDraw?.matchDuration || currentDraw?.config?.matchDuration || 30,
+      showTimings: currentDraw?.showTimings !== undefined ? Boolean(currentDraw.showTimings) : (currentDraw?.config?.showTimings !== undefined ? Boolean(currentDraw.config.showTimings) : true),
     }
 
     handleGenerateDrawWithConfig(selectedCategory, config)
@@ -3275,24 +3279,24 @@ export const BadmintonFixturesManager = ({
                                 })()}
 
                                 {/* Clean Bold Scheduled Time Below the Line (No Box / Border) */}
-                                {m.time && !m.winner && (
+                                {(m.time || m.scheduledTime) && !m.winner && (
                                   <text
                                     x={xBracket + 6}
                                     y={yMid + 11}
                                     className="official-match-time-text"
                                   >
-                                    {m.time} {m.court ? `• ${m.court}` : ''}
+                                    {m.time || m.scheduledTime} {m.court && m.court !== 'BYE' ? `• ${m.court}` : ''}
                                   </text>
                                 )}
 
-                                {m.time && m.winner && !m.winner.isBye && (
+                                {(m.time || m.scheduledTime) && m.winner && !m.winner.isBye && (
                                   <text
                                     x={xBracket + 6}
                                     y={yMid + 21}
                                     className="official-match-time-text"
                                     style={{ fontSize: '8.5px', opacity: 0.85 }}
                                   >
-                                    {m.time} {m.court ? `• ${m.court}` : ''}
+                                    {m.time || m.scheduledTime} {m.court && m.court !== 'BYE' ? `• ${m.court}` : ''}
                                   </text>
                                 )}
                               </g>
@@ -5252,7 +5256,25 @@ export const BadmintonFixturesManager = ({
                                   </div>
                                 </div>
                               </td>
-                              <td>{m.court || m.venue || ''}</td>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  {m.court && m.court !== 'BYE' && (
+                                    <span style={{ fontWeight: '700', color: '#f8fafc' }}>
+                                      🏟️ {m.court}
+                                    </span>
+                                  )}
+                                  {(m.time || m.scheduledTime) && (
+                                    <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                      ⏰ {m.time || m.scheduledTime}
+                                    </span>
+                                  )}
+                                  {m.venue && !m.court && (
+                                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                      📍 {m.venue}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
                               <td>
                                 {m.status === 'live' ? (
                                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
