@@ -1618,13 +1618,6 @@ function App() {
                   setPublicViewingFixturesMatch(null)
                   setPublicViewingCategory(null)
                 }}
-                onOpenOrganizerLogin={() => {
-                  if (authSession) {
-                    setAuthOpen(true)
-                  } else {
-                    setIsAuthModalOpen(true)
-                  }
-                }}
               />
             </div>
           ) : selectedMatch ? (
@@ -1646,27 +1639,6 @@ function App() {
                     <span className="crumb-sep">/</span>
                     <span className="tourn-tag">{selectedMatch.matchName}</span>
                   </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (authSession) {
-                        setAuthOpen(true)
-                      } else {
-                        setIsAuthModalOpen(true)
-                      }
-                    }}
-                    className="public-auth-btn icon-only"
-                    title={authSession ? 'Organizer / Umpire Portal' : 'Organizer / Umpire Login'}
-                    aria-label={authSession ? 'Organizer / Umpire Portal' : 'Organizer / Umpire Login'}
-                  >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                  </button>
                 </div>
               </div>
 

@@ -2456,8 +2456,42 @@ export const BadmintonFixturesManager = ({
               </button>
             )}
 
-            {/* Centered Dynamic Category Switcher Pills */}
-            <div className="public-fixtures-center-cat-bar">
+            {/* Theme Toggle Button on Right: Light Mode / Dark Mode */}
+            <div className="public-fixtures-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setSheetTheme(sheetTheme === 'white' ? 'dark' : 'white')}
+                className="public-sheet-theme-btn"
+              >
+                {sheetTheme === 'white' ? '🌙 Dark Mode' : '☀️ Light Mode'}
+              </button>
+            </div>
+          </div>
+
+          {/* Dedicated Category Selector Bar below Topbar */}
+          <div
+            className="public-fixtures-category-bar"
+            style={{
+              marginBottom: '16px',
+              padding: '12px 18px',
+              background: 'linear-gradient(135deg, rgba(13, 22, 39, 0.95) 0%, rgba(20, 32, 54, 0.92) 100%)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              flexWrap: 'wrap',
+              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.25)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ fontSize: '15px' }}>🏸</span>
+              <span style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '800' }}>
+                Category:
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', flex: 1 }}>
               {publishedCategoryList.length > 0 ? (
                 publishedCategoryList.map((cat) => {
                   const isCompact = publishedCategoryList.length > 4
@@ -2478,33 +2512,6 @@ export const BadmintonFixturesManager = ({
                 <span style={{ fontSize: '12px', color: '#fca5a5', fontWeight: '700' }}>
                   📢 No categories published yet.
                 </span>
-              )}
-            </div>
-
-            {/* Theme Toggle Button on Right */}
-            <div className="public-fixtures-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setSheetTheme(sheetTheme === 'white' ? 'dark' : 'white')}
-                className="public-sheet-theme-btn"
-              >
-                {sheetTheme === 'white' ? '🌙 Dark Mode' : '📄 White Sheet'}
-              </button>
-
-              {onOpenOrganizerLogin && (
-                <button
-                  type="button"
-                  onClick={onOpenOrganizerLogin}
-                  className="public-sheet-theme-btn icon-only"
-                  title="Organizer Login"
-                  aria-label="Organizer Login"
-                  style={{ background: 'rgba(59, 130, 246, 0.2)', borderColor: 'rgba(59, 130, 246, 0.45)', color: '#93c5fd', width: '38px', height: '38px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                  </svg>
-                </button>
               )}
             </div>
           </div>
@@ -2711,7 +2718,7 @@ export const BadmintonFixturesManager = ({
                         boxSizing: 'border-box',
                       }}
                     >
-                      <span>{sheetTheme === 'white' ? '🌙 Dark Mode' : '📄 White Sheet (Photo Style)'}</span>
+                      <span>{sheetTheme === 'white' ? '🌙 Dark Mode' : '☀️ Light Mode'}</span>
                     </button>
                   </div>
                 </div>

@@ -7212,12 +7212,12 @@ select {
   box-sizing: border-box;
 }
 
-/* Public Fixtures Topbar & Centered Dynamic Category Switcher */
+/* Public Fixtures Topbar & Dynamic Category Switcher */
 .public-fixtures-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   flex-wrap: wrap;
   gap: 12px;
   background: linear-gradient(135deg, rgba(13, 22, 39, 0.95) 0%, rgba(20, 32, 54, 0.92) 100%);
@@ -7227,6 +7227,21 @@ select {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.public-fixtures-category-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px 18px;
+  background: linear-gradient(135deg, rgba(13, 22, 39, 0.95) 0%, rgba(20, 32, 54, 0.92) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 16px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
 }
 
 .public-fixtures-back-btn {
@@ -7254,18 +7269,6 @@ select {
   border-color: #38bdf8;
   transform: translateX(-3px);
   box-shadow: 0 4px 14px rgba(56, 189, 248, 0.25);
-}
-
-/* Centered Dynamic Category Pill Bar */
-.public-fixtures-center-cat-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  padding: 0 8px;
 }
 
 .public-fixtures-cat-pill {
