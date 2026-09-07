@@ -411,16 +411,38 @@ export const BadmintonFixturesManager = ({
 
   const togglePlayerReporting = (player) => {
     if (!player) return
-    const id = typeof player === 'object' ? (player.id || player.name) : player
-    const nameKey = typeof player === 'object' && player.name ? player.name.trim().toLowerCase() : String(player).trim().toLowerCase()
+    const idStr = typeof player === 'object' && player.id ? String(player.id).trim() : (typeof player === 'string' || typeof player === 'number' ? String(player).trim() : '')
+    const nameStr = typeof player === 'object' && player.name ? player.name.trim() : (typeof player === 'string' ? player.trim() : '')
+    const nameKey = nameStr.toLowerCase()
     const key = `${selectedMatch?.id || 1}-${selectedCategory}`
 
     setReportedPlayers((prev) => {
       const currentCatMap = { ...(prev[key] || {}) }
-      const isRep = Boolean((id && currentCatMap[id]) || (nameKey && currentCatMap[nameKey]))
+      
+      // Determine if currently reported across any key variant
+      let isRep = false
+      if (idStr && currentCatMap[idStr] !== undefined) {
+        isRep = Boolean(currentCatMap[idStr])
+      } else if (idStr && !isNaN(Number(idStr)) && currentCatMap[Number(idStr)] !== undefined) {
+        isRep = Boolean(currentCatMap[Number(idStr)])
+      } else if (nameKey && currentCatMap[nameKey] !== undefined) {
+        isRep = Boolean(currentCatMap[nameKey])
+      } else if (nameStr && currentCatMap[nameStr] !== undefined) {
+        isRep = Boolean(currentCatMap[nameStr])
+      }
+
       const nextVal = !isRep
-      if (id) currentCatMap[id] = nextVal
+
+      // Always set/clear all key variations synchronously so state is clean
+      if (idStr) {
+        currentCatMap[idStr] = nextVal
+        if (!isNaN(Number(idStr))) {
+          currentCatMap[Number(idStr)] = nextVal
+        }
+      }
       if (nameKey) currentCatMap[nameKey] = nextVal
+      if (nameStr) currentCatMap[nameStr] = nextVal
+
       const nextFullMap = {
         ...prev,
         [key]: currentCatMap,
@@ -446,16 +468,25 @@ export const BadmintonFixturesManager = ({
     if (!playerOrId) return false
     const key = `${selectedMatch?.id || 1}-${selectedCategory}`
     const map = reportedPlayers[key] || {}
+    
     if (typeof playerOrId === 'object') {
-      if (playerOrId.id && map[playerOrId.id] !== undefined) return Boolean(map[playerOrId.id])
-      if (playerOrId.name) {
-        const nKey = playerOrId.name.trim().toLowerCase()
-        if (map[nKey] !== undefined) return Boolean(map[nKey])
-      }
+      const idStr = playerOrId.id ? String(playerOrId.id).trim() : ''
+      const nameStr = playerOrId.name ? playerOrId.name.trim() : ''
+      const nameKey = nameStr.toLowerCase()
+
+      if (idStr && map[idStr] !== undefined) return Boolean(map[idStr])
+      if (idStr && !isNaN(Number(idStr)) && map[Number(idStr)] !== undefined) return Boolean(map[Number(idStr)])
+      if (nameKey && map[nameKey] !== undefined) return Boolean(map[nameKey])
+      if (nameStr && map[nameStr] !== undefined) return Boolean(map[nameStr])
       return false
     }
-    const strKey = String(playerOrId).trim().toLowerCase()
-    return Boolean(map[playerOrId] || map[strKey])
+
+    const strKey = String(playerOrId).trim()
+    const lowerKey = strKey.toLowerCase()
+    if (map[strKey] !== undefined) return Boolean(map[strKey])
+    if (map[lowerKey] !== undefined) return Boolean(map[lowerKey])
+    if (!isNaN(Number(strKey)) && map[Number(strKey)] !== undefined) return Boolean(map[Number(strKey)])
+    return false
   }
 
   const isMatchBothReported = (m) => {
@@ -469,8 +500,16 @@ export const BadmintonFixturesManager = ({
     setReportedPlayers((prev) => {
       const newMap = {}
       categoryPlayers.forEach((p) => {
-        if (p.id) newMap[p.id] = status
-        if (p.name) newMap[p.name.trim().toLowerCase()] = status
+        const idStr = p.id ? String(p.id).trim() : ''
+        const nameStr = p.name ? p.name.trim() : ''
+        const nameKey = nameStr.toLowerCase()
+
+        if (idStr) {
+          newMap[idStr] = status
+          if (!isNaN(Number(idStr))) newMap[Number(idStr)] = status
+        }
+        if (nameKey) newMap[nameKey] = status
+        if (nameStr) newMap[nameStr] = status
       })
       const nextFullMap = {
         ...prev,
@@ -1867,14 +1906,14 @@ export const BadmintonFixturesManager = ({
   })
 
   // Player reporting computations
-  const reportedCount = categoryPlayers.filter((p) => isPlayerReported(p.id)).length
+  const reportedCount = categoryPlayers.filter((p) => isPlayerReported(p)).length
   const pendingCount = categoryPlayers.length - reportedCount
   const reportedPercent = categoryPlayers.length > 0 ? Math.round((reportedCount / categoryPlayers.length) * 100) : 0
 
   // Filtered & Sorted category players list (Seeds first, then alphabetical)
   const filteredCategoryPlayers = categoryPlayers
     .filter((p) => {
-      const isRep = isPlayerReported(p.id)
+      const isRep = isPlayerReported(p)
       if (playerReportingFilter === 'reported' && !isRep) return false
       if (playerReportingFilter === 'pending' && isRep) return false
       if (playerSearchQuery.trim()) {
