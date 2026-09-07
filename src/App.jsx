@@ -340,6 +340,19 @@ function App() {
     return initialBadmintonDb?.publishedStatus || {}
   })
 
+  const [fixtureResults, setFixtureResults] = useState(() => {
+    try {
+      const saved = localStorage.getItem('badminton-fixture-results')
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed && typeof parsed === 'object') return parsed
+      }
+    } catch {
+      // fallback
+    }
+    return {}
+  })
+
   // Auto-sync live stream broadcast active status with localStorage & storage events
   useEffect(() => {
     const syncStreamStatus = () => {
@@ -869,9 +882,14 @@ function App() {
     }
   }, [publishedStatusMap])
 
+  const lastFixtureResultsRef = useRef('')
   useEffect(() => {
     try {
-      localStorage.setItem('badminton-fixture-results', JSON.stringify(fixtureResults))
+      const serialized = JSON.stringify(fixtureResults)
+      if (lastFixtureResultsRef.current !== serialized) {
+        lastFixtureResultsRef.current = serialized
+        localStorage.setItem('badminton-fixture-results', serialized)
+      }
     } catch (error) {
       console.error('Unable to save fixture results', error)
     }
