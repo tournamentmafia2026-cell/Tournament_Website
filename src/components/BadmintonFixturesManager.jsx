@@ -343,17 +343,23 @@ export const BadmintonFixturesManager = ({
             Object.keys(data.tournamentDraws).forEach((k) => {
               sanitized[k] = sanitizeBadmintonDraw(data.tournamentDraws[k])
             })
-            setTournamentDraws((prev) => ({ ...prev, ...sanitized }))
+            setTournamentDraws((prev) => ({ ...sanitized, ...prev }))
             try {
-              localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify({ ...tournamentDraws, ...sanitized }))
+              localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify({ ...sanitized, ...tournamentDraws }))
             } catch (e) {}
           }
 
           if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
-            setReportedPlayers((prev) => ({ ...prev, ...data.reportedPlayers }))
-            try {
-              localStorage.setItem('badminton-reported-players', JSON.stringify({ ...reportedPlayers, ...data.reportedPlayers }))
-            } catch (e) {}
+            setReportedPlayers((prev) => {
+              const merged = { ...data.reportedPlayers }
+              Object.keys(prev).forEach((catKey) => {
+                merged[catKey] = {
+                  ...(merged[catKey] || {}),
+                  ...(prev[catKey] || {}),
+                }
+              })
+              return merged
+            })
           }
 
           if (data.liveUmpireMode !== undefined) {
@@ -383,7 +389,7 @@ export const BadmintonFixturesManager = ({
                   supaDraws[row.id] = sanitizeBadmintonDraw(row.draw_data)
                 }
               })
-              setTournamentDraws((prev) => ({ ...prev, ...supaDraws }))
+              setTournamentDraws((prev) => ({ ...supaDraws, ...prev }))
             }
           })
           .catch(() => {})
@@ -391,7 +397,7 @@ export const BadmintonFixturesManager = ({
     }
 
     syncDraws()
-    const timer = setInterval(syncDraws, 1500) // Poll every 1.5s for instant point-by-point updates
+    const timer = setInterval(syncDraws, 2500)
     return () => clearInterval(timer)
   }, [selectedMatch?.id])
 
@@ -410,18 +416,22 @@ export const BadmintonFixturesManager = ({
     const key = `${selectedMatch?.id || 1}-${selectedCategory}`
 
     setReportedPlayers((prev) => {
-      const currentCatMap = prev[key] || {}
-      const isRep = Boolean(currentCatMap[id] || (nameKey && currentCatMap[nameKey]))
+      const currentCatMap = { ...(prev[key] || {}) }
+      const isRep = Boolean((id && currentCatMap[id]) || (nameKey && currentCatMap[nameKey]))
       const nextVal = !isRep
-      const updatedMap = { ...currentCatMap }
-      if (id) updatedMap[id] = nextVal
-      if (nameKey) updatedMap[nameKey] = nextVal
+      if (id) currentCatMap[id] = nextVal
+      if (nameKey) currentCatMap[nameKey] = nextVal
       const nextFullMap = {
         ...prev,
-        [key]: updatedMap,
+        [key]: currentCatMap,
       }
 
-      // Sync directly to DB
+      // Synchronously write to localStorage
+      try {
+        localStorage.setItem('badminton-reported-players', JSON.stringify(nextFullMap))
+      } catch (e) {}
+
+      // Fire background POST to shared DB
       fetch('/api/tournaments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -466,6 +476,10 @@ export const BadmintonFixturesManager = ({
         ...prev,
         [key]: newMap,
       }
+
+      try {
+        localStorage.setItem('badminton-reported-players', JSON.stringify(nextFullMap))
+      } catch (e) {}
 
       // Sync directly to DB
       fetch('/api/tournaments', {
@@ -5769,7 +5783,7 @@ export const BadmintonFixturesManager = ({
                     </thead>
                     <tbody>
                       {filteredCategoryPlayers.map((player, idx) => {
-                        const isReported = isPlayerReported(player.id)
+                        const isReported = isPlayerReported(player)
 
                         return (
                           <tr
@@ -5782,7 +5796,7 @@ export const BadmintonFixturesManager = ({
                             <td>
                               <div
                                 className="reporting-tick-container"
-                                onClick={() => togglePlayerReporting(player.id)}
+                                onClick={() => togglePlayerReporting(player)}
                                 title="Click to toggle reporting status"
                               >
                                 <div className={`reporting-custom-checkbox ${isReported ? 'checked' : ''}`}>
