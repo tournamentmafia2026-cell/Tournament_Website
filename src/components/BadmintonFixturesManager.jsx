@@ -672,10 +672,66 @@ export const BadmintonFixturesManager = ({
     }
   }, [isPublicView, selectedMatch?.id, selectedCategory, JSON.stringify(publishedStatusMap)])
 
-  // Auto-sync players updated in Match Management directly into the Draw (only if no draw exists yet)
+  // Auto-sync players updated or deleted in Match Management directly into the Draw
   useEffect(() => {
-    if (!tournamentDraws[drawKey] && uploadedCategoryPlayers && uploadedCategoryPlayers.length > 0) {
-      const pCount = uploadedCategoryPlayers.length
+    if (!selectedMatch || !selectedCategory) return
+    const key = drawKey
+    const pCount = (uploadedCategoryPlayers || []).length
+
+    if (pCount === 0) {
+      if (tournamentDraws[key]) {
+        setTournamentDraws((prev) => {
+          const next = { ...prev }
+          delete next[key]
+          try {
+            localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
+          } catch (e) {}
+          SupabaseService.deleteTournamentDraw(key).catch(() => {})
+          return next
+        })
+      }
+      return
+    }
+
+    const existingDraw = tournamentDraws[key]
+    let needsUpdate = false
+
+    if (!existingDraw) {
+      needsUpdate = true
+    } else {
+      // Check if any player in existing draw was deleted or modified
+      const registeredIds = new Set(uploadedCategoryPlayers.map((p) => String(p.id)))
+      const registeredNames = new Set(uploadedCategoryPlayers.map((p) => String(p.name || '').trim().toLowerCase()))
+      
+      const r1Matches = (existingDraw.matches || []).filter((m) => m.round === 1)
+      let drawPlayerCount = 0
+      for (const m of r1Matches) {
+        if (m.player1 && !m.player1.isBye) {
+          drawPlayerCount++
+          const pId = String(m.player1.id)
+          const pName = String(m.player1.name || '').trim().toLowerCase()
+          if (!registeredIds.has(pId) && !registeredNames.has(pName)) {
+            needsUpdate = true
+            break
+          }
+        }
+        if (m.player2 && !m.player2.isBye) {
+          drawPlayerCount++
+          const pId = String(m.player2.id)
+          const pName = String(m.player2.name || '').trim().toLowerCase()
+          if (!registeredIds.has(pId) && !registeredNames.has(pName)) {
+            needsUpdate = true
+            break
+          }
+        }
+      }
+
+      if (drawPlayerCount !== pCount) {
+        needsUpdate = true
+      }
+    }
+
+    if (needsUpdate) {
       const dSize = getNextPowerOfTwo(Math.max(2, pCount))
       const autoSeeds = uploadedCategoryPlayers
         .filter((p) => p.seed)
@@ -694,13 +750,20 @@ export const BadmintonFixturesManager = ({
       })
 
       if (newDraw) {
-        setTournamentDraws((prev) => ({
-          ...prev,
-          [drawKey]: newDraw,
-        }))
+        setTournamentDraws((prev) => {
+          const next = {
+            ...prev,
+            [key]: newDraw,
+          }
+          try {
+            localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
+          } catch (e) {}
+          SupabaseService.upsertTournamentDraw(key, selectedMatch.id, selectedCategory, newDraw, true).catch(() => {})
+          return next
+        })
       }
     }
-  }, [uploadedCategoryPlayers.length, JSON.stringify(uploadedCategoryPlayers), drawKey])
+  }, [uploadedCategoryPlayers, selectedMatch?.id, selectedCategory, drawKey])
 
   // Sync inline seeding bar defaults with the active draw or category when opened
   useEffect(() => {

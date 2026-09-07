@@ -9,7 +9,7 @@ import { TournamentResultsModal } from './components/TournamentResultsModal'
 import { StadiumTvLiveCast } from './components/StadiumTvLiveCast'
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal'
 import { PublicSponsorShowcase } from './components/PublicSponsorShowcase'
-import { generateBadmintonDraw } from './utils/badmintonDrawEngine'
+import { generateBadmintonDraw, getNextPowerOfTwo } from './utils/badmintonDrawEngine'
 import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from './utils/courtConfig'
 import { SupabaseService } from './utils/supabaseDb'
 import {
@@ -1360,7 +1360,55 @@ function App() {
     })
 
     SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
-    setSuccessToast(`✓ Player removed.`)
+
+    // Automatically synchronize and clean tournament draws upon player deletion
+    try {
+      const savedDraws = localStorage.getItem('badminton-tournament-draws')
+      if (savedDraws) {
+        const drawsMap = JSON.parse(savedDraws)
+        let drawsChanged = false
+        const tourCats = (updatedMatchObj.categories || ['Men Singles'])
+        tourCats.forEach((catName) => {
+          const dKey = `${matchIdStr}-${catName}`
+          const catPlayers = uniqueFiltered.filter(
+            (p) => (p.category || 'Men Singles').trim().toLowerCase() === catName.trim().toLowerCase()
+          )
+          if (catPlayers.length >= 2) {
+            const autoSeeds = catPlayers
+              .filter((p) => p.seed)
+              .sort((a, b) => a.seed - b.seed)
+              .map((p) => ({ id: p.id, name: p.name, place: p.place, seed: p.seed }))
+            const newDraw = generateBadmintonDraw(catPlayers, {
+              drawSize: getNextPowerOfTwo(catPlayers.length),
+              totalMembers: catPlayers.length,
+              seedsCount: autoSeeds.length || (catPlayers.length >= 16 ? 4 : catPlayers.length >= 8 ? 2 : 0),
+              seeds: autoSeeds,
+              courtName: updatedMatchObj.courtName || 'Court 1',
+              venue: updatedMatchObj.matchAddress || 'Badminton Arena',
+              startTime: '09:00',
+              matchDurationMinutes: 30,
+            })
+            drawsMap[dKey] = newDraw
+            drawsChanged = true
+            SupabaseService.upsertTournamentDraw(dKey, matchIdStr, catName, newDraw, true).catch(() => {})
+          } else {
+            if (drawsMap[dKey]) {
+              delete drawsMap[dKey]
+              drawsChanged = true
+              SupabaseService.deleteTournamentDraw(dKey).catch(() => {})
+            }
+          }
+        })
+        if (drawsChanged) {
+          localStorage.setItem('badminton-tournament-draws', JSON.stringify(drawsMap))
+          window.dispatchEvent(new Event('storage'))
+        }
+      }
+    } catch (e) {
+      console.warn('Draw sync error on participant removal:', e)
+    }
+
+    setSuccessToast(`✓ Player removed from tournament & fixtures.`)
   }
 
   const handleDeleteMatch = async (matchId) => {
