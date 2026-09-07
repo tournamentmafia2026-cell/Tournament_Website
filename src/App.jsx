@@ -1509,6 +1509,60 @@ function App() {
       console.error('Error saving draw', e)
     }
 
+    // Sync seeds and player modifications to authenticators outside as well!
+    if (Array.isArray(config?.seeds) && config.seeds.length > 0) {
+      try {
+        const savedAuthStr = localStorage.getItem('badminton-authenticators') || localStorage.getItem('badminton-match-authenticators')
+        const allAuthMap = savedAuthStr ? JSON.parse(savedAuthStr) : { ...authenticators }
+        const mId = match.id
+        const mIdStr = String(mId)
+        const currentList = Array.isArray(allAuthMap[mId])
+          ? allAuthMap[mId]
+          : (Array.isArray(allAuthMap[mIdStr]) ? allAuthMap[mIdStr] : (match.participants || []))
+
+        const updatedList = currentList.map((p) => {
+          if ((p.category || 'Men Singles').trim().toLowerCase() !== category.trim().toLowerCase()) {
+            return p
+          }
+          const pId = String(p.id || '').trim()
+          const pName = String(p.name || '').trim().toLowerCase()
+
+          const matchedSeed = config.seeds.find((s) => {
+            if (!s) return false
+            const sId = String(s.id || '').trim()
+            const sName = String(s.name || '').trim().toLowerCase()
+            return (sId && sId === pId) || (sName && sName === pName)
+          })
+
+          if (matchedSeed) {
+            return {
+              ...p,
+              seed: Number(matchedSeed.seed) || null,
+              isSeed: true,
+              place: matchedSeed.place !== undefined && matchedSeed.place !== '' ? matchedSeed.place : (p.place || ''),
+              court: matchedSeed.court !== undefined && matchedSeed.court !== '' ? matchedSeed.court : (p.court || ''),
+            }
+          } else {
+            return {
+              ...p,
+              seed: null,
+              isSeed: false,
+            }
+          }
+        })
+
+        allAuthMap[mId] = updatedList
+        allAuthMap[mIdStr] = updatedList
+        setAuthenticators(allAuthMap)
+        localStorage.setItem('badminton-authenticators', JSON.stringify(allAuthMap))
+        localStorage.setItem('badminton-match-authenticators', JSON.stringify(allAuthMap))
+        syncServerData({ authenticators: allAuthMap })
+        SupabaseService.upsertAuthenticators(mId, updatedList).catch(() => {})
+      } catch (err) {
+        console.error('Error updating seeds in authenticators', err)
+      }
+    }
+
     setSelectedMatch(match)
     setFixturesCategory(category)
     setSeedingModalMatch(null)

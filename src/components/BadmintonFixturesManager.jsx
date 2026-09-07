@@ -974,6 +974,63 @@ export const BadmintonFixturesManager = ({
       return nextDraws
     })
 
+    // Update player seeds and info in authenticators / tournament participants outside the draw as well!
+    if (Array.isArray(config.seeds) && config.seeds.length > 0) {
+      try {
+        const savedAuthStr = localStorage.getItem('badminton-authenticators') || localStorage.getItem('badminton-match-authenticators')
+        const allAuthMap = savedAuthStr ? JSON.parse(savedAuthStr) : { ...authenticators }
+        const mId = selectedMatch.id
+        const mIdStr = String(mId)
+        const currentList = Array.isArray(allAuthMap[mId])
+          ? allAuthMap[mId]
+          : (Array.isArray(allAuthMap[mIdStr]) ? allAuthMap[mIdStr] : (selectedMatch.participants || []))
+
+        const updatedList = currentList.map((p) => {
+          if ((p.category || 'Men Singles').trim().toLowerCase() !== targetCategory.trim().toLowerCase()) {
+            return p
+          }
+          const pId = String(p.id || '').trim()
+          const pName = String(p.name || '').trim().toLowerCase()
+
+          const matchedSeed = config.seeds.find((s) => {
+            if (!s) return false
+            const sId = String(s.id || '').trim()
+            const sName = String(s.name || '').trim().toLowerCase()
+            return (sId && sId === pId) || (sName && sName === pName)
+          })
+
+          if (matchedSeed) {
+            return {
+              ...p,
+              seed: Number(matchedSeed.seed) || null,
+              isSeed: true,
+              place: matchedSeed.place !== undefined && matchedSeed.place !== '' ? matchedSeed.place : (p.place || ''),
+              court: matchedSeed.court !== undefined && matchedSeed.court !== '' ? matchedSeed.court : (p.court || ''),
+            }
+          } else {
+            return {
+              ...p,
+              seed: null,
+              isSeed: false,
+            }
+          }
+        })
+
+        allAuthMap[mId] = updatedList
+        allAuthMap[mIdStr] = updatedList
+        localStorage.setItem('badminton-authenticators', JSON.stringify(allAuthMap))
+        localStorage.setItem('badminton-match-authenticators', JSON.stringify(allAuthMap))
+        fetch('/api/tournaments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ authenticators: allAuthMap }),
+        }).catch(() => {})
+        SupabaseService.upsertAuthenticators(mId, updatedList).catch(() => {})
+      } catch (err) {
+        console.error('Error syncing seeds to authenticators', err)
+      }
+    }
+
     setSelectedCategory(targetCategory)
     setFixturesLevel('draw')
     setViewMode('official') // Navigate screen directly to official fixtures!
@@ -1621,6 +1678,54 @@ export const BadmintonFixturesManager = ({
         matches: updatedMatches,
       },
     }))
+
+    // Also sync player seeds to authenticators outside
+    try {
+      const savedAuthStr = localStorage.getItem('badminton-authenticators') || localStorage.getItem('badminton-match-authenticators')
+      const allAuthMap = savedAuthStr ? JSON.parse(savedAuthStr) : { ...authenticators }
+      const mId = selectedMatch.id
+      const mIdStr = String(mId)
+      const currentList = Array.isArray(allAuthMap[mId])
+        ? allAuthMap[mId]
+        : (Array.isArray(allAuthMap[mIdStr]) ? allAuthMap[mIdStr] : (selectedMatch.participants || []))
+
+      let changed = false
+      const updatedList = currentList.map((p) => {
+        if ((p.category || 'Men Singles').trim().toLowerCase() !== selectedCategory.trim().toLowerCase()) return p
+        const pId = String(p.id || '').trim()
+        const pName = String(p.name || '').trim().toLowerCase()
+        if (newPlayerInSource && (String(newPlayerInSource.id) === pId || String(newPlayerInSource.name || '').trim().toLowerCase() === pName)) {
+          changed = true
+          return {
+            ...p,
+            seed: newPlayerInSource.seed || null,
+            isSeed: Boolean(newPlayerInSource.seed),
+          }
+        }
+        if (newPlayerInTarget && (String(newPlayerInTarget.id) === pId || String(newPlayerInTarget.name || '').trim().toLowerCase() === pName)) {
+          changed = true
+          return {
+            ...p,
+            seed: newPlayerInTarget.seed || null,
+            isSeed: Boolean(newPlayerInTarget.seed),
+          }
+        }
+        return p
+      })
+
+      if (changed) {
+        allAuthMap[mId] = updatedList
+        allAuthMap[mIdStr] = updatedList
+        localStorage.setItem('badminton-authenticators', JSON.stringify(allAuthMap))
+        localStorage.setItem('badminton-match-authenticators', JSON.stringify(allAuthMap))
+        fetch('/api/tournaments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ authenticators: allAuthMap }),
+        }).catch(() => {})
+        SupabaseService.upsertAuthenticators(mId, updatedList).catch(() => {})
+      }
+    } catch (e) {}
 
     const nameA = playerA?.name || 'Player'
     const nameB = playerB?.name || 'Player'
