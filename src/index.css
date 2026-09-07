@@ -2811,6 +2811,36 @@ select {
   stroke: rgba(148, 163, 184, 0.6);
 }
 
+/* Active Highlighted Blue Path from Player to Finals */
+.official-draw-branch-path-blue {
+  fill: none;
+  stroke: #0284c7;
+  stroke-width: 3.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(2, 132, 199, 0.65));
+  pointer-events: none;
+  z-index: 10;
+}
+
+.official-draw-sheet-wrapper.dark-theme .official-draw-branch-path-blue {
+  stroke: #38bdf8;
+  stroke-width: 3.5px;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.85));
+}
+
+.official-sheet-line-row.highlighted-path-slot {
+  background: rgba(2, 132, 199, 0.18) !important;
+  border-bottom: 2.5px solid #0284c7 !important;
+  box-shadow: inset 3px 0 0 #0284c7;
+}
+
+.official-draw-sheet-wrapper.dark-theme .official-sheet-line-row.highlighted-path-slot {
+  background: rgba(56, 189, 248, 0.22) !important;
+  border-bottom: 2.5px solid #38bdf8 !important;
+  box-shadow: inset 3px 0 0 #38bdf8;
+}
+
 .official-match-branch-group:hover .official-draw-branch-path {
   stroke: #0284c7;
   stroke-width: 2px;

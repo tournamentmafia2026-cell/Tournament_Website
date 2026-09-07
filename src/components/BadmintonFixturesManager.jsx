@@ -180,6 +180,12 @@ export const BadmintonFixturesManager = ({
     category: '',
   })
   const [courtFilter, setCourtFilter] = useState('all')
+  const [highlightedPath, setHighlightedPath] = useState(null) // { r1MIdx, slot: 'player1'|'player2', playerName }
+
+  useEffect(() => {
+    setHighlightedPath(null)
+  }, [selectedMatch?.id, selectedCategory])
+
   const [reportedPlayers, setReportedPlayers] = useState(() => {
     try {
       const saved = localStorage.getItem('badminton-reported-players')
@@ -2554,53 +2560,55 @@ export const BadmintonFixturesManager = ({
             </>
           )}
 
-          {/* 1. Dedicated Category Selector Bar */}
-          <div
-            className="fixtures-category-selector-bar"
-            style={{
-              marginBottom: '12px',
-              padding: '12px 18px',
-              background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.88) 100%)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
-              borderRadius: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              flexWrap: 'wrap',
-              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.25)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '15px' }}>🏸</span>
-              <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '800' }}>
-                Select Category:
-              </span>
-            </div>
+          {/* 1. Dedicated Category Selector Bar (Admin/Management View only, Public View has Topbar Selector) */}
+          {!isPublicView && (
+            <div
+              className="fixtures-category-selector-bar"
+              style={{
+                marginBottom: '12px',
+                padding: '12px 18px',
+                background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.92) 0%, rgba(30, 41, 59, 0.88) 100%)',
+                border: '1px solid rgba(56, 189, 248, 0.25)',
+                borderRadius: '14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+                boxShadow: '0 4px 18px rgba(0, 0, 0, 0.25)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ fontSize: '15px' }}>🏸</span>
+                <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '800' }}>
+                  Select Category:
+                </span>
+              </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-              {visibleCategories.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat)}
-                  style={{
-                    padding: '7px 16px',
-                    borderRadius: '999px',
-                    border: selectedCategory === cat ? '1.5px solid #38bdf8' : '1px solid rgba(148, 163, 184, 0.25)',
-                    background: selectedCategory === cat ? 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' : 'rgba(15, 23, 42, 0.65)',
-                    color: selectedCategory === cat ? '#ffffff' : '#cbd5e1',
-                    cursor: 'pointer',
-                    fontSize: '12.5px',
-                    fontWeight: '700',
-                    transition: 'all 0.2s ease',
-                    boxShadow: selectedCategory === cat ? '0 0 16px rgba(56, 189, 248, 0.45)' : 'none',
-                  }}
-                >
-                  {cat}
-                </button>
-              ))}
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                {visibleCategories.map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat)}
+                    style={{
+                      padding: '7px 16px',
+                      borderRadius: '999px',
+                      border: selectedCategory === cat ? '1.5px solid #38bdf8' : '1px solid rgba(148, 163, 184, 0.25)',
+                      background: selectedCategory === cat ? 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)' : 'rgba(15, 23, 42, 0.65)',
+                      color: selectedCategory === cat ? '#ffffff' : '#cbd5e1',
+                      cursor: 'pointer',
+                      fontSize: '12.5px',
+                      fontWeight: '700',
+                      transition: 'all 0.2s ease',
+                      boxShadow: selectedCategory === cat ? '0 0 16px rgba(56, 189, 248, 0.45)' : 'none',
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* 2. View Mode Tabs Bar (Official Draw, Diagram, Schedule, Players) */}
           {!isPublicView && (
@@ -2723,14 +2731,96 @@ export const BadmintonFixturesManager = ({
             const colWidth = 155
             const svgWidth = totalRounds * colWidth + 80
 
+            // Calculate continuous path from selected player / match forward to the Finals
+            const highlightedSegments = (() => {
+              if (!highlightedPath) return []
+              const segments = []
+              const startR = highlightedPath.startRound || 1
+              let currMIdx = highlightedPath.mIdx ?? highlightedPath.r1MIdx ?? 0
+              let currSlot = highlightedPath.slot || 'player1'
+
+              for (let r = startR; r <= totalRounds; r++) {
+                const xStart = (r - 1) * colWidth
+                const xBracket = xStart + 42
+                const xEnd = xStart + colWidth
+
+                let yTop, yBot, yMid
+                if (r === 1) {
+                  yTop = getPlayer1BaselineY(currMIdx)
+                  yBot = getPlayer2BaselineY(currMIdx)
+                  yMid = (yTop + yBot) / 2
+                } else {
+                  const prevCenters = matchCenters[r - 1] || []
+                  yTop = prevCenters[currMIdx * 2] ?? 0
+                  yBot = prevCenters[currMIdx * 2 + 1] ?? (yTop + 40)
+                  yMid = (yTop + yBot) / 2
+                }
+
+                if (r === startR && currSlot === 'match') {
+                  const d = `M ${xBracket} ${yMid} L ${xEnd} ${yMid}`
+                  segments.push({ round: r, mIdx: currMIdx, d })
+                } else {
+                  const yIn = currSlot === 'player1' ? yTop : yBot
+                  const d = `M ${xStart} ${yIn} L ${xBracket} ${yIn} L ${xBracket} ${yMid} L ${xEnd} ${yMid}`
+                  segments.push({ round: r, mIdx: currMIdx, d })
+                }
+
+                currSlot = currMIdx % 2 === 0 ? 'player1' : 'player2'
+                currMIdx = Math.floor(currMIdx / 2)
+              }
+              return segments
+            })()
+
             return (
               <>
                 {isPublicView && (
                   <div className="mobile-scroll-hint">
                     <span>👉</span>
-                    <span>Swipe sideways to view bracket rounds & finals 🏆</span>
+                    <span>Swipe sideways to view bracket rounds & finals 🏆 • Click any player to trace their path to the Finals!</span>
                   </div>
                 )}
+
+                {/* Active Highlighted Finals Path Indicator Banner */}
+                {highlightedPath && (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '9px 16px',
+                    marginBottom: '12px',
+                    background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.22) 0%, rgba(3, 105, 161, 0.32) 100%)',
+                    border: '1.5px solid #38bdf8',
+                    borderRadius: '10px',
+                    color: '#38bdf8',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    boxShadow: '0 4px 14px rgba(56, 189, 248, 0.25)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '16px' }}>⚡</span>
+                      <span>
+                        Finals Road Highlighted: <strong style={{ color: '#ffffff', textDecoration: 'underline' }}>{highlightedPath.playerName}</strong> (Blue Line Path)
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setHighlightedPath(null)}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.15)',
+                        border: '1px solid rgba(255, 255, 255, 0.3)',
+                        borderRadius: '6px',
+                        color: '#ffffff',
+                        padding: '4px 12px',
+                        fontSize: '11.5px',
+                        fontWeight: '700',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✕ Clear Path
+                    </button>
+                  </div>
+                )}
+
                 <div className="official-draw-sheet-scroll-container" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch', paddingBottom: '16px', boxSizing: 'border-box' }}>
                 <div className={`official-draw-sheet-wrapper ${sheetTheme === 'dark' ? 'dark-theme' : ''}`}>
                 {/* Framed Top Box Header from Photo */}
@@ -2752,7 +2842,8 @@ export const BadmintonFixturesManager = ({
                       const lineNum2 = mIdx * 2 + 2
                       const p1 = m.player1
                       const p2 = m.player2
-                      const isQuarterEnd = (drawSize >= 16) && (mIdx % 2 === 1) && (mIdx < round1Matches.length - 1)
+                      const isP1Highlighted = highlightedPath?.r1MIdx === mIdx && highlightedPath?.slot === 'player1'
+                      const isP2Highlighted = highlightedPath?.r1MIdx === mIdx && highlightedPath?.slot === 'player2'
 
                       return (
                         <div
@@ -2764,8 +2855,8 @@ export const BadmintonFixturesManager = ({
                         >
                           {/* Line 1 (Player 1) */}
                           <div
-                            className={`official-sheet-line-row ${!isPublicView ? 'draggable-player-slot' : ''} ${dragOverSlotKey === `${m.id}-player1` ? 'drag-over-slot' : ''}`}
-                            style={{ height: `${ROW_HEIGHT}px`, cursor: isPublicView ? 'default' : 'pointer' }}
+                            className={`official-sheet-line-row ${!isPublicView ? 'draggable-player-slot' : ''} ${dragOverSlotKey === `${m.id}-player1` ? 'drag-over-slot' : ''} ${isP1Highlighted ? 'highlighted-path-slot' : ''}`}
+                            style={{ height: `${ROW_HEIGHT}px`, cursor: 'pointer' }}
                             draggable={!isPublicView && Boolean(p1)}
                             onDragStart={(e) => {
                               if (isPublicView || !p1) return
@@ -2793,6 +2884,13 @@ export const BadmintonFixturesManager = ({
                             }}
                             onClick={(e) => {
                               e.stopPropagation()
+                              if (p1 && !p1.isBye) {
+                                setHighlightedPath((prev) =>
+                                  prev?.r1MIdx === mIdx && prev?.slot === 'player1'
+                                    ? null
+                                    : { startRound: 1, r1MIdx: mIdx, mIdx, slot: 'player1', playerName: p1.name }
+                                )
+                              }
                               if (isPublicView) return
                               setExchangeModalSource({
                                 matchId: m.id,
@@ -2803,7 +2901,7 @@ export const BadmintonFixturesManager = ({
                               })
                               setExchangeSearchQuery('')
                             }}
-                            title={isPublicView ? (p1?.name || 'Player') : "Click to exchange / swap player position with any other player"}
+                            title={p1 ? `Click to trace ${p1.name || 'Player'}'s path to Finals 🏆` : "Player Slot"}
                           >
                             <span className="official-line-num">{lineNum1}</span>
                             <div className="official-player-label-container">
@@ -2840,8 +2938,8 @@ export const BadmintonFixturesManager = ({
 
                           {/* Line 2 (Player 2) */}
                           <div
-                            className={`official-sheet-line-row ${!isPublicView ? 'draggable-player-slot' : ''} ${dragOverSlotKey === `${m.id}-player2` ? 'drag-over-slot' : ''}`}
-                            style={{ height: `${ROW_HEIGHT}px`, cursor: isPublicView ? 'default' : 'pointer' }}
+                            className={`official-sheet-line-row ${!isPublicView ? 'draggable-player-slot' : ''} ${dragOverSlotKey === `${m.id}-player2` ? 'drag-over-slot' : ''} ${isP2Highlighted ? 'highlighted-path-slot' : ''}`}
+                            style={{ height: `${ROW_HEIGHT}px`, cursor: 'pointer' }}
                             draggable={!isPublicView && Boolean(p2)}
                             onDragStart={(e) => {
                               if (isPublicView || !p2) return
@@ -2869,6 +2967,13 @@ export const BadmintonFixturesManager = ({
                             }}
                             onClick={(e) => {
                               e.stopPropagation()
+                              if (p2 && !p2.isBye) {
+                                setHighlightedPath((prev) =>
+                                  prev?.r1MIdx === mIdx && prev?.slot === 'player2'
+                                    ? null
+                                    : { startRound: 1, r1MIdx: mIdx, mIdx, slot: 'player2', playerName: p2.name }
+                                )
+                              }
                               if (isPublicView) return
                               setExchangeModalSource({
                                 matchId: m.id,
@@ -2879,7 +2984,7 @@ export const BadmintonFixturesManager = ({
                               })
                               setExchangeSearchQuery('')
                             }}
-                            title={isPublicView ? (p2?.name || 'Player') : "Click to exchange / swap player position with any other player"}
+                            title={p2 ? `Click to trace ${p2.name || 'Player'}'s path to Finals 🏆` : "Player Slot"}
                           >
                             <span className="official-line-num">{lineNum2}</span>
                             <div className="official-player-label-container">
@@ -2920,6 +3025,7 @@ export const BadmintonFixturesManager = ({
                     className="official-svg-canvas"
                     style={{ width: `${svgWidth}px`, height: `${totalAreaHeight}px` }}
                   >
+                    {/* 1. Base Bracket Lines */}
                     {Array.from({ length: totalRounds }, (_, i) => i + 1).map((round) => {
                       const matches = matchesByRound[round] || []
                       const xStart = (round - 1) * colWidth
@@ -3040,6 +3146,19 @@ export const BadmintonFixturesManager = ({
                         </g>
                       )
                     })}
+
+                    {/* 2. Highlighted Blue Path Layer from Clicked Player to Finals */}
+                    {highlightedSegments.length > 0 && (
+                      <g className="official-highlighted-path-layer">
+                        {highlightedSegments.map((seg, sIdx) => (
+                          <path
+                            key={`hl-path-${seg.round}-${seg.mIdx}-${sIdx}`}
+                            d={seg.d}
+                            className="official-draw-branch-path-blue"
+                          />
+                        ))}
+                      </g>
+                    )}
                   </svg>
                 </div>
 
