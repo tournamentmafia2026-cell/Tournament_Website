@@ -80,9 +80,9 @@ export default async function handler(req, res) {
           return
         }
 
-        if (key === 'publishedStatus') {
-          if (payload.publishedStatus && typeof payload.publishedStatus === 'object') {
-            dbState.publishedStatus = payload.publishedStatus
+        if (key === 'publishedStatus' || key === 'publishedStatusMap') {
+          if (payload[key] && typeof payload[key] === 'object') {
+            dbState.publishedStatus = { ...(dbState.publishedStatus || {}), ...payload[key] }
           }
           return
         }

@@ -101,6 +101,13 @@ export const handler = async (event) => {
           return
         }
 
+        if (key === 'publishedStatus' || key === 'publishedStatusMap') {
+          if (payload[key] && typeof payload[key] === 'object') {
+            dbState.publishedStatus = { ...(dbState.publishedStatus || {}), ...payload[key] }
+          }
+          return
+        }
+
         if (key === 'organizerCredentials') {
           if (payload.organizerCredentials && typeof payload.organizerCredentials === 'object') {
             dbState.organizerCredentials = { ...(dbState.organizerCredentials || {}), ...payload.organizerCredentials }

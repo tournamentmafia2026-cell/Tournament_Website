@@ -87,6 +87,13 @@ function saveDbData(data) {
         return
       }
 
+      if (key === 'publishedStatus' || key === 'publishedStatusMap') {
+        if (data[key] && typeof data[key] === 'object') {
+          merged.publishedStatus = { ...(current.publishedStatus || {}), ...data[key] }
+        }
+        return
+      }
+
       if (
         typeof data[key] === 'object' &&
         data[key] !== null &&

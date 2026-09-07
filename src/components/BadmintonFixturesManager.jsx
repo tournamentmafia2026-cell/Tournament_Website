@@ -344,10 +344,31 @@ export const BadmintonFixturesManager = ({
             Object.keys(data.tournamentDraws).forEach((k) => {
               sanitized[k] = sanitizeBadmintonDraw(data.tournamentDraws[k])
             })
-            setTournamentDraws((prev) => ({ ...sanitized, ...prev }))
-            try {
-              localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify({ ...sanitized, ...tournamentDraws }))
-            } catch (e) {}
+            setTournamentDraws((prev) => {
+              const next = { ...prev, ...sanitized }
+              try {
+                localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
+              } catch (e) {}
+              return next
+            })
+          }
+
+          if (data.publishedStatus && typeof data.publishedStatus === 'object') {
+            setPublishedStatusMap((prev) => {
+              const next = { ...prev, ...data.publishedStatus }
+              try {
+                localStorage.setItem('badminton-published-status', JSON.stringify(next))
+              } catch (e) {}
+              return next
+            })
+          } else if (data.publishedStatusMap && typeof data.publishedStatusMap === 'object') {
+            setPublishedStatusMap((prev) => {
+              const next = { ...prev, ...data.publishedStatusMap }
+              try {
+                localStorage.setItem('badminton-published-status', JSON.stringify(next))
+              } catch (e) {}
+              return next
+            })
           }
 
           if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
@@ -387,7 +408,13 @@ export const BadmintonFixturesManager = ({
                   supaDraws[row.id] = sanitizeBadmintonDraw(row.draw_data)
                 }
               })
-              setTournamentDraws((prev) => ({ ...supaDraws, ...prev }))
+              setTournamentDraws((prev) => {
+                const next = { ...prev, ...supaDraws }
+                try {
+                  localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
+                } catch (e) {}
+                return next
+              })
             }
           })
           .catch(() => {})
@@ -710,21 +737,21 @@ export const BadmintonFixturesManager = ({
   }, [])
 
   const publishedCategoryList = (categories || []).filter(
-    (cat) => Boolean(publishedStatusMap[`${selectedMatch?.id}-${cat}`])
+    (cat) => Boolean(publishedStatusMap[`${selectedMatch?.id}-${cat}`] || tournamentDraws[`${selectedMatch?.id}-${cat}`])
   )
-  const visibleCategories = isPublicView ? publishedCategoryList : (categories || [])
+  const visibleCategories = isPublicView ? (publishedCategoryList.length > 0 ? publishedCategoryList : categories || []) : (categories || [])
 
   // In spectator/public view, auto-select first published category
   useEffect(() => {
     if (isPublicView && selectedMatch) {
       const pubCats = (categories || []).filter(
-        (cat) => Boolean(publishedStatusMap[`${selectedMatch.id}-${cat}`])
+        (cat) => Boolean(publishedStatusMap[`${selectedMatch.id}-${cat}`] || tournamentDraws[`${selectedMatch.id}-${cat}`])
       )
       if (pubCats.length > 0 && !pubCats.includes(selectedCategory)) {
         setSelectedCategory(pubCats[0])
       }
     }
-  }, [isPublicView, selectedMatch?.id, selectedCategory, JSON.stringify(publishedStatusMap)])
+  }, [isPublicView, selectedMatch?.id, selectedCategory, JSON.stringify(publishedStatusMap), JSON.stringify(Object.keys(tournamentDraws))])
 
   // Auto-sync players updated or deleted in Match Management directly into the Draw
   useEffect(() => {
@@ -786,19 +813,21 @@ export const BadmintonFixturesManager = ({
     }
 
     if (needsUpdate) {
-      const dSize = getNextPowerOfTwo(Math.max(2, pCount))
+      const customDrawSize = existingDraw?.drawSize || getNextPowerOfTwo(Math.max(2, pCount))
+      const customTotalMembers = existingDraw?.config?.totalMembers || existingDraw?.totalMembers || pCount
       const autoSeeds = uploadedCategoryPlayers
         .filter((p) => p.seed)
         .sort((a, b) => a.seed - b.seed)
         .map((p) => ({ id: p.id, name: p.name, place: p.place, seed: p.seed }))
+      const existingSeeds = Array.isArray(existingDraw?.seeds) && existingDraw.seeds.length > 0 ? existingDraw.seeds : autoSeeds
 
       const newDraw = generateBadmintonDraw(uploadedCategoryPlayers, {
-        drawSize: dSize,
-        totalMembers: pCount,
-        seedsCount: autoSeeds.length || (pCount >= 16 ? 4 : pCount >= 8 ? 2 : 0),
-        seeds: autoSeeds,
-        courtName: selectedMatch?.courtName || 'Court 1',
-        venue: selectedMatch?.matchAddress || 'Badminton Arena',
+        drawSize: customDrawSize,
+        totalMembers: customTotalMembers,
+        seedsCount: existingSeeds.length || autoSeeds.length || (pCount >= 16 ? 4 : pCount >= 8 ? 2 : 0),
+        seeds: existingSeeds,
+        courtName: existingDraw?.courtName || selectedMatch?.courtName || 'Court 1',
+        venue: existingDraw?.venue || selectedMatch?.matchAddress || 'Badminton Arena',
         startTime: existingDraw?.startTime || existingDraw?.config?.startTime || '09:00',
         matchDurationMinutes: existingDraw?.matchDuration || existingDraw?.config?.matchDuration || 30,
         showTimings: existingDraw?.showTimings !== undefined ? Boolean(existingDraw.showTimings) : (existingDraw?.config?.showTimings !== undefined ? Boolean(existingDraw.config.showTimings) : true),
@@ -948,6 +977,19 @@ export const BadmintonFixturesManager = ({
 
     const draw = generateBadmintonDraw(basePlayers, config)
     const key = `${selectedMatch.id}-${targetCategory}`
+
+    setPublishedStatusMap((prev) => {
+      const nextPub = { ...prev, [key]: true }
+      try {
+        localStorage.setItem('badminton-published-status', JSON.stringify(nextPub))
+      } catch (e) {}
+      fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publishedStatus: nextPub }),
+      }).catch(() => {})
+      return nextPub
+    })
 
     setTournamentDraws((prev) => {
       const nextDraws = {
@@ -2696,6 +2738,11 @@ export const BadmintonFixturesManager = ({
                         const nextMap = { ...publishedStatusMap, [drawKey]: !isCurrentlyPub }
                         setPublishedStatusMap(nextMap)
                         localStorage.setItem('badminton-published-status', JSON.stringify(nextMap))
+                        fetch('/api/tournaments', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ publishedStatus: nextMap }),
+                        }).catch(() => {})
                         window.dispatchEvent(new Event('storage'))
                       }}
                       className="btn-primary-gradient"
