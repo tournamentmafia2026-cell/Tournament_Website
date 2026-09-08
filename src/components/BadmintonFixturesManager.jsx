@@ -19,7 +19,8 @@ import { PublicSponsorShowcase } from './PublicSponsorShowcase'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
 import { getSavedCourtConfig, generateCourtsList } from '../utils/courtConfig'
 import { printOfficialFixturesA4 } from '../utils/printFixturesEngine'
-import { isDoublesCategory } from '../utils/badmintonCategories'
+import { isDoublesCategory, sortBadmintonCategories } from '../utils/badmintonCategories'
+import { fastDeepEqual } from '../utils/fastDeepEqual'
 import {
   formatTournamentName,
   formatAddress,
@@ -74,10 +75,17 @@ export const BadmintonFixturesManager = ({
 
   const selectedMatch = publishedMatches.find((m) => String(m.id) === String(selectedMatchId)) || publishedMatches[0] || null
 
-  const categories = selectedMatch?.categories || DEFAULT_CATEGORIES
+  const categories = useMemo(
+    () => sortBadmintonCategories(selectedMatch?.categories || DEFAULT_CATEGORIES),
+    [selectedMatch?.categories]
+  )
   const [selectedCategory, setSelectedCategory] = useState(() => initialCategory || categories[0] || 'Men Singles')
   const [isSeedingModalOpen, setIsSeedingModalOpen] = useState(false)
   const [isStadiumTvCastOpen, setIsStadiumTvCastOpen] = useState(false)
+
+  // Unique session identifier to prevent self-broadcast echo loops
+  const localSessionIdRef = useRef(`session_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`)
+  const isModalActiveRef = useRef(false)
 
   // Live Cast Sponsor Advertisement Manager State
   const [isAdModalOpen, setIsAdModalOpen] = useState(false)
@@ -159,7 +167,7 @@ export const BadmintonFixturesManager = ({
     } catch {}
   }
   const [viewMode, setViewMode] = useState('official') // 'official' | 'diagram' | 'bracket' | 'schedule' | 'players'
-  const [scheduleFilter, setScheduleFilter] = useState('live') // 'live' | 'scheduled' | 'completed' | 'all'
+  const [scheduleFilter, setScheduleFilter] = useState('all') // 'all' | 'live' | 'scheduled' | 'completed' | 'ready'
   const [scheduleSearchQuery, setScheduleSearchQuery] = useState('')
   const [scheduleRoundFilter, setScheduleRoundFilter] = useState('all')
   const [scheduleLayoutView, setScheduleLayoutView] = useState('cards') // 'cards' | 'table'
@@ -190,22 +198,21 @@ export const BadmintonFixturesManager = ({
   const [reportedPlayers, setReportedPlayers] = useState(() => {
     try {
       const saved = localStorage.getItem('badminton-reported-players')
-      return saved ? JSON.parse(saved) : {}
+      const perm = localStorage.getItem('badminton-permanent-reported-cache')
+      const savedObj = saved ? JSON.parse(saved) : {}
+      const permObj = perm ? JSON.parse(perm) : {}
+      return { ...permObj, ...savedObj }
     } catch {
       return {}
     }
   })
-  const lastLocalReportedUpdateRef = useRef(0)
+  const lastLocalReportedUpdateRef = useRef(Date.now())
+  const lastLocalDrawUpdateRef = useRef(0)
   const [playerSearchQuery, setPlayerSearchQuery] = useState('')
   const [playerReportingFilter, setPlayerReportingFilter] = useState('all') // 'all' | 'reported' | 'pending'
 
-  // Ensure public view strictly displays official draw sheet
+  // Theme state for official draw sheet
   const [sheetTheme, setSheetTheme] = useState('dark')
-  useEffect(() => {
-    if (isPublicView && viewMode !== 'official') {
-      setViewMode('official')
-    }
-  }, [isPublicView, viewMode])
 
   const [matchTotalSets, setMatchTotalSets] = useState(() => {
     try {
@@ -331,21 +338,37 @@ export const BadmintonFixturesManager = ({
     return initialDraws
   })
 
+  // Production-Grade order-agnostic deep equality helper to guarantee 0 state update churn
+  const isDeepEqual = fastDeepEqual
+
   // Realtime Live Draw, Reported Players, and Score Sync from Shared Database & Supabase
   useEffect(() => {
     const syncDraws = () => {
+      // If user recently made a local draw modification or has a modal open, do not overwrite from background polling
+      if (Date.now() - (lastLocalDrawUpdateRef.current || 0) < 60000 || isModalActiveRef.current) return
+
       // 1. Fetch from Local/Network Server DB
       fetch('/api/tournaments')
         .then((res) => res.json())
         .then((data) => {
           if (!data) return
+          if (Date.now() - (lastLocalDrawUpdateRef.current || 0) < 60000 || isModalActiveRef.current) return
+
           if (data.tournamentDraws && typeof data.tournamentDraws === 'object') {
             const sanitized = {}
             Object.keys(data.tournamentDraws).forEach((k) => {
               sanitized[k] = sanitizeBadmintonDraw(data.tournamentDraws[k])
             })
             setTournamentDraws((prev) => {
-              const next = { ...prev, ...sanitized }
+              let changed = false
+              const next = { ...prev }
+              Object.keys(sanitized).forEach((k) => {
+                if (!isDeepEqual(prev[k], sanitized[k])) {
+                  next[k] = sanitized[k]
+                  changed = true
+                }
+              })
+              if (!changed) return prev
               try {
                 localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
               } catch (e) {}
@@ -355,6 +378,7 @@ export const BadmintonFixturesManager = ({
 
           if (data.publishedStatus && typeof data.publishedStatus === 'object') {
             setPublishedStatusMap((prev) => {
+              if (isDeepEqual(prev, { ...prev, ...data.publishedStatus })) return prev
               const next = { ...prev, ...data.publishedStatus }
               try {
                 localStorage.setItem('badminton-published-status', JSON.stringify(next))
@@ -363,6 +387,7 @@ export const BadmintonFixturesManager = ({
             })
           } else if (data.publishedStatusMap && typeof data.publishedStatusMap === 'object') {
             setPublishedStatusMap((prev) => {
+              if (isDeepEqual(prev, { ...prev, ...data.publishedStatusMap })) return prev
               const next = { ...prev, ...data.publishedStatusMap }
               try {
                 localStorage.setItem('badminton-published-status', JSON.stringify(next))
@@ -372,35 +397,89 @@ export const BadmintonFixturesManager = ({
           }
 
           if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
-            // Only merge from background fetch if user has not performed a local reporting action in the last 8 seconds
-            if (Date.now() - (lastLocalReportedUpdateRef.current || 0) > 8000) {
+            // Only merge from background fetch if user has not performed a local reporting action in the last 60 seconds
+            if (Date.now() - (lastLocalReportedUpdateRef.current || 0) > 60000) {
               setReportedPlayers((prev) => {
-                const merged = { ...data.reportedPlayers }
-                return merged
+                let changed = false
+                const next = { ...prev }
+                Object.keys(data.reportedPlayers).forEach((k) => {
+                  const sVal = data.reportedPlayers[k]
+                  if (typeof sVal === 'object' && sVal !== null) {
+                    const mergedSub = { ...(next[k] || {}), ...sVal }
+                    if (!isDeepEqual(next[k], mergedSub)) {
+                      next[k] = mergedSub
+                      changed = true
+                    }
+                  } else if (sVal && next[k] !== sVal) {
+                    next[k] = sVal
+                    changed = true
+                  }
+                })
+                if (!changed) return prev
+                try {
+                  localStorage.setItem('badminton-reported-players', JSON.stringify(next))
+                } catch (e) {}
+                return next
               })
             }
           }
 
           if (data.liveUmpireMode !== undefined) {
-            setIsLiveUmpireMode(data.liveUmpireMode)
-            try {
-              localStorage.setItem('badminton-live-umpire-mode', JSON.stringify(data.liveUmpireMode))
-            } catch (e) {}
+            setIsLiveUmpireMode((prev) => {
+              if (prev === data.liveUmpireMode) return prev
+              try {
+                localStorage.setItem('badminton-live-umpire-mode', JSON.stringify(data.liveUmpireMode))
+              } catch (e) {}
+              return data.liveUmpireMode
+            })
           }
 
           if (data.systemSettings?.matchPoints) {
-            setMatchTotalPoints(data.systemSettings.matchPoints)
+            setMatchTotalPoints((prev) => (prev === data.systemSettings.matchPoints ? prev : data.systemSettings.matchPoints))
           }
           if (data.systemSettings?.matchSets) {
-            setMatchTotalSets(data.systemSettings.matchSets)
+            setMatchTotalSets((prev) => (prev === data.systemSettings.matchSets ? prev : data.systemSettings.matchSets))
           }
         })
         .catch(() => {})
 
-      // 2. Fetch from Supabase Cloud DB for selected tournament
-      if (selectedMatch?.id) {
+      // 2. Fetch reported players from Supabase Cloud DB (Smart merge)
+      if (Date.now() - (lastLocalReportedUpdateRef.current || 0) > 60000) {
+        SupabaseService.getReportedPlayers()
+          .then((supaRep) => {
+            if (supaRep && typeof supaRep === 'object') {
+              setReportedPlayers((prev) => {
+                let changed = false
+                const next = { ...prev }
+                Object.keys(supaRep).forEach((k) => {
+                  const sVal = supaRep[k]
+                  if (typeof sVal === 'object' && sVal !== null) {
+                    const mergedSub = { ...(next[k] || {}), ...sVal }
+                    if (!isDeepEqual(next[k], mergedSub)) {
+                      next[k] = mergedSub
+                      changed = true
+                    }
+                  } else if (sVal && next[k] !== sVal) {
+                    next[k] = sVal
+                    changed = true
+                  }
+                })
+                if (!changed) return prev
+                try {
+                  localStorage.setItem('badminton-reported-players', JSON.stringify(next))
+                } catch (e) {}
+                return next
+              })
+            }
+          })
+          .catch(() => {})
+      }
+
+      // 3. Fetch from Supabase Cloud DB for selected tournament (if not recently updated locally)
+      if (selectedMatch?.id && isPublicView) {
         SupabaseService.getTournamentDraws(selectedMatch.id)
           .then((rows) => {
+            if (Date.now() - (lastLocalDrawUpdateRef.current || 0) < 60000 || isModalActiveRef.current) return
             if (rows && Array.isArray(rows) && rows.length > 0) {
               const supaDraws = {}
               rows.forEach((row) => {
@@ -409,7 +488,15 @@ export const BadmintonFixturesManager = ({
                 }
               })
               setTournamentDraws((prev) => {
-                const next = { ...prev, ...supaDraws }
+                let changed = false
+                const next = { ...prev }
+                Object.keys(supaDraws).forEach((k) => {
+                  if (!isDeepEqual(prev[k], supaDraws[k])) {
+                    next[k] = supaDraws[k]
+                    changed = true
+                  }
+                })
+                if (!changed) return prev
                 try {
                   localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
                 } catch (e) {}
@@ -422,61 +509,192 @@ export const BadmintonFixturesManager = ({
     }
 
     syncDraws()
-    const timer = setInterval(syncDraws, 2500)
+    const timer = setInterval(syncDraws, 5000)
     return () => clearInterval(timer)
-  }, [selectedMatch?.id])
+  }, [selectedMatch?.id, isPublicView])
 
   useEffect(() => {
     try {
-      localStorage.setItem('badminton-reported-players', JSON.stringify(reportedPlayers))
+      if (reportedPlayers && Object.keys(reportedPlayers).length > 0) {
+        localStorage.setItem('badminton-reported-players', JSON.stringify(reportedPlayers))
+      }
     } catch (e) {
       console.error('Error saving reported players', e)
     }
   }, [reportedPlayers])
 
+  const PERMANENT_REPORTED_KEY = 'badminton-permanent-reported-cache'
+
+  // Helper to extract clean normalized identifier tokens from any player object or ID/name string
+  const getPlayerTokens = (playerOrId) => {
+    if (!playerOrId) return []
+    const tokens = new Set()
+    
+    if (typeof playerOrId === 'object') {
+      if (playerOrId.id !== undefined && playerOrId.id !== null && playerOrId.id !== '') {
+        const idStr = String(playerOrId.id).trim()
+        tokens.add(idStr)
+        tokens.add(idStr.toLowerCase())
+      }
+      if (playerOrId.name) {
+        const rawName = String(playerOrId.name).trim()
+        const cleanName = rawName.replace(/\[\s*S\d+\s*\]|\(\s*S\d+\s*\)|^S\d+\s+/gi, '').trim()
+        tokens.add(rawName)
+        tokens.add(rawName.toLowerCase())
+        tokens.add(cleanName)
+        tokens.add(cleanName.toLowerCase())
+        // For doubles, include individual partner names as well
+        if (cleanName.includes('/')) {
+          cleanName.split('/').forEach((part) => {
+            const pTrim = part.trim()
+            if (pTrim) {
+              tokens.add(pTrim)
+              tokens.add(pTrim.toLowerCase())
+            }
+          })
+        }
+      }
+    } else {
+      const strVal = String(playerOrId).trim()
+      const cleanVal = strVal.replace(/\[\s*S\d+\s*\]|\(\s*S\d+\s*\)|^S\d+\s+/gi, '').trim()
+      tokens.add(strVal)
+      tokens.add(strVal.toLowerCase())
+      tokens.add(cleanVal)
+      tokens.add(cleanVal.toLowerCase())
+      if (cleanVal.includes('/')) {
+        cleanVal.split('/').forEach((part) => {
+          const pTrim = part.trim()
+          if (pTrim) {
+            tokens.add(pTrim)
+            tokens.add(pTrim.toLowerCase())
+          }
+        })
+      }
+    }
+
+    return Array.from(tokens)
+  }
+
   const togglePlayerReporting = (player) => {
     if (!player) return
     lastLocalReportedUpdateRef.current = Date.now()
 
-    const idStr = typeof player === 'object' && player.id ? String(player.id).trim() : (typeof player === 'string' || typeof player === 'number' ? String(player).trim() : '')
-    const nameStr = typeof player === 'object' && player.name ? player.name.trim() : (typeof player === 'string' ? player.trim() : '')
-    const nameKey = nameStr.toLowerCase()
-    const key = `${selectedMatch?.id || 1}-${selectedCategory}`
+    const tournId = selectedMatch?.id || 1
+    const key = `${tournId}-${selectedCategory}`
+    const tokens = getPlayerTokens(player)
 
     setReportedPlayers((prev) => {
+      const isCurrentlyReported = isPlayerReported(player)
+      const nextFullMap = { ...prev }
       const currentCatMap = { ...(prev[key] || {}) }
-      
-      // Check current state: truthy means currently reported
-      const isRep = Boolean(
-        (idStr && currentCatMap[idStr]) ||
-        (idStr && !isNaN(Number(idStr)) && currentCatMap[Number(idStr)]) ||
-        (nameKey && currentCatMap[nameKey]) ||
-        (nameStr && currentCatMap[nameStr])
-      )
 
-      if (isRep) {
-        // UNTICK: Completely purge all key variants for this player
-        if (idStr) {
-          delete currentCatMap[idStr]
-          if (!isNaN(Number(idStr))) delete currentCatMap[Number(idStr)]
-        }
-        if (nameKey) delete currentCatMap[nameKey]
-        if (nameStr) delete currentCatMap[nameStr]
+      // Get permanent cache
+      let permCache = {}
+      try {
+        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
+        if (savedPerm) permCache = JSON.parse(savedPerm)
+      } catch (e) {}
+      const permTournCat = { ...(permCache[key] || {}) }
+
+      if (isCurrentlyReported) {
+        // UNTICK: User manually clicked to untick this player
+        tokens.forEach((tok) => {
+          delete currentCatMap[tok]
+          delete nextFullMap[`${tournId}-${tok}`]
+          delete nextFullMap[tok]
+          delete permTournCat[tok]
+          delete permCache[`${tournId}-${tok}`]
+          delete permCache[tok]
+        })
       } else {
-        // TICK: Set to true
-        if (idStr) currentCatMap[idStr] = true
-        if (nameKey) currentCatMap[nameKey] = true
+        // TICK: User ticked this player as reported
+        tokens.forEach((tok) => {
+          currentCatMap[tok] = true
+          nextFullMap[`${tournId}-${tok}`] = true
+          permTournCat[tok] = true
+          permCache[`${tournId}-${tok}`] = true
+        })
       }
 
-      const nextFullMap = {
-        ...prev,
-        [key]: currentCatMap,
-      }
+      nextFullMap[key] = currentCatMap
+      permCache[key] = permTournCat
 
-      // Synchronously write to localStorage
+      // Synchronously write to primary and permanent localStorage
       try {
         localStorage.setItem('badminton-reported-players', JSON.stringify(nextFullMap))
+        localStorage.setItem(PERMANENT_REPORTED_KEY, JSON.stringify(permCache))
       } catch (e) {}
+
+      // Update participant list in authenticators so isReported is baked into player records
+      try {
+        const savedAuthStr = localStorage.getItem('badminton-authenticators') || localStorage.getItem('badminton-match-authenticators')
+        if (savedAuthStr) {
+          const allAuth = JSON.parse(savedAuthStr)
+          const pList = allAuth[tournId] || allAuth[String(tournId)] || []
+          let authChanged = false
+          const nextPList = pList.map((p) => {
+            const pTokens = getPlayerTokens(p)
+            const matches = tokens.some((t) => pTokens.includes(t))
+            if (matches) {
+              authChanged = true
+              return { ...p, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
+            }
+            return p
+          })
+          if (authChanged) {
+            allAuth[tournId] = nextPList
+            allAuth[String(tournId)] = nextPList
+            localStorage.setItem('badminton-authenticators', JSON.stringify(allAuth))
+            localStorage.setItem('badminton-match-authenticators', JSON.stringify(allAuth))
+          }
+        }
+      } catch (e) {}
+
+      // Also update player objects in currentDraw.matches so isReported stays attached directly to match nodes
+      if (currentDraw?.matches) {
+        let drawMatchesChanged = false
+        const nextMatches = currentDraw.matches.map((m) => {
+          let updatedM = { ...m }
+          let mChanged = false
+          if (m.player1 && !m.player1.isBye) {
+            const p1Tokens = getPlayerTokens(m.player1)
+            if (tokens.some((t) => p1Tokens.includes(t))) {
+              updatedM.player1 = { ...m.player1, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
+              mChanged = true
+            }
+          }
+          if (m.player2 && !m.player2.isBye) {
+            const p2Tokens = getPlayerTokens(m.player2)
+            if (tokens.some((t) => p2Tokens.includes(t))) {
+              updatedM.player2 = { ...m.player2, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
+              mChanged = true
+            }
+          }
+          if (m.winner && !m.winner.isBye) {
+            const winTokens = getPlayerTokens(m.winner)
+            if (tokens.some((t) => winTokens.includes(t))) {
+              updatedM.winner = { ...m.winner, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
+              mChanged = true
+            }
+          }
+          if (mChanged) {
+            drawMatchesChanged = true
+            return updatedM
+          }
+          return m
+        })
+
+        if (drawMatchesChanged) {
+          setTournamentDraws((prevDraws) => {
+            const updatedDrawObj = { ...currentDraw, matches: nextMatches }
+            const nextDraws = { ...prevDraws, [drawKey]: updatedDrawObj }
+            try {
+              localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(nextDraws))
+            } catch (e) {}
+            return nextDraws
+          })
+        }
+      }
 
       // Fire background POST to shared DB
       fetch('/api/tournaments', {
@@ -485,33 +703,99 @@ export const BadmintonFixturesManager = ({
         body: JSON.stringify({ reportedPlayers: nextFullMap }),
       }).catch(() => {})
 
+      // Also persist to Supabase
+      try {
+        SupabaseService.upsertReportedPlayers(nextFullMap).catch(() => {})
+      } catch (e) {}
+
+      // Notify other tabs and components
+      try {
+        window.dispatchEvent(new Event('storage'))
+        window.dispatchEvent(new CustomEvent('badminton-reported-changed', { detail: nextFullMap }))
+        if (typeof BroadcastChannel !== 'undefined') {
+          const ch = new BroadcastChannel('badminton_sync')
+          ch.postMessage({ type: 'REPORTED_PLAYERS_UPDATED', senderId: localSessionIdRef.current, reportedPlayers: nextFullMap })
+          ch.close()
+        }
+      } catch (e) {}
+
       return nextFullMap
     })
   }
 
   const isPlayerReported = (playerOrId) => {
     if (!playerOrId) return false
-    const key = `${selectedMatch?.id || 1}-${selectedCategory}`
-    const map = reportedPlayers[key]
-    if (!map || typeof map !== 'object') return false
-    
-    if (typeof playerOrId === 'object') {
-      const idStr = playerOrId.id ? String(playerOrId.id).trim() : ''
-      const nameStr = playerOrId.name ? playerOrId.name.trim() : ''
-      const nameKey = nameStr.toLowerCase()
+    if (typeof playerOrId === 'object' && playerOrId.isBye) return false
 
-      if (idStr && map[idStr]) return true
-      if (idStr && !isNaN(Number(idStr)) && map[Number(idStr)]) return true
-      if (nameKey && map[nameKey]) return true
-      if (nameStr && map[nameStr]) return true
-      return false
+    // 1. Direct object property check
+    if (typeof playerOrId === 'object') {
+      if (playerOrId.isReported === true || playerOrId.reported === true || playerOrId.is_reported === true) {
+        return true
+      }
     }
 
-    const strKey = String(playerOrId).trim()
-    const lowerKey = strKey.toLowerCase()
-    if (map[strKey]) return true
-    if (map[lowerKey]) return true
-    if (!isNaN(Number(strKey)) && map[Number(strKey)]) return true
+    const tournId = selectedMatch?.id || 1
+    const key = `${tournId}-${selectedCategory}`
+    const tokens = getPlayerTokens(playerOrId)
+    if (tokens.length === 0) return false
+
+    // 2. Check primary in-memory reportedPlayers state under current category
+    const catMap = reportedPlayers[key] || {}
+    for (const tok of tokens) {
+      if (catMap[tok]) return true
+    }
+
+    // 3. Check across ALL keys and categories in reportedPlayers
+    for (const k of Object.keys(reportedPlayers)) {
+      const sub = reportedPlayers[k]
+      if (sub && typeof sub === 'object') {
+        for (const tok of tokens) {
+          if (sub[tok]) return true
+        }
+      } else if (sub === true) {
+        for (const tok of tokens) {
+          if (k === tok || k === `${tournId}-${tok}` || k.endsWith(`-${tok}`)) return true
+        }
+      }
+    }
+
+    // 4. Check permanent localStorage cache as ultimate fallback so no background sync can ever untick
+    try {
+      const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
+      if (savedPerm) {
+        const permCache = JSON.parse(savedPerm)
+        for (const k of Object.keys(permCache)) {
+          const sub = permCache[k]
+          if (sub && typeof sub === 'object') {
+            for (const tok of tokens) {
+              if (sub[tok]) return true
+            }
+          } else if (sub === true) {
+            for (const tok of tokens) {
+              if (k === tok || k === `${tournId}-${tok}` || k.endsWith(`-${tok}`)) return true
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
+    // 5. Check authenticators in localStorage as additional safety
+    try {
+      const savedAuthStr = localStorage.getItem('badminton-authenticators') || localStorage.getItem('badminton-match-authenticators')
+      if (savedAuthStr) {
+        const allAuth = JSON.parse(savedAuthStr)
+        const pList = allAuth[tournId] || allAuth[String(tournId)] || Object.values(allAuth).flat()
+        if (Array.isArray(pList)) {
+          for (const p of pList) {
+            if (p && (p.isReported === true || p.reported === true)) {
+              const pTokens = getPlayerTokens(p)
+              if (tokens.some((t) => pTokens.includes(t))) return true
+            }
+          }
+        }
+      }
+    } catch (e) {}
+
     return false
   }
 
@@ -523,26 +807,64 @@ export const BadmintonFixturesManager = ({
 
   const handleMarkAllReported = (status = true) => {
     lastLocalReportedUpdateRef.current = Date.now()
-    const key = `${selectedMatch?.id || 1}-${selectedCategory}`
+    const tournId = selectedMatch?.id || 1
+    const key = `${tournId}-${selectedCategory}`
+
     setReportedPlayers((prev) => {
+      const nextFullMap = { ...prev }
       const newMap = {}
+
+      let permCache = {}
+      try {
+        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
+        if (savedPerm) permCache = JSON.parse(savedPerm)
+      } catch (e) {}
+
       if (status) {
         categoryPlayers.forEach((p) => {
-          const idStr = p.id ? String(p.id).trim() : ''
-          const nameStr = p.name ? p.name.trim() : ''
-          const nameKey = nameStr.toLowerCase()
-
-          if (idStr) newMap[idStr] = true
-          if (nameKey) newMap[nameKey] = true
+          const tokens = getPlayerTokens(p)
+          tokens.forEach((tok) => {
+            newMap[tok] = true
+            nextFullMap[`${tournId}-${tok}`] = true
+            if (!permCache[key]) permCache[key] = {}
+            permCache[key][tok] = true
+            permCache[`${tournId}-${tok}`] = true
+          })
+        })
+      } else {
+        categoryPlayers.forEach((p) => {
+          const tokens = getPlayerTokens(p)
+          tokens.forEach((tok) => {
+            delete nextFullMap[`${tournId}-${tok}`]
+            if (permCache[key]) delete permCache[key][tok]
+            delete permCache[`${tournId}-${tok}`]
+          })
         })
       }
-      const nextFullMap = {
-        ...prev,
-        [key]: newMap,
-      }
+      nextFullMap[key] = newMap
 
       try {
         localStorage.setItem('badminton-reported-players', JSON.stringify(nextFullMap))
+        localStorage.setItem(PERMANENT_REPORTED_KEY, JSON.stringify(permCache))
+      } catch (e) {}
+
+      // Update authenticators list
+      try {
+        const savedAuthStr = localStorage.getItem('badminton-authenticators') || localStorage.getItem('badminton-match-authenticators')
+        if (savedAuthStr) {
+          const allAuth = JSON.parse(savedAuthStr)
+          const pList = allAuth[tournId] || allAuth[String(tournId)] || []
+          const nextPList = pList.map((p) => {
+            if ((p.category || 'Men Singles').trim().toLowerCase() === selectedCategory.trim().toLowerCase()) {
+              return { ...p, isReported: status, reported: status }
+            }
+            return p
+          })
+          allAuth[tournId] = nextPList
+          allAuth[String(tournId)] = nextPList
+          localStorage.setItem('badminton-authenticators', JSON.stringify(allAuth))
+          localStorage.setItem('badminton-match-authenticators', JSON.stringify(allAuth))
+        }
       } catch (e) {}
 
       // Sync directly to DB
@@ -551,6 +873,22 @@ export const BadmintonFixturesManager = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reportedPlayers: nextFullMap }),
       }).catch(() => {})
+
+      // Also persist to Supabase
+      try {
+        SupabaseService.upsertReportedPlayers(nextFullMap).catch(() => {})
+      } catch (e) {}
+
+      // Notify other tabs and components
+      try {
+        window.dispatchEvent(new Event('storage'))
+        window.dispatchEvent(new CustomEvent('badminton-reported-changed', { detail: nextFullMap }))
+        if (typeof BroadcastChannel !== 'undefined') {
+          const ch = new BroadcastChannel('badminton_sync')
+          ch.postMessage({ type: 'REPORTED_PLAYERS_UPDATED', senderId: localSessionIdRef.current, reportedPlayers: nextFullMap })
+          ch.close()
+        }
+      } catch (e) {}
 
       return nextFullMap
     })
@@ -583,32 +921,10 @@ export const BadmintonFixturesManager = ({
   // Only use manually entered players. NEVER inject sample or dummy players!
   const categoryPlayers = uploadedCategoryPlayers
 
-  // Current draw (only exists if previously saved, or auto-generated)
-  const currentDraw = tournamentDraws[drawKey]
-    ? sanitizeBadmintonDraw(tournamentDraws[drawKey])
-    : (categoryPlayers.length >= 2
-        ? generateBadmintonDraw(categoryPlayers, {
-            drawSize: getNextPowerOfTwo(categoryPlayers.length),
-            totalMembers: categoryPlayers.length,
-            seedsCount: Math.min(4, categoryPlayers.length),
-            courtName: selectedMatch?.courtName || 'Court 1',
-            venue: selectedMatch?.matchAddress || 'Badminton Arena',
-            startTime: '09:00',
-            matchDurationMinutes: 30,
-            showTimings: true,
-          })
-        : (categoryPlayers.length === 1
-            ? generateBadmintonDraw(categoryPlayers, {
-                drawSize: 2,
-                totalMembers: 1,
-                seedsCount: 1,
-                courtName: selectedMatch?.courtName || 'Court 1',
-                venue: selectedMatch?.matchAddress || 'Badminton Arena',
-                startTime: '09:00',
-                matchDurationMinutes: 30,
-                showTimings: true,
-              })
-            : null))
+  // Current draw (strictly from saved tournamentDraws state to eliminate render-time object churn and blinking)
+  const currentDraw = useMemo(() => {
+    return tournamentDraws[drawKey] || null
+  }, [tournamentDraws[drawKey]])
 
   // All Round 1 slots for the Tap-to-Exchange Player Picker
   const allRound1Slots = (currentDraw?.matches || [])
@@ -636,6 +952,60 @@ export const BadmintonFixturesManager = ({
   const [isMasterScheduleModalOpen, setIsMasterScheduleModalOpen] = useState(false)
   const [schedulingTournament, setSchedulingTournament] = useState(null)
 
+  // Track active modal state so background intervals do not overwrite data during active user editing
+  useEffect(() => {
+    isModalActiveRef.current = Boolean(
+      isSeedingModalOpen ||
+      showModifierPanel ||
+      isMasterScheduleModalOpen ||
+      isCourtConfigModalOpen ||
+      isAdModalOpen
+    )
+  }, [isSeedingModalOpen, showModifierPanel, isMasterScheduleModalOpen, isCourtConfigModalOpen, isAdModalOpen])
+
+  // Centralized helper to persist and broadcast draw changes instantly to all components and tabs
+  const broadcastAndPersistDraws = (nextDraws, targetKey = null, targetDraw = null) => {
+    lastLocalDrawUpdateRef.current = Date.now()
+    try {
+      localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(nextDraws))
+      window.dispatchEvent(new CustomEvent('badminton-draws-changed', { detail: { draws: nextDraws } }))
+      if (typeof BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('badminton_sync')
+        channel.postMessage({
+          type: 'DRAWS_UPDATED',
+          draws: nextDraws,
+          senderId: localSessionIdRef.current,
+        })
+        channel.close()
+      }
+    } catch (err) {
+      console.error('Failed to save to localStorage', err)
+    }
+
+    // Sync with server middleware DB
+    fetch('/api/tournaments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tournamentDraws: nextDraws }),
+    }).catch(() => {})
+
+    // Sync with Supabase Cloud DB
+    if (selectedMatch) {
+      if (targetKey && (targetDraw || nextDraws[targetKey])) {
+        const drawData = targetDraw || nextDraws[targetKey]
+        const cat = targetKey.replace(`${selectedMatch.id}-`, '')
+        SupabaseService.upsertTournamentDraw(targetKey, selectedMatch.id, cat, drawData, true).catch(() => {})
+      } else {
+        Object.keys(nextDraws || {}).forEach((key) => {
+          if (key.startsWith(`${selectedMatch.id}-`)) {
+            const cat = key.replace(`${selectedMatch.id}-`, '')
+            SupabaseService.upsertTournamentDraw(key, selectedMatch.id, cat, nextDraws[key], true).catch(() => {})
+          }
+        })
+      }
+    }
+  }
+
   const handleSaveMasterSchedule = ({ isTimingsActive, config, updatedDrawsMap }) => {
     const targetTour = schedulingTournament || selectedMatch
     if (!targetTour) return
@@ -653,26 +1023,7 @@ export const BadmintonFixturesManager = ({
 
     setTournamentDraws((prev) => {
       const nextDraws = { ...prev, ...fullKeysDrawMap }
-      try {
-        localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(nextDraws))
-      } catch (err) {
-        console.error('Failed to save to localStorage', err)
-      }
-
-      // Sync with server middleware DB
-      fetch('/api/tournaments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentDraws: nextDraws }),
-      }).catch(() => {})
-
-      // Sync with Supabase Cloud DB
-      Object.keys(fullKeysDrawMap).forEach((key) => {
-        const cat = key.replace(`${tourId}-`, '')
-        const draw = fullKeysDrawMap[key]
-        SupabaseService.upsertTournamentDraw(key, tourId, cat, draw, true).catch(() => {})
-      })
-
+      broadcastAndPersistDraws(nextDraws)
       return nextDraws
     })
 
@@ -683,7 +1034,6 @@ export const BadmintonFixturesManager = ({
         : '✓ Match Time Scheduling turned OFF.'
     )
     setTimeout(() => setSwapToast(null), 3500)
-    window.dispatchEvent(new Event('storage'))
   }
 
   const getAllCategoryDrawsForTournament = (targetTour) => {
@@ -724,16 +1074,89 @@ export const BadmintonFixturesManager = ({
       return {}
     }
   })
-  // Listen to storage events so publish toggles sync instantly
+  // Listen to storage & broadcast events so draws, publish toggles & reporting sync instantly across views/tabs
   useEffect(() => {
     const handleStorage = () => {
       try {
-        const saved = localStorage.getItem('badminton-published-status')
-        if (saved) setPublishedStatusMap(JSON.parse(saved))
+        const savedPub = localStorage.getItem('badminton-published-status')
+        if (savedPub) {
+          const parsedPub = JSON.parse(savedPub)
+          setPublishedStatusMap((prev) => (isDeepEqual(prev, parsedPub) ? prev : parsedPub))
+        }
+      } catch (e) {}
+
+      try {
+        if (Date.now() - (lastLocalDrawUpdateRef.current || 0) > 3000) {
+          const savedDraws = localStorage.getItem(DRAWS_STORAGE_KEY)
+          if (savedDraws) {
+            const parsed = JSON.parse(savedDraws)
+            if (parsed && typeof parsed === 'object') {
+              const sanitized = {}
+              Object.keys(parsed).forEach((k) => {
+                sanitized[k] = sanitizeBadmintonDraw(parsed[k])
+              })
+              setTournamentDraws((prev) => {
+                let changed = false
+                const next = { ...prev }
+                Object.keys(sanitized).forEach((k) => {
+                  if (!isDeepEqual(prev[k], sanitized[k])) {
+                    next[k] = sanitized[k]
+                    changed = true
+                  }
+                })
+                return changed ? next : prev
+              })
+            }
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const savedReported = localStorage.getItem('badminton-reported-players')
+        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
+        const repObj = savedReported ? JSON.parse(savedReported) : {}
+        const permObj = savedPerm ? JSON.parse(savedPerm) : {}
+        const mergedRep = { ...permObj, ...repObj }
+        if (Object.keys(mergedRep).length > 0) {
+          setReportedPlayers((prev) => (isDeepEqual(prev, mergedRep) ? prev : mergedRep))
+        }
       } catch (e) {}
     }
+
+    const handleReportedCustomEvent = (e) => {
+      if (e?.detail && typeof e.detail === 'object') {
+        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
+        const permObj = savedPerm ? JSON.parse(savedPerm) : {}
+        const merged = { ...permObj, ...e.detail }
+        setReportedPlayers((prev) => (isDeepEqual(prev, merged) ? prev : merged))
+      }
+    }
+
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    window.addEventListener('badminton-draws-changed', handleStorage)
+    window.addEventListener('badminton-reported-changed', handleReportedCustomEvent)
+
+    let channel = null
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        channel = new BroadcastChannel('badminton_sync')
+        channel.onmessage = (e) => {
+          if (e.data?.senderId && e.data.senderId === localSessionIdRef.current) return
+          if (e.data?.type === 'DRAWS_UPDATED' || e.data?.type === 'PUBLISH_STATUS_UPDATED' || e.data?.type === 'SETTINGS_UPDATED') {
+            handleStorage()
+          } else if (e.data?.type === 'REPORTED_PLAYERS_UPDATED' && e.data?.reportedPlayers) {
+            setReportedPlayers((prev) => (isDeepEqual(prev, e.data.reportedPlayers) ? prev : e.data.reportedPlayers))
+          }
+        }
+      } catch (err) {}
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener('badminton-draws-changed', handleStorage)
+      window.removeEventListener('badminton-reported-changed', handleReportedCustomEvent)
+      if (channel) channel.close()
+    }
   }, [])
 
   const publishedCategoryList = (categories || []).filter(
@@ -741,7 +1164,7 @@ export const BadmintonFixturesManager = ({
   )
   const visibleCategories = isPublicView ? (publishedCategoryList.length > 0 ? publishedCategoryList : categories || []) : (categories || [])
 
-  // In spectator/public view, auto-select first published category
+  // In spectator/public view, auto-select first published category if current category has no draw
   useEffect(() => {
     if (isPublicView && selectedMatch) {
       const pubCats = (categories || []).filter(
@@ -751,103 +1174,7 @@ export const BadmintonFixturesManager = ({
         setSelectedCategory(pubCats[0])
       }
     }
-  }, [isPublicView, selectedMatch?.id, selectedCategory, JSON.stringify(publishedStatusMap), JSON.stringify(Object.keys(tournamentDraws))])
-
-  // Auto-sync players updated or deleted in Match Management directly into the Draw
-  useEffect(() => {
-    if (!selectedMatch || !selectedCategory) return
-    const key = drawKey
-    const pCount = (uploadedCategoryPlayers || []).length
-
-    if (pCount === 0) {
-      if (tournamentDraws[key]) {
-        setTournamentDraws((prev) => {
-          const next = { ...prev }
-          delete next[key]
-          try {
-            localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
-          } catch (e) {}
-          SupabaseService.deleteTournamentDraw(key).catch(() => {})
-          return next
-        })
-      }
-      return
-    }
-
-    const existingDraw = tournamentDraws[key]
-    let needsUpdate = false
-
-    if (!existingDraw) {
-      needsUpdate = true
-    } else {
-      // Check if any player in existing draw was deleted or modified
-      const registeredIds = new Set(uploadedCategoryPlayers.map((p) => String(p.id)))
-      const registeredNames = new Set(uploadedCategoryPlayers.map((p) => String(p.name || '').trim().toLowerCase()))
-      
-      const r1Matches = (existingDraw.matches || []).filter((m) => m.round === 1)
-      let drawPlayerCount = 0
-      for (const m of r1Matches) {
-        if (m.player1 && !m.player1.isBye) {
-          drawPlayerCount++
-          const pId = String(m.player1.id)
-          const pName = String(m.player1.name || '').trim().toLowerCase()
-          if (!registeredIds.has(pId) && !registeredNames.has(pName)) {
-            needsUpdate = true
-            break
-          }
-        }
-        if (m.player2 && !m.player2.isBye) {
-          drawPlayerCount++
-          const pId = String(m.player2.id)
-          const pName = String(m.player2.name || '').trim().toLowerCase()
-          if (!registeredIds.has(pId) && !registeredNames.has(pName)) {
-            needsUpdate = true
-            break
-          }
-        }
-      }
-
-      if (drawPlayerCount !== pCount) {
-        needsUpdate = true
-      }
-    }
-
-    if (needsUpdate) {
-      const customDrawSize = existingDraw?.drawSize || getNextPowerOfTwo(Math.max(2, pCount))
-      const customTotalMembers = existingDraw?.config?.totalMembers || existingDraw?.totalMembers || pCount
-      const autoSeeds = uploadedCategoryPlayers
-        .filter((p) => p.seed)
-        .sort((a, b) => a.seed - b.seed)
-        .map((p) => ({ id: p.id, name: p.name, place: p.place, seed: p.seed }))
-      const existingSeeds = Array.isArray(existingDraw?.seeds) && existingDraw.seeds.length > 0 ? existingDraw.seeds : autoSeeds
-
-      const newDraw = generateBadmintonDraw(uploadedCategoryPlayers, {
-        drawSize: customDrawSize,
-        totalMembers: customTotalMembers,
-        seedsCount: existingSeeds.length || autoSeeds.length || (pCount >= 16 ? 4 : pCount >= 8 ? 2 : 0),
-        seeds: existingSeeds,
-        courtName: existingDraw?.courtName || selectedMatch?.courtName || 'Court 1',
-        venue: existingDraw?.venue || selectedMatch?.matchAddress || 'Badminton Arena',
-        startTime: existingDraw?.startTime || existingDraw?.config?.startTime || '09:00',
-        matchDurationMinutes: existingDraw?.matchDuration || existingDraw?.config?.matchDuration || 30,
-        showTimings: existingDraw?.showTimings !== undefined ? Boolean(existingDraw.showTimings) : (existingDraw?.config?.showTimings !== undefined ? Boolean(existingDraw.config.showTimings) : true),
-      })
-
-      if (newDraw) {
-        setTournamentDraws((prev) => {
-          const next = {
-            ...prev,
-            [key]: newDraw,
-          }
-          try {
-            localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
-          } catch (e) {}
-          SupabaseService.upsertTournamentDraw(key, selectedMatch.id, selectedCategory, newDraw, true).catch(() => {})
-          return next
-        })
-      }
-    }
-  }, [uploadedCategoryPlayers, selectedMatch?.id, selectedCategory, drawKey])
+  }, [selectedMatch?.id, isPublicView])
 
   // Sync inline seeding bar defaults with the active draw or category when opened
   useEffect(() => {
@@ -904,54 +1231,7 @@ export const BadmintonFixturesManager = ({
     }
   }, [drawKey, showModifierPanel])
 
-  // Automatically generate default official draw when category is selected if not already present
-  useEffect(() => {
-    if (selectedMatch && selectedCategory) {
-      const key = `${selectedMatch.id}-${selectedCategory}`
-      if (!tournamentDraws[key]) {
-        const pCount = categoryPlayers.length
-        if (pCount < 2) return // Only generate when at least 2 manual players are registered!
-        const recDraw = pCount <= 4 ? 4 : pCount <= 8 ? 8 : pCount <= 16 ? 16 : pCount <= 32 ? 32 : 64
-        const recSeeds = recDraw <= 4 ? 2 : recDraw <= 16 ? 4 : 8
-        const byes = Math.max(0, recDraw - pCount)
 
-        const explicitSeeds = []
-        for (let i = 1; i <= recSeeds; i++) {
-          if (categoryPlayers[i - 1]) {
-            explicitSeeds.push({
-              id: categoryPlayers[i - 1].id,
-              name: categoryPlayers[i - 1].name,
-              place: categoryPlayers[i - 1].place || '',
-              court: categoryPlayers[i - 1].court || '',
-              seed: i,
-            })
-          }
-        }
-
-        const config = {
-          totalMembers: recDraw,
-          drawSize: recDraw,
-          totalPlayers: pCount,
-          byesCount: byes,
-          seedsCount: explicitSeeds.length,
-          seeds: explicitSeeds,
-          courtName: selectedMatch.courtName || 'Court 1',
-          venue: selectedMatch.matchAddress || 'Badminton Arena',
-          startTime: '09:00',
-          matchDurationMinutes: 30,
-        }
-
-        const playersForCat = (authenticators[selectedMatch.id] || []).filter(
-          (p) => (p.category || 'Men Singles') === selectedCategory
-        )
-        const autoDraw = generateBadmintonDraw(playersForCat, config)
-        setTournamentDraws((prev) => ({
-          ...prev,
-          [key]: autoDraw,
-        }))
-      }
-    }
-  }, [selectedMatch?.id, selectedCategory, categoryPlayers.length])
 
   // Close dropdown on outside click
   const dropdownRef = useRef(null)
@@ -996,23 +1276,7 @@ export const BadmintonFixturesManager = ({
         ...prev,
         [key]: draw,
       }
-      try {
-        localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(nextDraws))
-      } catch (err) {
-        console.error('Failed to save to localStorage', err)
-      }
-
-      // Immediately sync with server middleware DB
-      fetch('/api/tournaments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentDraws: nextDraws }),
-      }).catch(() => {})
-
-      if (selectedMatch) {
-        SupabaseService.upsertTournamentDraw(key, selectedMatch.id, targetCategory, draw, true).catch(() => {})
-      }
-
+      broadcastAndPersistDraws(nextDraws, key, draw)
       return nextDraws
     })
 
@@ -1027,6 +1291,9 @@ export const BadmintonFixturesManager = ({
           ? allAuthMap[mId]
           : (Array.isArray(allAuthMap[mIdStr]) ? allAuthMap[mIdStr] : (selectedMatch.participants || []))
 
+        const matchedSeedIds = new Set()
+        const matchedSeedNames = new Set()
+
         const updatedList = currentList.map((p) => {
           if ((p.category || 'Men Singles').trim().toLowerCase() !== targetCategory.trim().toLowerCase()) {
             return p
@@ -1035,19 +1302,22 @@ export const BadmintonFixturesManager = ({
           const pName = String(p.name || '').trim().toLowerCase()
 
           const matchedSeed = config.seeds.find((s) => {
-            if (!s) return false
+            if (!s || !s.name) return false
             const sId = String(s.id || '').trim()
             const sName = String(s.name || '').trim().toLowerCase()
             return (sId && sId === pId) || (sName && sName === pName)
           })
 
           if (matchedSeed) {
+            if (matchedSeed.id) matchedSeedIds.add(String(matchedSeed.id).trim())
+            if (matchedSeed.name) matchedSeedNames.add(String(matchedSeed.name).trim().toLowerCase())
             return {
               ...p,
+              name: formatPersonName(matchedSeed.name || p.name),
               seed: Number(matchedSeed.seed) || null,
               isSeed: true,
-              place: matchedSeed.place !== undefined && matchedSeed.place !== '' ? matchedSeed.place : (p.place || ''),
-              court: matchedSeed.court !== undefined && matchedSeed.court !== '' ? matchedSeed.court : (p.court || ''),
+              place: matchedSeed.place !== undefined && matchedSeed.place !== '' ? formatPlaceOrClub(matchedSeed.place) : (p.place || ''),
+              court: matchedSeed.court !== undefined && matchedSeed.court !== '' ? formatCourtName(matchedSeed.court) : (p.court || ''),
             }
           } else {
             return {
@@ -1055,6 +1325,31 @@ export const BadmintonFixturesManager = ({
               seed: null,
               isSeed: false,
             }
+          }
+        })
+
+        // Add any new players that were typed into seed slots in the modal
+        config.seeds.forEach((s, idx) => {
+          if (!s || !s.name) return
+          const sName = String(s.name).trim()
+          const sNameLower = sName.toLowerCase()
+          const sId = String(s.id || '').trim()
+          const isGeneric = /^seed\s*\d+$/i.test(sName)
+
+          if (!isGeneric && !matchedSeedNames.has(sNameLower) && (!sId || !matchedSeedIds.has(sId))) {
+            const newPlayerId = (s.id && !String(s.id).startsWith('seed-')) ? s.id : (Date.now() + idx + 100)
+            const newPlayer = {
+              id: newPlayerId,
+              name: formatPersonName(sName),
+              place: formatPlaceOrClub(s.place || ''),
+              court: formatCourtName(s.court || ''),
+              category: targetCategory,
+              seed: Number(s.seed) || null,
+              isSeed: true,
+            }
+            updatedList.push(newPlayer)
+            matchedSeedNames.add(sNameLower)
+            if (sId) matchedSeedIds.add(sId)
           }
         })
 
@@ -1171,6 +1466,62 @@ export const BadmintonFixturesManager = ({
     const updatedMatches = currentDraw.matches.map((m) => {
       if (m.id === matchId) {
         const next = { ...m, ...updates }
+
+        // Explicitly preserve reporting status on player1 and player2
+        if (m.player1 && !m.player1.isBye) {
+          const isP1Rep = isPlayerReported(m.player1)
+          next.player1 = { ...m.player1, ...(updates.player1 || {}), isReported: isP1Rep, reported: isP1Rep }
+        }
+        if (m.player2 && !m.player2.isBye) {
+          const isP2Rep = isPlayerReported(m.player2)
+          next.player2 = { ...m.player2, ...(updates.player2 || {}), isReported: isP2Rep, reported: isP2Rep }
+        }
+        if (next.winner && !next.winner.isBye) {
+          const isWinRep = isPlayerReported(next.winner)
+          next.winner = { ...next.winner, isReported: isWinRep, reported: isWinRep }
+        }
+
+        // If reverting to scheduled status, reset all live points, sets, and scores to 0 / clean slate
+        if (updates.status === 'scheduled') {
+          next.isLive = false
+          next.winner = null
+          next.liveScore = {
+            set1: { p1: 0, p2: 0 },
+            set2: { p1: 0, p2: 0 },
+            set3: { p1: 0, p2: 0 },
+            set4: { p1: 0, p2: 0 },
+            set5: { p1: 0, p2: 0 },
+            currentSet: 1,
+            server: 'p1',
+            receiver: 'p2',
+          }
+          next.scoreSet1A = ''
+          next.scoreSet1B = ''
+          next.scoreSet2A = ''
+          next.scoreSet2B = ''
+          next.scoreSet3A = ''
+          next.scoreSet3B = ''
+          next.scoreSet4A = ''
+          next.scoreSet4B = ''
+          next.scoreSet5A = ''
+          next.scoreSet5B = ''
+          next.totalScoreA = ''
+          next.totalScoreB = ''
+          next.setsWonA = 0
+          next.setsWonB = 0
+        } else if (updates.status === 'live' && !next.liveScore) {
+          next.liveScore = {
+            set1: { p1: 0, p2: 0 },
+            set2: { p1: 0, p2: 0 },
+            set3: { p1: 0, p2: 0 },
+            set4: { p1: 0, p2: 0 },
+            set5: { p1: 0, p2: 0 },
+            currentSet: 1,
+            server: 'p1',
+            receiver: 'p2',
+          }
+        }
+
         if (updates.winner !== undefined && updates.winner !== m.winner) {
           next.previousWinnerId = m.winner?.id
         }
@@ -1187,34 +1538,15 @@ export const BadmintonFixturesManager = ({
 
     let nextDraws = null
     setTournamentDraws((prev) => {
+      const updatedDrawObj = {
+        ...currentDraw,
+        matches: updatedMatches,
+      }
       nextDraws = {
         ...prev,
-        [drawKey]: {
-          ...currentDraw,
-          matches: updatedMatches,
-        },
+        [drawKey]: updatedDrawObj,
       }
-      try {
-        localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(nextDraws))
-      } catch (err) {}
-
-      // Immediately sync with server middleware DB so umpire mobile portals get the live match instantly
-      fetch('/api/tournaments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tournamentDraws: nextDraws }),
-      }).catch(() => {})
-
-      if (selectedMatch && currentDraw) {
-        SupabaseService.upsertTournamentDraw(
-          drawKey,
-          selectedMatch.id,
-          selectedCategory,
-          { ...currentDraw, matches: updatedMatches },
-          true
-        ).catch(() => {})
-      }
-
+      broadcastAndPersistDraws(nextDraws, drawKey, updatedDrawObj)
       return nextDraws
     })
 
@@ -1500,7 +1832,6 @@ export const BadmintonFixturesManager = ({
       }
     }
 
-    // Update match with assigned Umpire & Court
     handleUpdateMatch(assigningLiveMatch.id, {
       status: startLiveImmediately ? 'live' : 'scheduled',
       isLive: Boolean(startLiveImmediately),
@@ -1509,10 +1840,6 @@ export const BadmintonFixturesManager = ({
       assignedUmpireUsername: targetUsername,
       assignedUmpireName: targetName,
     })
-
-    try {
-      window.dispatchEvent(new Event('storage'))
-    } catch (e) {}
 
     if (startLiveImmediately) {
       setSwapToast(`🚀 Match #${assigningLiveMatch.matchNumber || ''} is now LIVE on ${selectedLiveCourt}! Assigned to Umpire: ${targetName}`)
@@ -1712,14 +2039,20 @@ export const BadmintonFixturesManager = ({
       return s
     })
 
-    setTournamentDraws((prev) => ({
-      ...prev,
-      [drawKey]: {
-        ...currentDraw,
-        seeds: updatedSeeds,
-        matches: updatedMatches,
-      },
-    }))
+    const updatedDrawObj = {
+      ...currentDraw,
+      seeds: updatedSeeds,
+      matches: updatedMatches,
+    }
+
+    setTournamentDraws((prev) => {
+      const nextDraws = {
+        ...prev,
+        [drawKey]: updatedDrawObj,
+      }
+      broadcastAndPersistDraws(nextDraws, drawKey, updatedDrawObj)
+      return nextDraws
+    })
 
     // Also sync player seeds to authenticators outside
     try {
@@ -1940,18 +2273,17 @@ export const BadmintonFixturesManager = ({
         winner: updateP(m.winner),
       }))
 
+      const updatedDrawObj = {
+        ...currentDraw,
+        matches: updatedMatches,
+        seeds: (currentDraw.seeds || []).map(updateP),
+      }
       setTournamentDraws((prev) => {
         const next = {
           ...prev,
-          [drawKey]: {
-            ...currentDraw,
-            matches: updatedMatches,
-            seeds: (currentDraw.seeds || []).map(updateP),
-          },
+          [drawKey]: updatedDrawObj,
         }
-        try {
-          localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(next))
-        } catch (e) {}
+        broadcastAndPersistDraws(next, drawKey, updatedDrawObj)
         return next
       })
     }
@@ -1988,62 +2320,94 @@ export const BadmintonFixturesManager = ({
   }
 
   // Schedule statistics & computations
-  const validScheduleMatches = (currentDraw?.matches || []).filter((m) => !(m.player1?.isBye && m.player2?.isBye))
-  const totalScheduleCount = validScheduleMatches.length
-  const liveScheduleCount = validScheduleMatches.filter((m) => m.status === 'live' || (m.isLive === true && m.status !== 'completed')).length
-  const completedScheduleCount = validScheduleMatches.filter((m) => m.status === 'completed').length
-  const scheduledScheduleCount = validScheduleMatches.filter((m) => (m.status === 'scheduled' || !m.status) && !m.isLive).length
-  const readyScheduleCount = validScheduleMatches.filter((m) => m.status === 'scheduled' && isMatchBothReported(m)).length
-  const progressPercent = totalScheduleCount > 0 ? Math.round((completedScheduleCount / totalScheduleCount) * 100) : 0
+  const {
+    validScheduleMatches,
+    totalScheduleCount,
+    liveScheduleCount,
+    completedScheduleCount,
+    scheduledScheduleCount,
+    readyScheduleCount,
+    progressPercent,
+  } = useMemo(() => {
+    const valid = (currentDraw?.matches || []).filter((m) => !(m.player1?.isBye && m.player2?.isBye))
+    const total = valid.length
+    const live = valid.filter((m) => m.status === 'live' || (m.isLive === true && m.status !== 'completed')).length
+    const comp = valid.filter((m) => m.status === 'completed').length
+    const sched = valid.filter((m) => (m.status === 'scheduled' || !m.status) && !m.isLive).length
+    const ready = valid.filter((m) => (m.status === 'scheduled' || !m.status) && !m.isLive && isMatchBothReported(m)).length
+    const progress = total > 0 ? Math.round((comp / total) * 100) : 0
+    return {
+      validScheduleMatches: valid,
+      totalScheduleCount: total,
+      liveScheduleCount: live,
+      completedScheduleCount: comp,
+      scheduledScheduleCount: sched,
+      readyScheduleCount: ready,
+      progressPercent: progress,
+    }
+  }, [currentDraw?.matches, reportedPlayers, selectedMatch?.id, selectedCategory])
 
-  // Filtered & Priority-Sorted schedule list
-  // Priority order:
-  // 1. Live in-progress matches
-  // 2. Both Players Reported & Scheduled (Ready to put on court IMMEDIATELY - SHOWN 1ST!)
-  // 3. 1 Player Reported & Scheduled
-  // 4. Other Scheduled matches
-  // 5. Completed matches
-  const filteredScheduleMatches = validScheduleMatches
-    .filter((m) => {
-      if (scheduleFilter === 'ready' && !(m.status === 'scheduled' && isMatchBothReported(m))) return false
-      if (scheduleFilter === 'live' && !(m.status === 'live' || (m.isLive === true && m.status !== 'completed'))) return false
-      if (scheduleFilter !== 'all' && scheduleFilter !== 'ready' && scheduleFilter !== 'live' && m.status !== scheduleFilter) return false
-      if (courtFilter !== 'all' && m.court !== courtFilter) return false
-      if (scheduleRoundFilter !== 'all' && String(m.round) !== String(scheduleRoundFilter)) return false
-      if (scheduleSearchQuery.trim()) {
-        const q = scheduleSearchQuery.toLowerCase()
-        const p1Name = m.player1?.name?.toLowerCase() || ''
-        const p2Name = m.player2?.name?.toLowerCase() || ''
-        const rName = m.roundName?.toLowerCase() || ''
-        const mNum = `m#${m.matchNumber}`.toLowerCase()
-        const mNum2 = `m${m.matchNumber}`.toLowerCase()
-        const courtStr = m.court?.toLowerCase() || ''
-        const venueStr = m.venue?.toLowerCase() || ''
-        if (!p1Name.includes(q) && !p2Name.includes(q) && !rName.includes(q) && !mNum.includes(q) && !mNum2.includes(q) && !courtStr.includes(q) && !venueStr.includes(q)) {
-          return false
+  // Filtered & Natural Match Number-Sorted schedule list (Rock Solid & Zero Flicker)
+  const filteredScheduleMatches = useMemo(() => {
+    return (validScheduleMatches || [])
+      .filter((m) => {
+        if (scheduleFilter === 'ready' && !((m.status === 'scheduled' || !m.status) && !m.isLive && isMatchBothReported(m))) return false
+        if (scheduleFilter === 'live' && !(m.status === 'live' || (m.isLive === true && m.status !== 'completed'))) return false
+        if (scheduleFilter !== 'all' && scheduleFilter !== 'ready' && scheduleFilter !== 'live' && m.status !== scheduleFilter) return false
+        if (courtFilter !== 'all' && m.court !== courtFilter) return false
+        if (scheduleRoundFilter !== 'all' && String(m.round) !== String(scheduleRoundFilter)) return false
+        if (scheduleSearchQuery.trim()) {
+          const q = scheduleSearchQuery.toLowerCase().trim()
+          const p1Name = m.player1?.name?.toLowerCase() || ''
+          const p2Name = m.player2?.name?.toLowerCase() || ''
+          const p1Place = m.player1?.place?.toLowerCase() || ''
+          const p2Place = m.player2?.place?.toLowerCase() || ''
+          const p1Court = m.player1?.court?.toLowerCase() || ''
+          const p2Court = m.player2?.court?.toLowerCase() || ''
+          const rName = m.roundName?.toLowerCase() || ''
+          const mNum = `m#${m.matchNumber}`.toLowerCase()
+          const mNum2 = `m${m.matchNumber}`.toLowerCase()
+          const mNum3 = `${m.matchNumber}`
+          const courtStr = m.court?.toLowerCase() || ''
+          const venueStr = m.venue?.toLowerCase() || ''
+          if (
+            !p1Name.includes(q) &&
+            !p2Name.includes(q) &&
+            !p1Place.includes(q) &&
+            !p2Place.includes(q) &&
+            !p1Court.includes(q) &&
+            !p2Court.includes(q) &&
+            !rName.includes(q) &&
+            !mNum.includes(q) &&
+            !mNum2.includes(q) &&
+            mNum3 !== q &&
+            !courtStr.includes(q) &&
+            !venueStr.includes(q)
+          ) {
+            return false
+          }
         }
-      }
-      return true
-    })
-    .sort((a, b) => {
-      const getPriority = (m) => {
-        if (m.status === 'live') return 0
-        if (m.status === 'scheduled' && isMatchBothReported(m)) return 1
-        if (m.status === 'scheduled' && (isPlayerReported(m.player1) || isPlayerReported(m.player2))) return 2
-        if (m.status === 'scheduled') return 3
-        return 4 // completed
-      }
-      const pA = getPriority(a)
-      const pB = getPriority(b)
-      if (pA !== pB) return pA - pB
-      if (a.round !== b.round) return a.round - b.round
-      return (a.matchNumber || 0) - (b.matchNumber || 0)
-    })
+        return true
+      })
+      .sort((a, b) => {
+        if (a.round !== b.round) return (a.round || 1) - (b.round || 1)
+        return (a.matchNumber || 0) - (b.matchNumber || 0)
+      })
+  }, [
+    validScheduleMatches,
+    scheduleFilter,
+    courtFilter,
+    scheduleRoundFilter,
+    scheduleSearchQuery,
+    reportedPlayers,
+    selectedMatch?.id,
+    selectedCategory,
+  ])
 
-  // Unique courts list (Combines configured courts and any active match courts)
+  // Unique courts list (Combines configured courts and any active match courts, ignoring 'BYE')
   const uniqueCourts = useMemo(() => {
-    const matchCourts = (currentDraw?.matches || []).map((m) => m.court).filter(Boolean)
-    return Array.from(new Set([...configuredCourts, ...matchCourts]))
+    const matchCourts = (currentDraw?.matches || []).map((m) => m.court).filter((c) => Boolean(c) && c !== 'BYE')
+    return Array.from(new Set([...configuredCourts.filter((c) => c !== 'BYE'), ...matchCourts]))
   }, [configuredCourts, currentDraw?.matches])
 
   // Unique rounds list for round filter
@@ -2929,40 +3293,38 @@ export const BadmintonFixturesManager = ({
           )}
 
           {/* 2. View Mode Tabs Bar (Official Draw, Diagram, Schedule, Players) */}
-          {!isPublicView && (
-            <div className="fixtures-selectors-card" style={{ marginBottom: '18px' }}>
-              <div className="view-mode-tabs" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                <button
-                  type="button"
-                  className={`tab-btn ${viewMode === 'official' ? 'active' : ''}`}
-                  onClick={() => setViewMode('official')}
-                >
-                  📄 Official Draw Sheet (Photo)
-                </button>
-                <button
-                  type="button"
-                  className={`tab-btn ${viewMode === 'diagram' ? 'active' : ''}`}
-                  onClick={() => setViewMode('diagram')}
-                >
-                  🎯 Card Tree Diagram
-                </button>
-                <button
-                  type="button"
-                  className={`tab-btn ${viewMode === 'schedule' ? 'active' : ''}`}
-                  onClick={() => setViewMode('schedule')}
-                >
-                  📋 Schedule List
-                </button>
-                <button
-                  type="button"
-                  className={`tab-btn ${viewMode === 'players' ? 'active' : ''}`}
-                  onClick={() => setViewMode('players')}
-                >
-                  👥 Players ({categoryPlayers.length})
-                </button>
-              </div>
+          <div className="fixtures-selectors-card" style={{ marginBottom: '18px' }}>
+            <div className="view-mode-tabs" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              <button
+                type="button"
+                className={`tab-btn ${viewMode === 'official' ? 'active' : ''}`}
+                onClick={() => setViewMode('official')}
+              >
+                📄 Official Draw Sheet (with Byes)
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${viewMode === 'diagram' ? 'active' : ''}`}
+                onClick={() => setViewMode('diagram')}
+              >
+                🎯 Card Tree Diagram
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${viewMode === 'schedule' ? 'active' : ''}`}
+                onClick={() => setViewMode('schedule')}
+              >
+                📋 Match Schedule
+              </button>
+              <button
+                type="button"
+                className={`tab-btn ${viewMode === 'players' ? 'active' : ''}`}
+                onClick={() => setViewMode('players')}
+              >
+                👥 Players ({categoryPlayers.length})
+              </button>
             </div>
-          )}
+          </div>
 
 
       {/* Champion Banner if Final Completed */}
@@ -3952,29 +4314,58 @@ export const BadmintonFixturesManager = ({
                         <div className="diagram-card-main-title">{poolInfo.title}</div>
                         <div className="diagram-card-pool-text">{poolInfo.subtitle}</div>
 
-                        {/* Player name & winner indicator */}
-                        {m.winner && !m.winner.isBye ? (() => {
+                        {/* Matchup Details with BYE support */}
+                        {(() => {
+                          const isByeMatch = p1?.isBye || p2?.isBye
                           const winPlayer = typeof m.winner === 'object'
                             ? m.winner
                             : (m.winner === 'player1' ? p1 : m.winner === 'player2' ? p2 : null)
                           const winName = winPlayer?.name || (typeof m.winner === 'string' && m.winner !== 'player1' && m.winner !== 'player2' ? m.winner : '')
-                          if (!winName || winName === 'BYE') return null
-                          const isSeeded = Boolean(winPlayer?.seed || winPlayer?.isSeed)
-                          return (
-                            <div style={{ marginTop: '3px', fontSize: '11px', fontWeight: '800', color: '#4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                              {isSeeded && <span className="official-seed-pill" style={{ padding: '1px 5px', fontSize: '9px', margin: 0 }}>S{winPlayer?.seed || ''}</span>}
-                              <span>✓ {winName}</span>
-                            </div>
-                          )
-                        })() : (p1 || p2) ? (
-                          <div style={{ marginTop: '3px', fontSize: '10px', color: '#e0f2fe', fontWeight: '600', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
-                            {Boolean(p1?.seed || p1?.isSeed) && <span className="official-seed-pill" style={{ padding: '1px 4px', fontSize: '8px', margin: 0 }}>S{p1.seed || ''}</span>}
-                            <span>{p1 ? (p1.isBye ? 'BYE' : p1.name) : 'TBD'}</span>
-                            <span style={{ color: '#94a3b8', fontSize: '9px' }}>vs</span>
-                            {Boolean(p2?.seed || p2?.isSeed) && <span className="official-seed-pill" style={{ padding: '1px 4px', fontSize: '8px', margin: 0 }}>S{p2.seed || ''}</span>}
-                            <span>{p2 ? (p2.isBye ? 'BYE' : p2.name) : 'TBD'}</span>
-                          </div>
-                        ) : null}
+                          const hasValidWinner = Boolean(winName && winName !== 'BYE' && !m.winner?.isBye)
+
+                          if (isByeMatch) {
+                            const advPlayer = p1?.isBye ? p2 : p1
+                            return (
+                              <div className="diagram-bye-matchup-container">
+                                <div className="diagram-bye-vs-row">
+                                  {Boolean(advPlayer?.seed || advPlayer?.isSeed) && (
+                                    <span className="official-seed-pill" style={{ padding: '1px 4px', fontSize: '8px', margin: 0 }}>S{advPlayer?.seed || ''}</span>
+                                  )}
+                                  <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{advPlayer?.name || 'Player'}</span>
+                                  <span style={{ color: '#94a3b8', fontSize: '9px' }}>vs</span>
+                                  <span className="diagram-bye-pill">BYE</span>
+                                </div>
+                                <div className="diagram-bye-walkover-badge">
+                                  🛡️ Advanced via BYE
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          if (hasValidWinner) {
+                            const isSeeded = Boolean(winPlayer?.seed || winPlayer?.isSeed)
+                            return (
+                              <div style={{ marginTop: '3px', fontSize: '11px', fontWeight: '800', color: '#4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                {isSeeded && <span className="official-seed-pill" style={{ padding: '1px 5px', fontSize: '9px', margin: 0 }}>S{winPlayer?.seed || ''}</span>}
+                                <span>✓ {winName}</span>
+                              </div>
+                            )
+                          }
+
+                          if (p1 || p2) {
+                            return (
+                              <div style={{ marginTop: '3px', fontSize: '10px', color: '#e0f2fe', fontWeight: '600', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                                {Boolean(p1?.seed || p1?.isSeed) && <span className="official-seed-pill" style={{ padding: '1px 4px', fontSize: '8px', margin: 0 }}>S{p1.seed || ''}</span>}
+                                <span>{p1 ? (p1.isBye ? 'BYE' : p1.name) : 'TBD'}</span>
+                                <span style={{ color: '#94a3b8', fontSize: '9px' }}>vs</span>
+                                {Boolean(p2?.seed || p2?.isSeed) && <span className="official-seed-pill" style={{ padding: '1px 4px', fontSize: '8px', margin: 0 }}>S{p2.seed || ''}</span>}
+                                <span>{p2 ? (p2.isBye ? 'BYE' : p2.name) : 'TBD'}</span>
+                              </div>
+                            )
+                          }
+
+                          return null
+                        })()}
 
                         {m.time && (
                           <div
@@ -4589,7 +4980,7 @@ export const BadmintonFixturesManager = ({
           )}
 
           {/* =========================================================
-              4. PROFESSIONAL ENHANCED SCHEDULE LIST VIEW
+              4. PROFESSIONAL ENHANCED SCHEDULE LIST VIEW (REBUILT CLEAN)
              ========================================================= */}
           {viewMode === 'schedule' && (
             <div className="fixtures-schedule-container">
@@ -4635,6 +5026,18 @@ export const BadmintonFixturesManager = ({
                     <div className="schedule-stat-info">
                       <span className="schedule-stat-num">{totalScheduleCount}</span>
                       <span className="schedule-stat-label">Total Matches</span>
+                    </div>
+                  </div>
+
+                  <div
+                    className={`schedule-stat-card ready ${scheduleFilter === 'ready' ? 'active' : ''}`}
+                    onClick={() => setScheduleFilter((prev) => (prev === 'ready' ? 'all' : 'ready'))}
+                    title="Click to filter Ready to Play matches (both players checked in at desk)"
+                  >
+                    <span className="schedule-stat-icon">⚡</span>
+                    <div className="schedule-stat-info">
+                      <span className="schedule-stat-num">{readyScheduleCount}</span>
+                      <span className="schedule-stat-label">Ready to Play</span>
                     </div>
                   </div>
 
@@ -4703,7 +5106,7 @@ export const BadmintonFixturesManager = ({
                     )}
                   </div>
 
-                  {/* View layout toggle & print button */}
+                  {/* View layout toggle & admin controls */}
                   <div className="schedule-toolbar-actions">
                     <div className="schedule-view-toggle">
                       <button
@@ -5023,11 +5426,12 @@ export const BadmintonFixturesManager = ({
                 /* Cards View */
                 <div className="schedule-cards-grid">
                   {filteredScheduleMatches.map((m) => {
+                    const matchUniqueKey = m.id || `m_${m.round}_${m.matchNumber}`
                     const p1 = m.player1
                     const p2 = m.player2
                     const isP1Rep = isPlayerReported(p1)
                     const isP2Rep = isPlayerReported(p2)
-                    const isBothRep = isMatchBothReported(m)
+                    const isBothRep = isMatchBothReported(m) && (m.status === 'scheduled' || !m.status) && !m.isLive
                     const isP1Winner = m.winner && p1 && m.winner.id === p1.id
                     const isP2Winner = m.winner && p2 && m.winner.id === p2.id
                     const matchEffectiveSets = m.matchSets || (
@@ -5065,11 +5469,11 @@ export const BadmintonFixturesManager = ({
 
                     return (
                       <div
-                        key={m.id}
-                        className={`schedule-card ${m.status === 'live' ? 'is-live' : m.status === 'completed' ? 'is-completed' : ''} ${isBothRep && m.status === 'scheduled' ? 'both-reported' : ''}`}
+                        key={matchUniqueKey}
+                        className={`schedule-card ${m.status === 'live' ? 'is-live' : m.status === 'completed' ? 'is-completed' : ''} ${isBothRep ? 'both-reported' : ''}`}
                       >
                         {/* Ready to Play Banner when BOTH players reported */}
-                        {isBothRep && m.status === 'scheduled' && (
+                        {isBothRep && (
                           <div className="schedule-ready-banner">
                             <span>⚡ Court Ready • Both Players Reported</span>
                             <span style={{ fontSize: '10.5px', background: 'rgba(56, 189, 248, 0.25)', padding: '2px 6px', borderRadius: '4px' }}>
@@ -5138,71 +5542,84 @@ export const BadmintonFixturesManager = ({
 
                         {/* Meta Line: Court, Time, Venue */}
                         <div className="schedule-card-meta">
-                          {m.court && <span>🏟️ {m.court}</span>}
+                          {m.court && m.court !== 'BYE' && <span>🏟️ {m.court}</span>}
                           {m.time && (
                             <span style={{ color: '#38bdf8', fontWeight: '800' }}>
                               ⏱ {m.time}
                             </span>
                           )}
-                          {m.venue && <span>📍 {m.venue}</span>}
+                          {m.venue && !m.court && <span>📍 {m.venue}</span>}
+                          {(m.player1?.isBye || m.player2?.isBye || m.winner?.hasByeWalkover) && (
+                            <span style={{ color: '#c084fc', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '2px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: '800' }}>
+                              ⚡ BYE Walkover
+                            </span>
+                          )}
                         </div>
 
                         {/* Matchup Players */}
                         <div className="schedule-matchup-box">
                           {/* Player 1 */}
-                          <div className={`schedule-player-row ${isP1Winner ? 'is-winner' : ''}`}>
+                          <div className={`schedule-player-row ${isP1Winner ? 'is-winner' : ''} ${p1?.isBye ? 'is-bye-player' : ''}`}>
                             <div className="schedule-player-info">
                               {Boolean(p1?.seed || p1?.isSeed) && (
                                 <span className="official-seed-pill" title={`Seed #${p1.seed}`}>
                                   S{p1.seed || ''}
                                 </span>
                               )}
-                              <span className={`schedule-player-name ${isP1Rep ? 'is-reported' : ''}`}>
-                                {p1?.name || 'TBD'}
-                              </span>
+                              {p1?.isBye ? (
+                                <span className="schedule-bye-pill">BYE</span>
+                              ) : (
+                                <span className={`schedule-player-name ${isP1Rep ? 'is-reported' : ''}`}>
+                                  {p1?.name || 'TBD'}
+                                </span>
+                              )}
                               {isP1Rep && (
                                 <span className="schedule-player-reported-badge" title="Reported at desk">
                                   ✓ Reported
                                 </span>
                               )}
-                              {Boolean(p1?.place || p1?.court) && (
+                              {Boolean(!p1?.isBye && (p1?.place || p1?.court)) && (
                                 <span className="schedule-player-meta-tag">
                                   ({[p1.place, p1.court].filter(Boolean).join(' • ')})
                                 </span>
                               )}
                               {isP1Winner && <span className="schedule-winner-crown" title="Winner">👑</span>}
                             </div>
-                            <span className="schedule-sets-won-badge">{p1SetsWon}</span>
+                            <span className="schedule-sets-won-badge">{p1?.isBye ? '-' : p1SetsWon}</span>
                           </div>
 
                           {/* Player 2 */}
-                          <div className={`schedule-player-row ${isP2Winner ? 'is-winner' : ''}`}>
+                          <div className={`schedule-player-row ${isP2Winner ? 'is-winner' : ''} ${p2?.isBye ? 'is-bye-player' : ''}`}>
                             <div className="schedule-player-info">
                               {Boolean(p2?.seed || p2?.isSeed) && (
                                 <span className="official-seed-pill" title={`Seed #${p2.seed}`}>
                                   S{p2.seed || ''}
                                 </span>
                               )}
-                              <span className={`schedule-player-name ${isP2Rep ? 'is-reported' : ''}`}>
-                                {p2?.name || 'TBD'}
-                              </span>
+                              {p2?.isBye ? (
+                                <span className="schedule-bye-pill">BYE</span>
+                              ) : (
+                                <span className={`schedule-player-name ${isP2Rep ? 'is-reported' : ''}`}>
+                                  {p2?.name || 'TBD'}
+                                </span>
+                              )}
                               {isP2Rep && (
                                 <span className="schedule-player-reported-badge" title="Reported at desk">
                                   ✓ Reported
                                 </span>
                               )}
-                              {Boolean(p2?.place || p2?.court) && (
+                              {Boolean(!p2?.isBye && (p2?.place || p2?.court)) && (
                                 <span className="schedule-player-meta-tag">
                                   ({[p2.place, p2.court].filter(Boolean).join(' • ')})
                                 </span>
                               )}
                               {isP2Winner && <span className="schedule-winner-crown" title="Winner">👑</span>}
                             </div>
-                            <span className="schedule-sets-won-badge">{p2SetsWon}</span>
+                            <span className="schedule-sets-won-badge">{p2?.isBye ? '-' : p2SetsWon}</span>
                           </div>
                         </div>
 
-                        {/* Sets Score Breakdown & Live Points */}
+                        {/* Sets Score Breakdown & Live Points - Shown whenever match is live or has recorded scores */}
                         {(setPills.length > 0 || m.status === 'live') && (
                           <div className="schedule-score-breakdown">
                             <span style={{ color: m.status === 'live' ? '#f87171' : '#94a3b8', fontWeight: '800' }}>
@@ -5240,65 +5657,96 @@ export const BadmintonFixturesManager = ({
 
                         {/* Actions Footer */}
                         <div className="schedule-card-actions">
-                          {!isPublicView && isLiveUmpireMode && m.status === 'scheduled' && (
-                            <button
-                              type="button"
-                              onClick={() => handlePromptStartLive(m)}
-                              style={{
-                                background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                                color: '#ffffff',
-                                border: 'none',
-                                borderRadius: '8px',
-                                padding: '6px 12px',
-                                fontSize: '11px',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
-                              }}
-                            >
-                              <span className="live-pulse-dot" style={{ width: '6px', height: '6px', background: '#ffffff' }} />
-                              <span>🔴 Start Live (Umpire)</span>
-                            </button>
+                          {!isPublicView && (m.status === 'scheduled' || !m.status) && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handlePromptStartLive(m)}
+                                style={{
+                                  background: isLiveUmpireMode
+                                    ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                                    : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                  color: '#ffffff',
+                                  border: 'none',
+                                  borderRadius: '8px',
+                                  padding: '6px 12px',
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  boxShadow: isLiveUmpireMode ? '0 2px 8px rgba(239, 68, 68, 0.35)' : '0 2px 8px rgba(16, 185, 129, 0.35)',
+                                }}
+                              >
+                                <span className="live-pulse-dot" style={{ width: '6px', height: '6px', background: '#ffffff' }} />
+                                <span>{isLiveUmpireMode ? '🔴 Start Live (Umpire)' : '🟢 Start Live (Manual)'}</span>
+                              </button>
+
+                              {!isLiveUmpireMode && (
+                                <button
+                                  type="button"
+                                  className="btn-schedule-score"
+                                  style={{
+                                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                  }}
+                                  onClick={() => setQuickScoreScheduleMatch(m)}
+                                >
+                                  ⚡ Score
+                                </button>
+                              )}
+                            </>
                           )}
 
                           {!isPublicView && m.status === 'live' && (
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateMatch(m.id, { status: 'scheduled', isLive: false })}
-                              style={{
-                                background: 'rgba(239, 68, 68, 0.15)',
-                                border: '1.5px solid rgba(239, 68, 68, 0.5)',
-                                color: '#fca5a5',
-                                borderRadius: '8px',
-                                padding: '6px 12px',
-                                fontSize: '11px',
-                                fontWeight: '800',
-                                cursor: 'pointer',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '5px',
-                              }}
-                              title="Stop Live and move back to Scheduled"
-                            >
-                              <span>⏹️ Revert to Schedule</span>
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                className="btn-schedule-score"
+                                style={{
+                                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                                  color: '#ffffff',
+                                  fontWeight: '800',
+                                }}
+                                onClick={() => setQuickScoreScheduleMatch(m)}
+                                title="Enter live set scores / points directly"
+                              >
+                                ⚡ Live Points
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateMatch(m.id, { status: 'scheduled', isLive: false })}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  border: '1.5px solid rgba(239, 68, 68, 0.5)',
+                                  color: '#fca5a5',
+                                  borderRadius: '8px',
+                                  padding: '6px 12px',
+                                  fontSize: '11px',
+                                  fontWeight: '800',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                }}
+                                title="Stop Live and move back to Scheduled"
+                              >
+                                <span>⏹️ Stop Live</span>
+                              </button>
+                            </>
                           )}
 
-                          {!isPublicView && !isLiveUmpireMode && (
+                          {!isPublicView && m.status === 'completed' && (
                             <button
                               type="button"
                               className="btn-schedule-score"
                               style={{
-                                background: m.status === 'completed'
-                                  ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
-                                  : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
                               }}
                               onClick={() => setQuickScoreScheduleMatch(m)}
                             >
-                              {m.status === 'completed' ? '✏️ Modify Result' : '⚡ Score'}
+                              ✏️ Modify Result
                             </button>
                           )}
 
@@ -5317,7 +5765,7 @@ export const BadmintonFixturesManager = ({
                             👁️ Details
                           </button>
 
-                          {!isLiveUmpireMode && (
+                          {!isPublicView && (
                             <button
                               type="button"
                               className="btn-schedule-status-toggle"
@@ -5357,22 +5805,23 @@ export const BadmintonFixturesManager = ({
                       </thead>
                       <tbody>
                         {filteredScheduleMatches.map((m) => {
+                          const matchUniqueKey = m.id || `m_${m.round}_${m.matchNumber}`
                           const p1 = m.player1
                           const p2 = m.player2
                           const isP1Rep = isPlayerReported(p1)
                           const isP2Rep = isPlayerReported(p2)
-                          const isBothRep = isMatchBothReported(m)
+                          const isBothRep = isMatchBothReported(m) && (m.status === 'scheduled' || !m.status) && !m.isLive
                           const isP1Win = m.winner && p1 && m.winner.id === p1.id
                           const isP2Win = m.winner && p2 && m.winner.id === p2.id
                           const isFinal = m.round === currentDraw.totalRounds
                           const isSemi = m.round === currentDraw.totalRounds - 1
 
                           return (
-                            <tr key={m.id} className={isBothRep && m.status === 'scheduled' ? 'schedule-table-row-ready' : ''}>
+                            <tr key={matchUniqueKey} className={isBothRep ? 'schedule-table-row-ready' : ''}>
                               <td>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                   <span className="schedule-match-badge">M#{m.matchNumber}</span>
-                                  {isBothRep && m.status === 'scheduled' && (
+                                  {isBothRep && (
                                     <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: '800' }}>
                                       ⚡ Ready
                                     </span>
@@ -5388,11 +5837,15 @@ export const BadmintonFixturesManager = ({
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                   <div className={`schedule-table-player ${isP1Win ? 'winner' : ''} ${isP1Rep ? 'is-reported' : ''}`}>
                                     {Boolean(p1?.seed || p1?.isSeed) && <span className="official-seed-pill">S{p1.seed}</span>}
-                                    <span style={{ color: isP1Rep ? '#38bdf8' : undefined, fontWeight: isP1Rep ? '800' : undefined }}>
-                                      {p1?.name || 'TBD'}
-                                    </span>
+                                    {p1?.isBye ? (
+                                      <span className="schedule-bye-pill">BYE</span>
+                                    ) : (
+                                      <span style={{ color: isP1Rep ? '#38bdf8' : undefined, fontWeight: isP1Rep ? '800' : undefined }}>
+                                        {p1?.name || 'TBD'}
+                                      </span>
+                                    )}
                                     {isP1Rep && <span className="schedule-player-reported-badge">✓ Reported</span>}
-                                    {Boolean(p1?.place || p1?.court) && (
+                                    {Boolean(!p1?.isBye && (p1?.place || p1?.court)) && (
                                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                                         ({[p1.place, p1.court].filter(Boolean).join(' • ')})
                                       </span>
@@ -5402,11 +5855,15 @@ export const BadmintonFixturesManager = ({
                                   <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '800' }}>vs</span>
                                   <div className={`schedule-table-player ${isP2Win ? 'winner' : ''} ${isP2Rep ? 'is-reported' : ''}`}>
                                     {Boolean(p2?.seed || p2?.isSeed) && <span className="official-seed-pill">S{p2.seed}</span>}
-                                    <span style={{ color: isP2Rep ? '#38bdf8' : undefined, fontWeight: isP2Rep ? '800' : undefined }}>
-                                      {p2?.name || 'TBD'}
-                                    </span>
+                                    {p2?.isBye ? (
+                                      <span className="schedule-bye-pill">BYE</span>
+                                    ) : (
+                                      <span style={{ color: isP2Rep ? '#38bdf8' : undefined, fontWeight: isP2Rep ? '800' : undefined }}>
+                                        {p2?.name || 'TBD'}
+                                      </span>
+                                    )}
                                     {isP2Rep && <span className="schedule-player-reported-badge">✓ Reported</span>}
-                                    {Boolean(p2?.place || p2?.court) && (
+                                    {Boolean(!p2?.isBye && (p2?.place || p2?.court)) && (
                                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                                         ({[p2.place, p2.court].filter(Boolean).join(' • ')})
                                       </span>
@@ -5425,6 +5882,11 @@ export const BadmintonFixturesManager = ({
                                   {(m.time || m.scheduledTime) && (
                                     <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                                       ⏰ {m.time || m.scheduledTime}
+                                    </span>
+                                  )}
+                                  {(m.player1?.isBye || m.player2?.isBye || m.winner?.hasByeWalkover) && (
+                                    <span style={{ fontSize: '11px', color: '#c084fc', fontWeight: '800', background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '2px 6px', borderRadius: '4px', display: 'inline-block', width: 'fit-content' }}>
+                                      ⚡ BYE Walkover
                                     </span>
                                   )}
                                   {m.venue && !m.court && (
@@ -5455,6 +5917,8 @@ export const BadmintonFixturesManager = ({
                                       )
                                     })}
                                   </div>
+                                ) : (m.player1?.isBye || m.player2?.isBye || m.winner?.hasByeWalkover) ? (
+                                  <span style={{ color: '#c084fc', fontWeight: '800', fontSize: '12px' }}>W.O.</span>
                                 ) : (
                                   <span style={{ color: '#64748b' }}>-</span>
                                 )}
@@ -5498,14 +5962,33 @@ export const BadmintonFixturesManager = ({
                               </td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px' }}>
-                                  {!isPublicView && !isLiveUmpireMode && (
+                                  {!isPublicView && (m.status === 'scheduled' || !m.status) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePromptStartLive(m)}
+                                      style={{
+                                        background: isLiveUmpireMode
+                                          ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                                          : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        padding: '5px 8px',
+                                        fontSize: '11px',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {isLiveUmpireMode ? '🔴 Live' : '🟢 Live'}
+                                    </button>
+                                  )}
+                                  {!isPublicView && m.status === 'live' && (
                                     <button
                                       type="button"
                                       onClick={() => setQuickScoreScheduleMatch(m)}
                                       style={{
-                                        background: m.status === 'completed'
-                                          ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
-                                          : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                                         color: '#fff',
                                         border: 'none',
                                         borderRadius: '4px',
@@ -5516,7 +5999,26 @@ export const BadmintonFixturesManager = ({
                                         whiteSpace: 'nowrap',
                                       }}
                                     >
-                                      {m.status === 'completed' ? '✏️ Modify Result' : '⚡ Score'}
+                                      ⚡ Points
+                                    </button>
+                                  )}
+                                  {!isPublicView && m.status === 'completed' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setQuickScoreScheduleMatch(m)}
+                                      style={{
+                                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        padding: '5px 8px',
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      ✏️ Modify
                                     </button>
                                   )}
                                   <button
@@ -5537,7 +6039,7 @@ export const BadmintonFixturesManager = ({
                                   >
                                     👁️ Details
                                   </button>
-                                  {!isLiveUmpireMode && (
+                                  {!isPublicView && (
                                     <button
                                       type="button"
                                       onClick={() => handleOpenScoresheet(m)}
@@ -5570,8 +6072,8 @@ export const BadmintonFixturesManager = ({
                 </div>
               )}
 
-              {/* 4. Ultra-Clean, Simplified Score Update Modal */}
-              {quickScoreScheduleMatch && (() => {
+              {/* 4. Ultra-Clean, Simplified Score Update Modal (Admin Only) */}
+              {!isPublicView && quickScoreScheduleMatch && (() => {
                 const m = quickScoreScheduleMatch
                 const p1 = m.player1
                 const p2 = m.player2
@@ -5591,65 +6093,74 @@ export const BadmintonFixturesManager = ({
                 }
 
                 return (
-                  <div
-                    className="schedule-score-modal-backdrop"
-                    onClick={() => setQuickScoreScheduleMatch(null)}
-                  >
+                  <div className="custom-modal-overlay" onClick={() => setQuickScoreScheduleMatch(null)}>
                     <div
-                      className="schedule-score-modal-card"
+                      className="custom-modal-box"
+                      style={{ maxWidth: '460px', width: '92%' }}
                       onClick={(e) => e.stopPropagation()}
-                      style={{ maxWidth: '420px', padding: '18px 20px', borderRadius: '16px' }}
                     >
                       {/* Modal Header */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', borderBottom: '1px solid rgba(148, 163, 184, 0.15)', paddingBottom: '10px' }}>
+                      <div className="custom-modal-header" style={{ paddingBottom: '12px' }}>
                         <div>
-                          <div style={{ fontSize: '14px', fontWeight: '800', color: '#f8fafc' }}>
-                            🏸 Match #{m.matchNumber} <span style={{ color: '#38bdf8', fontSize: '12px', fontWeight: '700' }}>• {m.roundName}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="schedule-match-badge" style={{ fontSize: '12px' }}>
+                              M#{m.matchNumber}
+                            </span>
+                            <span style={{ fontSize: '13px', color: '#38bdf8', fontWeight: '700' }}>
+                              {m.roundName}
+                            </span>
                           </div>
+                          <h3 style={{ margin: '4px 0 0 0', fontSize: '17px', color: '#f8fafc' }}>
+                            ⚡ Enter Match Scores ({setsCount} {setsCount === 1 ? 'Set' : 'Sets'})
+                          </h3>
                         </div>
                         <button
                           type="button"
-                          className="schedule-score-modal-close"
+                          className="btn-modal-close"
                           onClick={() => setQuickScoreScheduleMatch(null)}
-                          title="Close"
-                          style={{ width: '28px', height: '28px', fontSize: '13px' }}
                         >
                           ✕
                         </button>
                       </div>
 
-                      {/* Players Matchup Bar */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(15, 23, 42, 0.7)', padding: '10px 14px', borderRadius: '10px', marginBottom: '16px', border: '1px solid rgba(148, 163, 184, 0.15)' }}>
-                        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                          {Boolean(p1?.seed || p1?.isSeed) && (
-                            <span className="official-seed-pill" style={{ marginRight: '4px', padding: '1px 5px', fontSize: '9px' }}>
-                              S{p1.seed}
-                            </span>
-                          )}
-                          <span style={{ fontWeight: '800', color: '#38bdf8', fontSize: '13px' }}>
+                      {/* Players & Sets Won Summary */}
+                      <div
+                        style={{
+                          background: 'rgba(15, 23, 42, 0.65)',
+                          borderRadius: '10px',
+                          padding: '12px 16px',
+                          marginBottom: '16px',
+                          display: 'grid',
+                          gridTemplateColumns: '1fr auto 1fr',
+                          alignItems: 'center',
+                          gap: '12px',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                        }}
+                      >
+                        <div style={{ textAlign: 'left' }}>
+                          <div style={{ fontWeight: '800', color: p1Won > p2Won ? '#4ade80' : '#f8fafc', fontSize: '14px' }}>
                             {p1?.name || 'Player 1'}
-                          </span>
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                            Sets Won: <strong style={{ color: '#38bdf8' }}>{p1Won}</strong>
+                          </div>
                         </div>
 
-                        <div style={{ padding: '0 10px', fontWeight: '800', color: '#94a3b8', fontSize: '12px' }}>
-                          VS
-                        </div>
+                        <div style={{ fontSize: '12px', fontWeight: '800', color: '#64748b' }}>VS</div>
 
-                        <div style={{ flex: 1, minWidth: 0, textAlign: 'right' }}>
-                          <span style={{ fontWeight: '800', color: '#a78bfa', fontSize: '13px' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: '800', color: p2Won > p1Won ? '#4ade80' : '#f8fafc', fontSize: '14px' }}>
                             {p2?.name || 'Player 2'}
-                          </span>
-                          {Boolean(p2?.seed || p2?.isSeed) && (
-                            <span className="official-seed-pill" style={{ marginLeft: '4px', padding: '1px 5px', fontSize: '9px' }}>
-                              S{p2.seed}
-                            </span>
-                          )}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                            Sets Won: <strong style={{ color: '#38bdf8' }}>{p2Won}</strong>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Clean Score Input Rows */}
+                      {/* Sets Inputs */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-                        {Array.from({ length: setsCount }, (_, idx) => idx + 1).map((sNum) => {
+                        {Array.from({ length: setsCount }, (_, i) => i + 1).map((sNum) => {
                           const keyA = `scoreSet${sNum}A`
                           const keyB = `scoreSet${sNum}B`
                           const valA = m[keyA] !== undefined ? m[keyA] : ''
@@ -5662,10 +6173,10 @@ export const BadmintonFixturesManager = ({
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                background: 'rgba(30, 41, 59, 0.5)',
+                                background: 'rgba(255, 255, 255, 0.03)',
                                 padding: '8px 14px',
-                                borderRadius: '10px',
-                                border: '1px solid rgba(148, 163, 184, 0.15)',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 255, 255, 0.06)',
                               }}
                             >
                               <span style={{ fontWeight: '800', color: '#94a3b8', fontSize: '12.5px', width: '50px' }}>
@@ -5690,9 +6201,7 @@ export const BadmintonFixturesManager = ({
                                     setQuickScoreScheduleMatch((prev) => ({ ...prev, [keyA]: v }))
                                   }}
                                 />
-
-                                <span style={{ fontWeight: '800', color: '#64748b', fontSize: '14px' }}>—</span>
-
+                                <span style={{ color: '#64748b', fontWeight: '800' }}>-</span>
                                 <input
                                   type="text"
                                   inputMode="numeric"
@@ -5716,43 +6225,16 @@ export const BadmintonFixturesManager = ({
                         })}
                       </div>
 
-                      {/* Winner Banner if Decided */}
-                      {m.winner && (
-                        <div style={{
-                          background: 'rgba(34, 197, 94, 0.15)',
-                          border: '1px solid rgba(34, 197, 94, 0.4)',
-                          borderRadius: '10px',
-                          padding: '8px 12px',
-                          marginBottom: '14px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          color: '#4ade80',
-                          fontWeight: '800',
-                          fontSize: '12px'
-                        }}>
-                          <span>🏆 Winner: {m.winner.name} ({p1Won} - {p2Won})</span>
-                          <button
-                            type="button"
-                            onClick={() => handleResetMatchScore(m)}
-                            title="Reset Score"
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#fca5a5',
-                              fontSize: '11px',
-                              fontWeight: '700',
-                              cursor: 'pointer',
-                              textDecoration: 'underline'
-                            }}
-                          >
-                            Reset
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Action Buttons */}
-                      <div style={{ display: 'flex', gap: '10px' }}>
+                      {/* Modal Footer Actions */}
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                        <button
+                          type="button"
+                          className="btn-modal-cancel"
+                          onClick={() => setQuickScoreScheduleMatch(null)}
+                          style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', fontSize: '13px' }}
+                        >
+                          Close
+                        </button>
                         {!isLiveUmpireMode && (
                           <button
                             type="button"
@@ -5761,13 +6243,13 @@ export const BadmintonFixturesManager = ({
                               setQuickScoreScheduleMatch(null)
                             }}
                             style={{
-                              padding: '9px 12px',
-                              background: 'rgba(59, 130, 246, 0.15)',
-                              border: '1px solid rgba(59, 130, 246, 0.35)',
-                              borderRadius: '8px',
+                              background: 'rgba(59, 130, 246, 0.2)',
                               color: '#93c5fd',
+                              border: '1px solid rgba(59, 130, 246, 0.4)',
+                              borderRadius: '8px',
+                              padding: '9px 14px',
+                              fontSize: '13px',
                               fontWeight: '700',
-                              fontSize: '12px',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
@@ -5884,49 +6366,51 @@ export const BadmintonFixturesManager = ({
                   </button>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="players-actions-group">
-                  <button
-                    type="button"
-                    onClick={() => handleMarkAllReported(true)}
-                    className="btn-secondary-glow"
-                    style={{ fontSize: '12px', padding: '7px 12px' }}
-                    title="Mark all registered players in this category as reported"
-                  >
-                    ✓ Mark All Reported
-                  </button>
+                {/* Action Buttons (Organizer Only) */}
+                {!isPublicView && (
+                  <div className="players-actions-group">
+                    <button
+                      type="button"
+                      onClick={() => handleMarkAllReported(true)}
+                      className="btn-secondary-glow"
+                      style={{ fontSize: '12px', padding: '7px 12px' }}
+                      title="Mark all registered players in this category as reported"
+                    >
+                      ✓ Mark All Reported
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleMarkAllReported(false)}
-                    style={{
-                      background: 'rgba(148, 163, 184, 0.15)',
-                      border: '1px solid rgba(148, 163, 184, 0.25)',
-                      color: '#cbd5e1',
-                      borderRadius: '8px',
-                      padding: '7px 12px',
-                      fontSize: '12px',
-                      fontWeight: '700',
-                      cursor: 'pointer',
-                    }}
-                    title="Reset reporting checkboxes"
-                  >
-                    ✕ Reset
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMarkAllReported(false)}
+                      style={{
+                        background: 'rgba(148, 163, 184, 0.15)',
+                        border: '1px solid rgba(148, 163, 184, 0.25)',
+                        color: '#cbd5e1',
+                        borderRadius: '8px',
+                        padding: '7px 12px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                      }}
+                      title="Reset reporting checkboxes"
+                    >
+                      ✕ Reset
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowQuickAdd(!showQuickAdd)}
-                    className="btn-primary-gradient"
-                    style={{ fontSize: '12px', padding: '7px 14px' }}
-                  >
-                    {showQuickAdd ? '✕ Close Quick Add' : '+ Quick Add Player'}
-                  </button>
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowQuickAdd(!showQuickAdd)}
+                      className="btn-primary-gradient"
+                      style={{ fontSize: '12px', padding: '7px 14px' }}
+                    >
+                      {showQuickAdd ? '✕ Close Quick Add' : '+ Quick Add Player'}
+                    </button>
+                  </div>
+                )}
               </div>
 
-              {/* Quick Add Form Drawer */}
-              {showQuickAdd && (
+              {/* Quick Add Form Drawer (Organizer Only) */}
+              {!isPublicView && showQuickAdd && (
                 <form onSubmit={handleQuickAddPlayer} className="quick-add-form">
                   <div className="form-row-grid">
                     {isDoublesCategory(selectedCategory) ? (
@@ -5996,7 +6480,7 @@ export const BadmintonFixturesManager = ({
                         <th>Place / Club</th>
                         <th>Court</th>
                         <th>Category</th>
-                        <th style={{ textAlign: 'right', width: '100px' }}>Actions</th>
+                        {!isPublicView && <th style={{ textAlign: 'right', width: '100px' }}>Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -6014,10 +6498,11 @@ export const BadmintonFixturesManager = ({
                             <td>
                               <div
                                 className="reporting-tick-container"
-                                onClick={() => togglePlayerReporting(player)}
-                                title="Click to toggle reporting status"
+                                onClick={isPublicView ? undefined : () => togglePlayerReporting(player)}
+                                style={isPublicView ? { cursor: 'default' } : undefined}
+                                title={isPublicView ? (isReported ? 'Reported at Desk' : 'Pending Reporting') : 'Click to toggle reporting status'}
                               >
-                                <div className={`reporting-custom-checkbox ${isReported ? 'checked' : ''}`}>
+                                <div className={`reporting-custom-checkbox ${isReported ? 'checked' : ''}`} style={isPublicView ? { pointerEvents: 'none' } : undefined}>
                                   {isReported && '✓'}
                                 </div>
                                 <span className={`reporting-status-pill ${isReported ? 'reported' : 'pending'}`}>
@@ -6052,62 +6537,64 @@ export const BadmintonFixturesManager = ({
                             <td>
                               <span className="category-pill-tag">{formatCategoryName(selectedCategory)}</span>
                             </td>
-                            <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenEditDeskPlayer(player)}
-                                  style={{
-                                    padding: '5px 12px',
-                                    background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(37, 99, 235, 0.25) 100%)',
-                                    border: '1px solid rgba(96, 165, 250, 0.5)',
-                                    color: '#93c5fd',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-                                    transition: 'all 0.15s ease',
-                                  }}
-                                  title="Modify player or doubles pair details"
-                                >
-                                  ✏️ Modify
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (window.confirm(`Are you sure you want to remove "${player.name}" from ${selectedCategory}?`)) {
-                                      if (onDeleteParticipant) {
-                                        onDeleteParticipant(selectedMatch.id, player.id || player.name)
+                            {!isPublicView && (
+                              <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditDeskPlayer(player)}
+                                    style={{
+                                      padding: '5px 12px',
+                                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(37, 99, 235, 0.25) 100%)',
+                                      border: '1px solid rgba(96, 165, 250, 0.5)',
+                                      color: '#93c5fd',
+                                      borderRadius: '6px',
+                                      fontSize: '12px',
+                                      fontWeight: '700',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                                      transition: 'all 0.15s ease',
+                                    }}
+                                    title="Modify player or doubles pair details"
+                                  >
+                                    ✏️ Modify
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (window.confirm(`Are you sure you want to remove "${player.name}" from ${selectedCategory}?`)) {
+                                        if (onDeleteParticipant) {
+                                          onDeleteParticipant(selectedMatch.id, player.id || player.name)
+                                        }
+                                        setSwapToast(`✓ Removed "${player.name}" from ${selectedCategory}!`)
+                                        setTimeout(() => setSwapToast(null), 3000)
                                       }
-                                      setSwapToast(`✓ Removed "${player.name}" from ${selectedCategory}!`)
-                                      setTimeout(() => setSwapToast(null), 3000)
-                                    }
-                                  }}
-                                  style={{
-                                    padding: '5px 10px',
-                                    background: 'rgba(239, 68, 68, 0.15)',
-                                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                                    color: '#fca5a5',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
-                                    transition: 'all 0.15s ease',
-                                  }}
-                                  title="Delete player from tournament category"
-                                >
-                                  🗑️ Delete
-                                </button>
-                              </div>
-                            </td>
+                                    }}
+                                    style={{
+                                      padding: '5px 10px',
+                                      background: 'rgba(239, 68, 68, 0.15)',
+                                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                                      color: '#fca5a5',
+                                      borderRadius: '6px',
+                                      fontSize: '12px',
+                                      fontWeight: '700',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      boxShadow: '0 2px 6px rgba(0, 0, 0, 0.2)',
+                                      transition: 'all 0.15s ease',
+                                    }}
+                                    title="Delete player from tournament category"
+                                  >
+                                    🗑️ Delete
+                                  </button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         )
                       })}
@@ -6132,8 +6619,8 @@ export const BadmintonFixturesManager = ({
         onGenerate={handleGenerateDrawWithConfig}
       />
 
-      {/* Tap-to-Exchange Player Position Modal with Search Bar */}
-      {exchangeModalSource && (() => {
+      {/* Tap-to-Exchange Player Position Modal with Search Bar (Admin Only) */}
+      {!isPublicView && exchangeModalSource && (() => {
         const sourcePlayer = exchangeModalSource.player
         const sourceLine = exchangeModalSource.lineNum
         const cleanQuery = exchangeSearchQuery.trim().toLowerCase()
@@ -6558,8 +7045,8 @@ export const BadmintonFixturesManager = ({
         )
       })()}
 
-      {/* Dedicated Modify Player / Doubles Pair Modal in Players Desk */}
-      {editingDeskPlayer && (() => {
+      {/* Dedicated Modify Player / Doubles Pair Modal in Players Desk (Admin Only) */}
+      {!isPublicView && editingDeskPlayer && (() => {
         const targetCat = deskEditForm.category || selectedCategory
         const isDoubles = isDoublesCategory(targetCat)
         const isFormValid = isDoubles
@@ -6861,9 +7348,9 @@ export const BadmintonFixturesManager = ({
       })()}
 
       {/* ==================================================================== */}
-      {/* ASSIGN OFFICIAL UMPIRE & START LIVE MATCH MODAL                      */}
+      {/* ASSIGN OFFICIAL UMPIRE & START LIVE MATCH MODAL (Admin Only)         */}
       {/* ==================================================================== */}
-      {assigningLiveMatch && (
+      {!isPublicView && assigningLiveMatch && (
         <div
           style={{
             position: 'fixed',

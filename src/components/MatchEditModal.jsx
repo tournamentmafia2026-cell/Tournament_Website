@@ -5,6 +5,7 @@ import {
   CATEGORY_FILTER_GROUPS,
   matchesCategorySearch,
   isCategoryInGroup,
+  sortBadmintonCategories,
 } from '../utils/badmintonCategories'
 import {
   formatTournamentName,
@@ -45,7 +46,8 @@ export const MatchEditModal = ({
   useEffect(() => {
     if (match) {
       const initialWinner = match.winner || ''
-      const cats = Array.isArray(match.categories) && match.categories.length > 0 ? match.categories : ['Men Singles', 'Women Singles']
+      const rawCats = Array.isArray(match.categories) && match.categories.length > 0 ? match.categories : ['Men Singles', 'Women Singles']
+      const cats = sortBadmintonCategories(rawCats)
       const initialCatWinners = { ...(match.categoryWinners || {}) }
       const allDone = cats.length > 0 && cats.every((c) => initialCatWinners[c] && initialCatWinners[c].trim().length > 0)
       const isDone = Boolean(allDone || (match.isCompleted && cats.length <= 1))
@@ -97,7 +99,7 @@ export const MatchEditModal = ({
       const updated = current.includes(category)
         ? current.filter((c) => c !== category)
         : [...current, category]
-      return { ...prev, categories: updated }
+      return { ...prev, categories: sortBadmintonCategories(updated) }
     })
   }
 
@@ -108,7 +110,7 @@ export const MatchEditModal = ({
     setFormData((prev) => {
       const current = prev.categories || []
       if (current.includes(formattedCat)) return prev
-      return { ...prev, categories: [...current, formattedCat] }
+      return { ...prev, categories: sortBadmintonCategories([...current, formattedCat]) }
     })
     setCategorySearch('')
     categoryInputRef.current?.focus()
@@ -121,7 +123,7 @@ export const MatchEditModal = ({
       return
     }
 
-    const cats = formData.categories.length > 0 ? formData.categories.map(formatCategoryName) : ['Men Singles']
+    const cats = formData.categories.length > 0 ? sortBadmintonCategories(formData.categories.map(formatCategoryName)) : ['Men Singles']
     const cleanCatWinners = {}
     Object.entries(formData.categoryWinners || {}).forEach(([c, val]) => {
       if (val && typeof val === 'string' && val.trim().length > 0) {

@@ -54,28 +54,25 @@ function saveDbData(data) {
     const current = getDbData()
     const merged = { ...current }
 
-    // Merge all incoming payload fields safely
+    // Apply all incoming payload fields accurately to persist additions, edits, and deletions
     Object.keys(data).forEach((key) => {
-      // If incoming matches is empty array but current DB has matches, DO NOT wipe
       if (key === 'matches') {
-        if (Array.isArray(data.matches) && data.matches.length > 0) {
+        if (Array.isArray(data.matches)) {
           merged.matches = sanitizeMatchesData(data.matches)
-        } else if (Array.isArray(data.matches) && data.matches.length === 0 && (!current.matches || current.matches.length === 0)) {
-          merged.matches = []
         }
         return
       }
 
       if (key === 'authenticators') {
-        if (data.authenticators && typeof data.authenticators === 'object' && Object.keys(data.authenticators).length > 0) {
-          merged.authenticators = { ...(current.authenticators || {}), ...data.authenticators }
+        if (data.authenticators && typeof data.authenticators === 'object') {
+          merged.authenticators = data.authenticators
         }
         return
       }
 
       if (key === 'reportedPlayers') {
         if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
-          merged.reportedPlayers = data.reportedPlayers
+          merged.reportedPlayers = { ...(merged.reportedPlayers || {}), ...data.reportedPlayers }
         }
         return
       }
@@ -89,23 +86,33 @@ function saveDbData(data) {
 
       if (key === 'publishedStatus' || key === 'publishedStatusMap') {
         if (data[key] && typeof data[key] === 'object') {
-          merged.publishedStatus = { ...(current.publishedStatus || {}), ...data[key] }
+          merged.publishedStatus = data[key]
         }
         return
       }
 
-      if (
-        typeof data[key] === 'object' &&
-        data[key] !== null &&
-        !Array.isArray(data[key]) &&
-        typeof current[key] === 'object' &&
-        current[key] !== null &&
-        !Array.isArray(current[key])
-      ) {
-        merged[key] = { ...current[key], ...data[key] }
-      } else {
-        merged[key] = data[key]
+      if (key === 'tournamentDraws') {
+        if (data.tournamentDraws && typeof data.tournamentDraws === 'object') {
+          merged.tournamentDraws = data.tournamentDraws
+        }
+        return
       }
+
+      if (key === 'courtConfig') {
+        if (data.courtConfig && typeof data.courtConfig === 'object') {
+          merged.courtConfig = data.courtConfig
+        }
+        return
+      }
+
+      if (key === 'organizerCredentials') {
+        if (data.organizerCredentials && typeof data.organizerCredentials === 'object') {
+          merged.organizerCredentials = { ...(current.organizerCredentials || {}), ...data.organizerCredentials }
+        }
+        return
+      }
+
+      merged[key] = data[key]
     })
 
     if (merged.matches) {

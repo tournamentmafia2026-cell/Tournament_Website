@@ -5,6 +5,7 @@ import {
   formatCourtName,
   formatPersonName,
 } from '../utils/textFormatters'
+import { sortBadmintonCategories } from '../utils/badmintonCategories'
 
 export const TournamentResultsModal = ({
   isOpen,
@@ -30,7 +31,7 @@ export const TournamentResultsModal = ({
   // Extract category podium data (Winner, Runner, Semi-Finalists)
   const categoryResults = useMemo(() => {
     if (!tournament) return []
-    const cats = tournament.categories || ['Men Singles', 'Women Singles']
+    const cats = sortBadmintonCategories(tournament.categories || ['Men Singles', 'Women Singles'])
     return cats
       .map((cat) => {
         const drawKey = `${tournament.id}-${cat}`

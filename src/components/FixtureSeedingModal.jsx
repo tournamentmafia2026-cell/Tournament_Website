@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, memo } from 'react'
 import {
   formatTournamentName,
   formatAddress,
@@ -7,10 +7,11 @@ import {
   formatPlaceOrClub,
   formatCategoryName,
 } from '../utils/textFormatters'
+import { sortBadmintonCategories } from '../utils/badmintonCategories'
 
 const DEFAULT_SEEDING_CATEGORIES = ['Men Singles', 'Women Singles', 'Men Doubles']
 
-export const FixtureSeedingModal = ({
+const FixtureSeedingModalComponent = ({
   isOpen = false,
   onClose = () => {},
   match = null,
@@ -20,7 +21,7 @@ export const FixtureSeedingModal = ({
   availablePlayers = [],
   onGenerate = () => {},
 }) => {
-  const categories = match?.categories || DEFAULT_SEEDING_CATEGORIES
+  const categories = useMemo(() => sortBadmintonCategories(match?.categories || DEFAULT_SEEDING_CATEGORIES), [match?.categories])
   const [selectedCategory, setSelectedCategory] = useState(() => initialCategory || categories[0] || 'Men Singles')
   
   // Total Members / Draw Size (4, 8, 16, 32, 64)
@@ -53,18 +54,23 @@ export const FixtureSeedingModal = ({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const rawUploadedPlayers = match ? (authenticators[match.id] || []).filter(
-    (p) => (p.category || 'Men Singles') === selectedCategory
-  ) : []
+  const rawUploadedPlayers = useMemo(() => {
+    return match ? (authenticators[match.id] || []).filter(
+      (p) => (p.category || 'Men Singles') === selectedCategory
+    ) : []
+  }, [match, authenticators, selectedCategory])
 
-  const uploadedCategoryPlayers = availablePlayers && availablePlayers.length > 0
-    ? availablePlayers
-    : rawUploadedPlayers
+  const uploadedCategoryPlayers = useMemo(() => {
+    return availablePlayers && availablePlayers.length > 0
+      ? availablePlayers
+      : rawUploadedPlayers
+  }, [availablePlayers, rawUploadedPlayers])
 
   const wasOpenRef = useRef(false)
 
   useEffect(() => {
     if (isOpen && !wasOpenRef.current && match) {
+      wasOpenRef.current = true
       const initialCat = (initialCategory && categories.includes(initialCategory)) 
         ? initialCategory 
         : (categories[0] || 'Men Singles')
@@ -130,9 +136,10 @@ export const FixtureSeedingModal = ({
         }
       }
       setSeedDetails(initialSeeds)
+    } else if (!isOpen) {
+      wasOpenRef.current = false
     }
-    wasOpenRef.current = Boolean(isOpen)
-  }, [isOpen])
+  }, [isOpen, match?.id, initialCategory])
 
   if (!isOpen || !match) return null
 
@@ -587,28 +594,86 @@ export const FixtureSeedingModal = ({
                     <label style={{ display: 'block', fontSize: '11px', fontWeight: '700', color: '#cbd5e1', marginBottom: '4px' }}>
                       🏸 Courts Count
                     </label>
-                    <select
-                      value={numberOfCourts}
-                      onChange={(e) => setNumberOfCourts(Number(e.target.value))}
-                      style={{
-                        width: '100%',
-                        background: '#0f172a',
-                        border: '1px solid rgba(148, 163, 184, 0.3)',
-                        borderRadius: '8px',
-                        padding: '7px 10px',
-                        color: '#4ade80',
-                        fontSize: '12.5px',
-                        fontWeight: '700',
-                        boxSizing: 'border-box',
-                      }}
-                    >
-                      <option value={1}>1 Court</option>
-                      <option value={2}>2 Courts</option>
-                      <option value={3}>3 Courts</option>
-                      <option value={4}>4 Courts</option>
-                      <option value={6}>6 Courts</option>
-                      <option value={8}>8 Courts</option>
-                    </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <button
+                        type="button"
+                        title="Decrease Courts"
+                        onClick={() => setNumberOfCourts((prev) => Math.max(1, (Number(prev) || 1) - 1))}
+                        style={{
+                          width: '32px',
+                          height: '34px',
+                          background: '#1e293b',
+                          border: '1px solid rgba(148, 163, 184, 0.3)',
+                          borderRadius: '8px',
+                          color: '#cbd5e1',
+                          fontWeight: '900',
+                          fontSize: '15px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={numberOfCourts}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          if (val === '') {
+                            setNumberOfCourts('')
+                          } else {
+                            const num = parseInt(val, 10)
+                            setNumberOfCourts(isNaN(num) ? 1 : Math.max(1, Math.min(50, num)))
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!numberOfCourts || Number(numberOfCourts) < 1) {
+                            setNumberOfCourts(1)
+                          }
+                        }}
+                        placeholder="4"
+                        style={{
+                          width: '100%',
+                          flex: 1,
+                          background: '#0f172a',
+                          border: '1px solid rgba(148, 163, 184, 0.3)',
+                          borderRadius: '8px',
+                          padding: '7px 8px',
+                          color: '#4ade80',
+                          fontSize: '13px',
+                          fontWeight: '800',
+                          textAlign: 'center',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <button
+                        type="button"
+                        title="Increase Courts"
+                        onClick={() => setNumberOfCourts((prev) => Math.min(50, (Number(prev) || 0) + 1))}
+                        style={{
+                          width: '32px',
+                          height: '34px',
+                          background: '#1e293b',
+                          border: '1px solid rgba(148, 163, 184, 0.3)',
+                          borderRadius: '8px',
+                          color: '#cbd5e1',
+                          fontWeight: '900',
+                          fontSize: '15px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
 
                   <div>
@@ -868,3 +933,6 @@ export const FixtureSeedingModal = ({
     </div>
   )
 }
+
+export const FixtureSeedingModal = memo(FixtureSeedingModalComponent)
+

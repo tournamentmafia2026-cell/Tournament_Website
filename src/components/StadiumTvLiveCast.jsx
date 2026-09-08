@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { formatCategoryName, formatTournamentName, formatCourtName, formatAddress } from '../utils/textFormatters'
+import { sortBadmintonCategories } from '../utils/badmintonCategories'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
-import { CourtConfigModal } from './CourtConfigModal'
 import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from '../utils/courtConfig'
+import { fastDeepEqual } from '../utils/fastDeepEqual'
 
 export const StadiumTvLiveCast = ({
   tournament,
@@ -123,15 +124,21 @@ export const StadiumTvLiveCast = ({
     const syncAds = () => {
       try {
         const savedAds = localStorage.getItem('badminton-stadium-ads')
-        if (savedAds) setSponsorAds(JSON.parse(savedAds))
+        if (savedAds) {
+          const parsedAds = JSON.parse(savedAds)
+          setSponsorAds((prev) => (fastDeepEqual(prev, parsedAds) ? prev : parsedAds))
+        }
         const savedSettings = localStorage.getItem('badminton-ad-settings')
-        if (savedSettings) setAdSettings(JSON.parse(savedSettings))
+        if (savedSettings) {
+          const parsedSettings = JSON.parse(savedSettings)
+          setAdSettings((prev) => (fastDeepEqual(prev, parsedSettings) ? prev : parsedSettings))
+        }
       } catch (e) {
         console.error(e)
       }
     }
     window.addEventListener('storage', syncAds)
-    const interval = setInterval(syncAds, 2000)
+    const interval = setInterval(syncAds, 2500)
     return () => {
       window.removeEventListener('storage', syncAds)
       clearInterval(interval)
@@ -253,13 +260,13 @@ export const StadiumTvLiveCast = ({
           const data = await res.json()
           if (!isMounted) return
           if (data && data.tournamentDraws && typeof data.tournamentDraws === 'object') {
-            setTournamentDraws(data.tournamentDraws)
+            setTournamentDraws((prev) => (fastDeepEqual(prev, data.tournamentDraws) ? prev : data.tournamentDraws))
             try {
               localStorage.setItem('badminton-tournament-draws', JSON.stringify(data.tournamentDraws))
             } catch {}
           }
           if (data?.liveUmpireMode !== undefined) {
-            setIsLiveUmpireMode(data.liveUmpireMode)
+            setIsLiveUmpireMode((prev) => (prev === data.liveUmpireMode ? prev : data.liveUmpireMode))
           }
           return
         }
@@ -269,14 +276,15 @@ export const StadiumTvLiveCast = ({
       try {
         const saved = localStorage.getItem('badminton-tournament-draws')
         if (saved && isMounted) {
-          setTournamentDraws(JSON.parse(saved))
+          const parsed = JSON.parse(saved)
+          setTournamentDraws((prev) => (fastDeepEqual(prev, parsed) ? prev : parsed))
         }
       } catch {}
     }
 
     syncDraws()
     window.addEventListener('storage', syncDraws)
-    const syncInterval = setInterval(syncDraws, 1500)
+    const syncInterval = setInterval(syncDraws, 2000)
     return () => {
       isMounted = false
       window.removeEventListener('storage', syncDraws)
@@ -299,12 +307,13 @@ export const StadiumTvLiveCast = ({
       try {
         const saved = localStorage.getItem('badminton-live-umpire-mode')
         if (saved !== null) {
-          setIsLiveUmpireMode(JSON.parse(saved))
+          const parsed = JSON.parse(saved)
+          setIsLiveUmpireMode((prev) => (prev === parsed ? prev : parsed))
         }
       } catch {}
     }
     window.addEventListener('storage', syncUmpireMode)
-    const interval = setInterval(syncUmpireMode, 1500)
+    const interval = setInterval(syncUmpireMode, 2000)
     return () => {
       window.removeEventListener('storage', syncUmpireMode)
       clearInterval(interval)
@@ -419,13 +428,16 @@ export const StadiumTvLiveCast = ({
 
       try {
         const saved = localStorage.getItem('badminton-published-matches')
-        if (saved && isMounted) setLiveTournaments(JSON.parse(saved))
+        if (saved && isMounted) {
+          const parsed = JSON.parse(saved)
+          setLiveTournaments((prev) => (fastDeepEqual(prev, parsed) ? prev : parsed))
+        }
       } catch {}
     }
 
     syncTournaments()
     window.addEventListener('storage', syncTournaments)
-    const interval = setInterval(syncTournaments, 2000)
+    const interval = setInterval(syncTournaments, 3000)
     return () => {
       isMounted = false
       window.removeEventListener('storage', syncTournaments)
@@ -458,9 +470,10 @@ export const StadiumTvLiveCast = ({
   // Extract all categories for this tournament
   const tournamentCategories = useMemo(() => {
     if (!currentTournament) return []
-    return currentTournament.categories || [
+    const raw = currentTournament.categories || [
       'Men Singles', 'Men Doubles', 'Women Singles', 'Women Doubles', 'Mixed Doubles', 'Boys Under 15', 'Girls Under 15'
     ]
+    return sortBadmintonCategories(raw)
   }, [currentTournament])
 
   // Aggregate all matches across all categories

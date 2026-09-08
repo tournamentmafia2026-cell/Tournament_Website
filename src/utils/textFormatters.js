@@ -2,6 +2,8 @@
 // Ensures all tournament names, addresses, organizer details, player names, and categories
 // are presented in a clean, consistent, professional Title Case regardless of how users type them.
 
+import { sortBadmintonCategories } from './badmintonCategories'
+
 // Known sports, organization, and country acronyms that should remain UPPERCASE
 const ACRONYMS = new Set([
   'BWF', 'BAI', 'TNBA', 'KBA', 'MBA', 'APBA', 'TSBA', 'USA', 'UK', 'UAE', 'SDAT',
@@ -281,7 +283,7 @@ export const sanitizeTournament = (tournament) => {
     winner: tournament.winner ? formatPersonName(tournament.winner) : (tournament.winner || ''),
     categoryWinners: cleanCategoryWinners,
     categories: Array.isArray(tournament.categories)
-      ? tournament.categories.map((c) => formatCategoryName(c))
+      ? sortBadmintonCategories(tournament.categories.map((c) => formatCategoryName(c)))
       : ['Men Singles', 'Women Singles'],
     completedAt: tournament.completedAt || null,
   }

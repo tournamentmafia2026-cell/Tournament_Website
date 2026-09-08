@@ -168,6 +168,8 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             mobile: cloudAdmin.mobile || cleanId,
             name: 'Chief Organizer',
             role: 'organizer',
+            isChiefOrganizer: true,
+            isTemporary: false,
             scope: 'full',
             token: `admin_auth_${Date.now()}`,
             loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -204,14 +206,13 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       })
 
       if (matched) {
-        const isOrganizer =
-          matched.role === 'organizer' ||
-          matched.scope === 'full' ||
-          matched.username === 'admin' ||
-          String(matched.name || '').toLowerCase().includes('organizer') ||
-          String(matched.name || '').toLowerCase().includes('admin')
+        const hasAssignedMatch = Boolean(matched.assigned_match_id || matched.assignedMatchId)
+        const isTemporaryCred = hasAssignedMatch || String(matched.id || '').startsWith('temp_') || String(matched.id || '').startsWith('umpire_')
+        const isChiefAdmin =
+          !isTemporaryCred &&
+          (matched.role === 'organizer' || String(matched.id).startsWith('admin_') || matched.username === 'admin')
 
-        if (isOrganizer) {
+        if (isChiefAdmin) {
           // Sync to device's localStorage so offline works
           localStorage.setItem(
             ORGANIZER_CREDS_KEY,
@@ -229,6 +230,8 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
             mobile: matched.username,
             name: matched.name || 'Chief Organizer',
             role: 'organizer',
+            isChiefOrganizer: true,
+            isTemporary: false,
             scope: 'full',
             token: `admin_auth_${Date.now()}`,
             loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -240,20 +243,24 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
           onSuccess(adminSession)
           return
         } else {
-          // Umpire / Referee Account
+          // Temporary Authenticator or Umpire / Referee Account
           const courtAssigned =
             matched.court_name ||
             matched.courtName ||
             matched.assignedCourt ||
             'Court 1'
 
+          const isUmpire = matched.role === 'umpire' || matched.scope === 'umpire'
+
           const tempSession = {
             username: matched.username,
             name: matched.name || matched.authName || matched.username,
-            role: 'umpire',
+            role: isUmpire ? 'umpire' : 'temporary_authenticator',
+            isChiefOrganizer: false,
+            isTemporary: true,
             assignedMatchId: matched.assigned_match_id || matched.assignedMatchId,
             assignedMatchName: matched.assigned_match_name || matched.assignedMatchName,
-            scope: 'umpire',
+            scope: matched.scope || (isUmpire ? 'umpire' : 'full'),
             courtName: courtAssigned,
             assignedCourt: courtAssigned,
             token: `auth_temp_${Date.now()}`,
@@ -292,6 +299,8 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
           mobile: creds.mobile || '9840012345',
           name: 'Chief Organizer',
           role: 'organizer',
+          isChiefOrganizer: true,
+          isTemporary: false,
           scope: 'full',
           token: `admin_auth_${Date.now()}`,
           loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -471,6 +480,8 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       mobile: cleanPhone,
       name: 'Chief Organizer',
       role: 'organizer',
+      isChiefOrganizer: true,
+      isTemporary: false,
       scope: 'full',
       token: `admin_auth_${Date.now()}`,
       loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

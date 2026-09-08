@@ -240,34 +240,41 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     activePlayerList = [...explicitSeeds, ...nonSeedPlayers]
   }
 
-  // Determine target draw size strictly if explicitly requested
-  let targetDrawSize
-  if (options.drawSize) {
-    targetDrawSize = getNextPowerOfTwo(Number(options.drawSize))
-  } else if (options.totalMembers) {
-    targetDrawSize = getNextPowerOfTwo(Number(options.totalMembers))
-  } else {
-    targetDrawSize = getNextPowerOfTwo(Math.max(2, activePlayerList.length))
-  }
-  const drawSize = Math.max(2, targetDrawSize)
+  // Determine target draw size strictly based on active players count
+  const pCount = Math.max(2, activePlayerList.length)
+  const naturalDrawSize = getNextPowerOfTwo(pCount)
 
-  // If activePlayerList exceeds target drawSize (e.g. going from 32 down to 16), truncate to fit
+  // Clamp drawSize so that a bracket cannot have empty BYE-vs-BYE matches
+  let drawSize = naturalDrawSize
+  if (options.drawSize && Number(options.drawSize) >= naturalDrawSize) {
+    const reqSize = getNextPowerOfTwo(Number(options.drawSize))
+    if (activePlayerList.length > reqSize / 2) {
+      drawSize = reqSize
+    } else {
+      drawSize = naturalDrawSize
+    }
+  } else if (options.totalMembers && Number(options.totalMembers) >= naturalDrawSize) {
+    const reqSize = getNextPowerOfTwo(Number(options.totalMembers))
+    if (activePlayerList.length > reqSize / 2) {
+      drawSize = reqSize
+    } else {
+      drawSize = naturalDrawSize
+    }
+  }
+
+  // If activePlayerList exceeds target drawSize, truncate to fit
   if (activePlayerList.length > drawSize) {
     const nonSeedPlayers = activePlayerList.filter((p) => !isPlayerInList(p, explicitSeeds))
     const neededNonSeeds = Math.max(0, drawSize - explicitSeeds.length)
     activePlayerList = [...explicitSeeds, ...nonSeedPlayers.slice(0, neededNonSeeds)]
   }
 
-  // Calculate actual participant count within the drawSize
-  const rawParticipantCount = activePlayerList.length > 0 
-    ? activePlayerList.length 
-    : (requestedTotalMembers > 0 ? Math.min(requestedTotalMembers, drawSize) : drawSize)
-  
-  const totalParticipants = Math.min(drawSize, Math.max(2, rawParticipantCount))
+  const totalParticipants = activePlayerList.length
   const totalRounds = Math.max(1, Math.round(Math.log2(drawSize)))
   const totalMatchesInR1 = drawSize / 2
 
-  // Total byes: Draw Size - Total Participants (e.g. 16 - 11 = 5 Byes)
+  // Total byes: Draw Size - Total Participants (e.g. 16 - 9 = 7 Byes)
+  // Guaranteed: totalByes <= totalMatchesInR1 (No two Byes can ever be in the same match!)
   let totalByes = Math.max(0, drawSize - totalParticipants)
   if (options.byesCount !== undefined && Number(options.byesCount) >= 0) {
     totalByes = Math.min(Number(options.byesCount), totalMatchesInR1)
@@ -339,7 +346,7 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     }
   })
 
-  // 3. PRIORITIZE BYES FOR SEEDED PLAYERS FIRST!
+  // 3. PRIORITY 1: BYES GIVEN TO SEEDED PLAYERS FIRST!
   // The opponents of Seed 1, Seed 2, Seed 3, Seed 4... receive BYEs first.
   let byesAssigned = 0
   for (let i = 0; i < seedOpponentSlots.length; i++) {
@@ -357,7 +364,7 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     }
   }
 
-  // 4. Distribute any remaining BYEs across unseeded / normal matches.
+  // 4. PRIORITY 2: DISTRIBUTE REMAINING BYES TO NORMAL / UNSEEDED MATCHES
   // CRITICAL RULE: Exactly ONE BYE per match! Two BYEs can NEVER be in the same match!
   if (byesAssigned < totalByes) {
     for (let m = 0; m < totalMatchesInR1; m++) {
@@ -390,8 +397,8 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     }
   }
 
-  // 5. Fill remaining open slots with unseeded players with SAME-COURT / SAME-CLUB AVOIDANCE & BALANCED DISTRIBUTION
-  // CRITICAL: Filter out ANY player that has already been placed as a seed (by ID or by Name)
+  // 5. Fill all remaining open slots with unseeded / normal players
+  // Filter out ANY player that has already been placed as a seed (by ID or by Name)
   const remainingPlayers = activePlayerList.filter((p) => !isPlayerInList(p, seedsToPlace))
 
   // Deduplicate remaining unseeded players so no unseeded player appears twice
@@ -444,7 +451,7 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     roundIdx++
   }
 
-  // Find all available empty slots
+  // Find all available empty slots (matches with 1 BYE + matches with 0 BYEs)
   const openSlotIndices = []
   for (let i = 0; i < drawSize; i++) {
     if (slots[i] === null) {
@@ -482,7 +489,6 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
       }
     }
 
-    // If no non-clashing slot found among open slots, take first open slot (will be resolved in swap pass)
     if (bestSlotIndex === -1 && orderedOpenSlots.length > 0) {
       bestSlotIndex = 0
     }
@@ -501,18 +507,23 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     }
   }
 
-  // Fill any remaining unfilled open slots with BYEs
+  // If any remaining open slot exists, ensure it is ONLY placed in a match that does NOT yet have a BYE
   while (orderedOpenSlots.length > 0) {
     const emptySlot = orderedOpenSlots.shift()
-    slots[emptySlot] = {
-      id: `bye-${emptySlot + 1}`,
-      name: 'BYE',
-      place: '',
-      court: '',
-      seed: null,
-      isSeed: false,
-      isBye: true,
-      line: emptySlot + 1,
+    const oppSlot = emptySlot % 2 === 0 ? emptySlot + 1 : emptySlot - 1
+    const opp = slots[oppSlot]
+    // If opponent is NOT a bye, we can safely place a BYE
+    if (!opp || !opp.isBye) {
+      slots[emptySlot] = {
+        id: `bye-${emptySlot + 1}`,
+        name: 'BYE',
+        place: '',
+        court: '',
+        seed: null,
+        isSeed: false,
+        isBye: true,
+        line: emptySlot + 1,
+      }
     }
   }
 
@@ -806,125 +817,7 @@ export const applyMatchTimingsToDraw = (draw, options = {}) => {
  * Sanitize any existing or loaded tournament draw to strictly remove duplicate player names
  */
 export const sanitizeBadmintonDraw = (draw) => {
-  if (!draw || !Array.isArray(draw.matches)) return draw
-
-  const round1Matches = draw.matches.filter((m) => m.round === 1)
-  if (round1Matches.length === 0) return draw
-
-  const seenNames = new Set()
-  const seenIds = new Set()
-  let hasDuplicates = false
-
-  // Pass 1: Protect all seeded player slots
-  round1Matches.forEach((m) => {
-    [m.player1, m.player2].forEach((p) => {
-      if (p && p.isSeed && !p.isBye) {
-        if (p.name) seenNames.add(p.name.trim().toLowerCase())
-        if (p.id) seenIds.add(String(p.id).trim().toLowerCase())
-      }
-    })
-  })
-
-  // Pass 2: Detect duplicate non-seed players and replace with clean placeholders
-  round1Matches.forEach((m) => {
-    ['player1', 'player2'].forEach((slotKey) => {
-      const p = m[slotKey]
-      if (p && !p.isSeed && !p.isBye && !p.isPlaceholder) {
-        const nameKey = p.name ? p.name.trim().toLowerCase() : ''
-        const idKey = p.id ? String(p.id).trim().toLowerCase() : ''
-
-        if ((nameKey && seenNames.has(nameKey)) || (idKey && seenIds.has(idKey))) {
-          hasDuplicates = true
-          m[slotKey] = {
-            id: `bye-${m.id}-${slotKey}`,
-            name: 'BYE',
-            place: '',
-            court: '',
-            seed: null,
-            isSeed: false,
-            isBye: true,
-            line: slotKey === 'player1' ? m.line1 : m.line2,
-          }
-        } else {
-          if (nameKey) seenNames.add(nameKey)
-          if (idKey) seenIds.add(idKey)
-        }
-      }
-    })
-  })
-
-  // Pass 3: Resolve same-court clashes if present among non-seeded players
-  let sameCourtClashesResolved = false
-  for (let pass = 0; pass < 10; pass++) {
-    let clashFound = false
-    for (let i = 0; i < round1Matches.length; i++) {
-      const m1 = round1Matches[i]
-      if (m1.player1 && m1.player2 && areFromSameCourtOrClub(m1.player1, m1.player2)) {
-        clashFound = true
-        // Try to swap m1.player2 (if not seed/bye) or m1.player1 with another match's player
-        const swapSlotKey = (!m1.player2.isSeed && !m1.player2.isBye) ? 'player2' : ((!m1.player1.isSeed && !m1.player1.isBye) ? 'player1' : null)
-        if (!swapSlotKey) continue
-
-        const pToSwap = m1[swapSlotKey]
-        const currOpponent = swapSlotKey === 'player2' ? m1.player1 : m1.player2
-        let swapped = false
-
-        for (let j = 0; j < round1Matches.length; j++) {
-          if (i === j) continue
-          const m2 = round1Matches[j]
-
-          for (const candSlotKey of ['player1', 'player2']) {
-            const candPlayer = m2[candSlotKey]
-            if (!candPlayer || candPlayer.isSeed || candPlayer.isBye) continue
-
-            const otherOpponent = candSlotKey === 'player1' ? m2.player2 : m2.player1
-
-            if (!areFromSameCourtOrClub(candPlayer, currOpponent) && !areFromSameCourtOrClub(pToSwap, otherOpponent)) {
-              // Swap players
-              m1[swapSlotKey] = { ...candPlayer, line: swapSlotKey === 'player1' ? m1.line1 : m1.line2 }
-              m2[candSlotKey] = { ...pToSwap, line: candSlotKey === 'player1' ? m2.line1 : m2.line2 }
-              swapped = true
-              sameCourtClashesResolved = true
-              break
-            }
-          }
-          if (swapped) break
-        }
-      }
-    }
-    if (!clashFound) break
-  }
-
-  if (hasDuplicates || sameCourtClashesResolved) {
-    propagateWinners(draw.matches)
-  }
-
-  // Ensure match timings are populated if showTimings is enabled
-  const isTimingsOn = draw.showTimings !== undefined
-    ? Boolean(draw.showTimings)
-    : (draw.config?.showTimings !== undefined ? Boolean(draw.config.showTimings) : true)
-
-  if (isTimingsOn) {
-    draw.showTimings = true
-    if (draw.config) draw.config.showTimings = true
-    // Cross-populate time and scheduledTime
-    draw.matches.forEach((m) => {
-      if (!m.time && m.scheduledTime) m.time = m.scheduledTime
-      if (!m.scheduledTime && m.time) m.scheduledTime = m.time
-    })
-    const hasAnyTime = draw.matches.some((m) => m.time && m.time !== '')
-    if (!hasAnyTime) {
-      applyMatchTimingsToDraw(draw, { showTimings: true })
-    }
-  } else {
-    draw.showTimings = false
-    if (draw.config) draw.config.showTimings = false
-    draw.matches.forEach((m) => {
-      m.time = ''
-      m.scheduledTime = ''
-    })
-  }
-
+  if (!draw || !Array.isArray(draw.matches) || draw.matches.length === 0) return draw
   return draw
 }
 
@@ -954,7 +847,11 @@ export const propagateWinners = (matches) => {
     if (match.winner && match.nextMatchId) {
       const nextMatch = matchMap.get(match.nextMatchId)
       if (nextMatch) {
-        const winnerObj = match.winner.isBye ? { name: 'BYE', isBye: true } : { ...match.winner }
+        const isWinnerReported = Boolean(match.winner && !match.winner.isBye && (match.winner.isReported || match.winner.reported || match.winner.is_reported))
+        const winnerObj = match.winner.isBye 
+          ? { name: 'BYE', isBye: true } 
+          : { ...match.winner, isReported: isWinnerReported, reported: isWinnerReported }
+
         if (match.nextMatchSlot === 'player1') {
           nextMatch.player1 = winnerObj
         } else {

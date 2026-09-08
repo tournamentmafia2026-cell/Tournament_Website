@@ -379,3 +379,123 @@ export const isDoublesCategory = (categoryName) => {
     /\b(md|wd|xd|bd|gd)\b/i.test(categoryName)
   )
 }
+
+// Exact index lookup map for canonical BADMINTON_CATEGORIES ordering
+const CATEGORY_INDEX_MAP = new Map(
+  BADMINTON_CATEGORIES.map((cat, index) => [cat.toLowerCase().trim(), index])
+)
+
+/**
+ * Calculates a logical sort weight for any badminton category name.
+ * Uses canonical BADMINTON_CATEGORIES index first, then hierarchical age/format parsing.
+ */
+export const getCategorySortWeight = (category) => {
+  if (!category || typeof category !== 'string') return 999999
+  const clean = category.trim()
+  const lower = clean.toLowerCase()
+
+  // 1. Exact canonical registry match (0 - 249)
+  if (CATEGORY_INDEX_MAP.has(lower)) {
+    return CATEGORY_INDEX_MAP.get(lower)
+  }
+
+  // 2. Open / Senior Shortcuts and Variations
+  if (lower === 'ms' || lower === 'men singles' || lower === "men's singles") return 0
+  if (lower === 'ws' || lower === 'women singles' || lower === "women's singles") return 1
+  if (lower === 'md' || lower === 'men doubles' || lower === "men's doubles") return 2
+  if (lower === 'wd' || lower === 'women doubles' || lower === "women's doubles") return 3
+  if (lower === 'xd' || lower === 'mixed doubles') return 4
+
+  // 3. Junior / Under Age Groups (U7 to U19) -> mapped into range 1000 - 2999
+  const underMatch = lower.match(/(?:under|u-?)\s*(\d{1,2})/i)
+  if (underMatch) {
+    const age = parseInt(underMatch[1], 10)
+    let sub = 0
+    if (lower.includes('boy') && lower.includes('single')) sub = 0
+    else if (lower.includes('girl') && lower.includes('single')) sub = 1
+    else if (lower.includes('boy') && lower.includes('double')) sub = 2
+    else if (lower.includes('girl') && lower.includes('double')) sub = 3
+    else if (lower.includes('mixed')) sub = 4
+    else if (lower.includes('single')) sub = 0
+    else if (lower.includes('double')) sub = 2
+    return 1000 + age * 10 + sub
+  }
+
+  // 4. Sub-Junior / Junior General -> 3000
+  if (lower.startsWith('sub-junior') || lower.startsWith('junior')) {
+    return 3000
+  }
+
+  // 5. Jumbled Doubles -> 5000 + combined age
+  if (lower.includes('jumbled')) {
+    const jumbAge = lower.match(/(\d{2,3})\+?/)
+    const age = jumbAge ? parseInt(jumbAge[1], 10) : 0
+    return 5000 + age
+  }
+
+  // 6. Masters / Veterans (30+ to 80+) -> 10000 + age * 10 + sub
+  const mastersMatch = lower.match(/(\d{2})\+/)
+  if (mastersMatch) {
+    const age = parseInt(mastersMatch[1], 10)
+    let sub = 0
+    if (lower.includes('men') && lower.includes('single')) sub = 0
+    else if (lower.includes('men') && lower.includes('double')) sub = 1
+    else if (lower.includes('women') && lower.includes('single')) sub = 2
+    else if (lower.includes('women') && lower.includes('double')) sub = 3
+    else if (lower.includes('mixed')) sub = 4
+    else if (lower.includes('single')) sub = 0
+    else if (lower.includes('double')) sub = 1
+    return 10000 + age * 10 + sub
+  }
+
+  // 7. General Veterans / Masters without specific number
+  if (lower.includes('veteran') || lower.includes('masters')) {
+    return 11000
+  }
+
+  // 8. Skill Ratings & Corporate -> 20000+
+  if (/beginner/i.test(lower)) return 20000
+  if (/amateur/i.test(lower)) return 20100
+  if (/intermediate/i.test(lower)) return 20200
+  if (/advanced/i.test(lower)) return 20300
+  if (/corporate/i.test(lower)) return 20400
+
+  // 9. Family & Social -> 25000
+  if (/father|mother|parent|husband|wife|sibling/i.test(lower)) return 25000
+
+  // 10. Para Badminton -> 28000
+  if (lower.startsWith('para')) return 28000
+
+  // 11. Custom / Other unknown categories -> 30000
+  return 30000
+}
+
+/**
+ * Sorts an array of badminton category strings in standard tournament order:
+ * Open/Senior -> Under Age Groups (U7 to U19) -> Jumbled Doubles -> Masters/Veterans -> Skill/Corporate -> Family -> Others
+ */
+export const sortBadmintonCategories = (categories) => {
+  if (!Array.isArray(categories)) return []
+  return [...categories].sort((a, b) => {
+    const weightA = getCategorySortWeight(a)
+    const weightB = getCategorySortWeight(b)
+    if (weightA !== weightB) {
+      return weightA - weightB
+    }
+    return String(a).localeCompare(String(b))
+  })
+}
+
+export const getMatchCategories = (match) => {
+  if (!match) return ['Men Singles', 'Women Singles']
+  const cats = Array.isArray(match.categories) && match.categories.length > 0
+    ? match.categories
+    : ['Men Singles', 'Women Singles']
+  const validCategories = cats.filter(
+    (category) => typeof category === 'string' && category.trim().length > 0
+  )
+  const result = validCategories.length > 0 ? validCategories : ['Men Singles', 'Women Singles']
+  return sortBadmintonCategories(result)
+}
+
+

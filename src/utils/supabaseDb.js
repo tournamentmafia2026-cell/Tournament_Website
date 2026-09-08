@@ -98,6 +98,28 @@ export const SupabaseService = {
     }
   },
 
+  async upsertAuthenticators(tournamentId, playersList) {
+    if (!supabase || !tournamentId) return null;
+    try {
+      const strId = String(tournamentId);
+      const cleanList = Array.isArray(playersList) ? playersList : [];
+      const { data, error } = await supabase
+        .from('tournaments')
+        .update({
+          authenticators: cleanList,
+          participants: cleanList,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', strId)
+        .select();
+      if (error) throw error;
+      return data;
+    } catch (err) {
+      console.warn('Supabase Authenticators sync status:', err.message);
+      return null;
+    }
+  },
+
   async deleteTournament(tournamentId) {
     if (!supabase || !tournamentId) return false;
     try {
@@ -234,6 +256,43 @@ export const SupabaseService = {
       return data;
     } catch (err) {
       console.warn('Supabase Draw upsert status:', err.message);
+      return null;
+    }
+  },
+
+  // --- Reported Players Sync ---
+  async getReportedPlayers() {
+    if (!supabase) return null;
+    try {
+      const { data, error } = await supabase
+        .from('tournament_draws')
+        .select('draw_data')
+        .eq('id', 'global-reported-players')
+        .single();
+      if (error || !data) return null;
+      return data.draw_data?.reportedPlayers || null;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async upsertReportedPlayers(reportedPlayersMap) {
+    if (!supabase || !reportedPlayersMap || typeof reportedPlayersMap !== 'object') return null;
+    try {
+      const { data, error } = await supabase
+        .from('tournament_draws')
+        .upsert({
+          id: 'global-reported-players',
+          tournament_id: 'system',
+          category: 'reporting',
+          draw_data: { reportedPlayers: reportedPlayersMap },
+          is_published: true,
+          updated_at: new Date().toISOString()
+        })
+        .select();
+      if (error) throw error;
+      return data;
+    } catch (err) {
       return null;
     }
   },

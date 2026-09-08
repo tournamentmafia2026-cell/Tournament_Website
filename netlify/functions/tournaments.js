@@ -89,7 +89,7 @@ export const handler = async (event) => {
 
         if (key === 'reportedPlayers') {
           if (payload.reportedPlayers && typeof payload.reportedPlayers === 'object') {
-            dbState.reportedPlayers = payload.reportedPlayers
+            dbState.reportedPlayers = { ...(dbState.reportedPlayers || {}), ...payload.reportedPlayers }
           }
           return
         }

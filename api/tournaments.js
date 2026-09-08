@@ -82,14 +82,14 @@ export default async function handler(req, res) {
 
         if (key === 'publishedStatus' || key === 'publishedStatusMap') {
           if (payload[key] && typeof payload[key] === 'object') {
-            dbState.publishedStatus = { ...(dbState.publishedStatus || {}), ...payload[key] }
+            dbState.publishedStatus = payload[key]
           }
           return
         }
 
         if (key === 'reportedPlayers') {
           if (payload.reportedPlayers && typeof payload.reportedPlayers === 'object') {
-            dbState.reportedPlayers = payload.reportedPlayers
+            dbState.reportedPlayers = { ...(dbState.reportedPlayers || {}), ...payload.reportedPlayers }
           }
           return
         }

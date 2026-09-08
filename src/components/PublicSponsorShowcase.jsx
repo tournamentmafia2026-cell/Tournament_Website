@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
+import { fastDeepEqual } from '../utils/fastDeepEqual'
 
 export function PublicSponsorShowcase({
   tournamentName = '',
@@ -28,9 +29,15 @@ export function PublicSponsorShowcase({
     const syncAds = () => {
       try {
         const savedAds = localStorage.getItem('badminton-stadium-ads')
-        if (savedAds) setSponsorAds(JSON.parse(savedAds))
+        if (savedAds) {
+          const parsedAds = JSON.parse(savedAds)
+          setSponsorAds((prev) => (fastDeepEqual(prev, parsedAds) ? prev : parsedAds))
+        }
         const savedSettings = localStorage.getItem('badminton-ad-settings')
-        if (savedSettings) setAdSettings(JSON.parse(savedSettings))
+        if (savedSettings) {
+          const parsedSettings = JSON.parse(savedSettings)
+          setAdSettings((prev) => (fastDeepEqual(prev, parsedSettings) ? prev : parsedSettings))
+        }
       } catch {}
     }
     window.addEventListener('storage', syncAds)

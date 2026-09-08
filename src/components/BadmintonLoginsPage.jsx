@@ -264,6 +264,8 @@ Login Portal: ${window.location.origin}/`
       username: cred.username,
       name: cred.name,
       role: isUmpire ? 'umpire' : 'temporary_authenticator',
+      isChiefOrganizer: false,
+      isTemporary: true,
       assignedMatchId: cred.assignedMatchId,
       assignedMatchName: cred.assignedMatchName,
       scope: cred.scope,
@@ -286,6 +288,33 @@ Login Portal: ${window.location.origin}/`
       return () => clearTimeout(timer)
     }
   }, [toastMessage])
+
+  const isChief = !currentSession?.isTemporary && !currentSession?.assignedMatchId && currentSession?.role === 'organizer'
+
+  if (currentSession && !isChief) {
+    return (
+      <div style={{ width: '100%', maxWidth: '600px', margin: '60px auto', padding: '36px 28px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.95)', borderRadius: '24px', border: '1.5px solid rgba(239, 68, 68, 0.4)', color: '#f8fafc', boxShadow: '0 20px 48px rgba(0, 0, 0, 0.7)' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
+        <h2 style={{ fontSize: '22px', fontWeight: '900', marginBottom: '10px', color: '#fca5a5', letterSpacing: '-0.01em' }}>
+          Chief Organizer Access Only
+        </h2>
+        <p style={{ color: '#94a3b8', fontSize: '14px', lineHeight: 1.5, marginBottom: '24px' }}>
+          Temporary credentials and match officials cannot view or manage login credentials. Only the Chief Organizer (Master Admin) has access to this portal.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            if (onNavigateToMatchManagement) onNavigateToMatchManagement()
+            else if (onBackToPublic) onBackToPublic()
+          }}
+          className="btn-primary-gradient"
+          style={{ padding: '12px 28px', borderRadius: '12px', fontWeight: '800', cursor: 'pointer', fontSize: '13.5px' }}
+        >
+          ← Return to Tournament Hub
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ width: '100%', maxWidth: '1140px', margin: '0 auto', padding: '16px 12px 48px', boxSizing: 'border-box' }}>
@@ -442,6 +471,10 @@ Login Portal: ${window.location.origin}/`
               const adminSession = {
                 username: 'admin',
                 role: 'organizer',
+                name: 'Chief Organizer',
+                isChiefOrganizer: true,
+                isTemporary: false,
+                scope: 'full',
                 loginTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               }
               localStorage.setItem(ORGANIZER_SESSION_KEY, JSON.stringify(adminSession))
@@ -466,7 +499,7 @@ Login Portal: ${window.location.origin}/`
       )}
 
       {/* Main Grid: Generator Form + Active Credentials List */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '22px' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column: Create Temporary Login Form */}
         <div
           style={{
@@ -602,7 +635,7 @@ Login Portal: ${window.location.origin}/`
             </div>
 
             {/* Username & Password Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label style={{ display: 'block', fontSize: '11.5px', fontWeight: '800', color: '#cbd5e1', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                   Temporary Username

@@ -369,17 +369,47 @@ export const TournamentMasterScheduleModal = ({
                           flex: 1,
                           padding: '6px',
                           borderRadius: '6px',
-                          background: numberOfCourts === c ? '#0284c7' : 'rgba(30, 41, 59, 0.8)',
-                          border: numberOfCourts === c ? '1px solid #38bdf8' : '1px solid rgba(148, 163, 184, 0.2)',
+                          background: Number(numberOfCourts) === c ? '#0284c7' : 'rgba(30, 41, 59, 0.8)',
+                          border: Number(numberOfCourts) === c ? '1px solid #38bdf8' : '1px solid rgba(148, 163, 184, 0.2)',
                           color: '#fff',
                           fontSize: '11.5px',
                           fontWeight: '800',
                           cursor: 'pointer',
                         }}
                       >
-                        {c} {c === 1 ? 'Court' : 'Courts'}
+                        {c}
                       </button>
                     ))}
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={numberOfCourts}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        if (val === '') setNumberOfCourts('')
+                        else {
+                          const num = parseInt(val, 10)
+                          setNumberOfCourts(isNaN(num) ? 1 : Math.max(1, Math.min(50, num)))
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!numberOfCourts || Number(numberOfCourts) < 1) setNumberOfCourts(1)
+                      }}
+                      placeholder="Custom"
+                      style={{
+                        width: '58px',
+                        background: '#0f172a',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        borderRadius: '6px',
+                        padding: '6px 4px',
+                        color: '#38bdf8',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        textAlign: 'center',
+                        boxSizing: 'border-box',
+                      }}
+                    />
                   </div>
                 </div>
 

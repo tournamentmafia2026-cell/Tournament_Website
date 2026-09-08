@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import {
   formatTournamentName,
   formatCourtName,
@@ -6,6 +6,7 @@ import {
   formatCategoryName,
 } from '../utils/textFormatters'
 import { SupabaseService } from '../utils/supabaseDb'
+import { fastDeepEqual } from '../utils/fastDeepEqual'
 
 export function UmpireLiveScoringDashboard({
   session,
@@ -41,45 +42,9 @@ export function UmpireLiveScoringDashboard({
     return publishedMatches.find((m) => String(m.id) === String(selectedMatchId)) || publishedMatches[0]
   }, [publishedMatches, selectedMatchId])
 
-  // Realtime Live Draw and Score Sync from Server & Supabase (Every 1.5s)
-  useEffect(() => {
-    const syncDraws = () => {
-      fetch('/api/tournaments')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.liveUmpireMode !== undefined) {
-            setIsLiveUmpireModeActive(data.liveUmpireMode)
-          }
-          if (data?.tournamentDraws && typeof data.tournamentDraws === 'object') {
-            setTournamentDraws((prev) => ({ ...prev, ...data.tournamentDraws }))
-            try {
-              localStorage.setItem('badminton-tournament-draws', JSON.stringify({ ...tournamentDraws, ...data.tournamentDraws }))
-            } catch (e) {}
-          }
-        })
-        .catch(() => {})
-
-      if (selectedMatchId) {
-        SupabaseService.getTournamentDraws(selectedMatchId)
-          .then((rows) => {
-            if (rows && Array.isArray(rows) && rows.length > 0) {
-              const supaDraws = {}
-              rows.forEach((row) => {
-                if (row.id && row.draw_data) {
-                  supaDraws[row.id] = row.draw_data
-                }
-              })
-              setTournamentDraws((prev) => ({ ...prev, ...supaDraws }))
-            }
-          })
-          .catch(() => {})
-      }
-    }
-
-    syncDraws()
-    const timer = setInterval(syncDraws, 1500)
-    return () => clearInterval(timer)
-  }, [selectedMatchId])
+  const localSessionIdRef = useRef(`umpire_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`)
+  const lastLocalUpdateRef = useRef(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Strict helper to check if a match is assigned to THIS logged-in umpire
   const isMatchForThisUmpire = (m) => {
@@ -107,7 +72,8 @@ export function UmpireLiveScoringDashboard({
   }
 
   // Collect Live Matches assigned to THIS umpire
-  const liveMatches = useMemo(() => {
+  // Collect all matches on this umpire's court / tournament
+  const allCourtMatches = useMemo(() => {
     const list = []
 
     Object.keys(tournamentDraws).forEach((key) => {
@@ -116,7 +82,7 @@ export function UmpireLiveScoringDashboard({
         const [tId, ...catParts] = key.split('-')
         const cat = catParts.join('-') || draw.category || 'Standard'
         draw.matches.forEach((m) => {
-          if (m.status === 'live' && !(m.player1?.isBye && m.player2?.isBye)) {
+          if (!(m.player1?.isBye && m.player2?.isBye)) {
             if (isMatchForThisUmpire(m)) {
               list.push({
                 ...m,
@@ -133,31 +99,105 @@ export function UmpireLiveScoringDashboard({
     return list
   }, [tournamentDraws, session])
 
+  const liveMatches = useMemo(() => {
+    return allCourtMatches.filter((m) => m.status === 'live')
+  }, [allCourtMatches])
 
-  // Active match being scored
+  const completedMatches = useMemo(() => {
+    return allCourtMatches.filter((m) => m.status === 'completed' || Boolean(m.winner))
+  }, [allCourtMatches])
+
+  const upcomingMatches = useMemo(() => {
+    return allCourtMatches.filter((m) => (m.status === 'scheduled' || !m.status) && !m.winner && !m.isLive)
+  }, [allCourtMatches])
+
+  // Active match being scored (default null: requires umpire to click and start a match)
   const [activeMatchId, setActiveMatchId] = useState(null)
 
   const activeMatch = useMemo(() => {
-    if (liveMatches.length === 0) return null
-    if (activeMatchId) {
-      const found = liveMatches.find((m) => String(m.id) === String(activeMatchId))
-      if (found) return found
-    }
-    // Priority 1: Match directly assigned to this umpire's username
-    if (session?.username) {
-      const assigned = liveMatches.find((m) => m.assignedUmpireUsername === session.username)
-      if (assigned) return assigned
-    }
-    // Priority 2: Match assigned to this umpire's court
-    if (session?.assignedCourt) {
-      const onCourt = liveMatches.find((m) => m.court === session.assignedCourt)
-      if (onCourt) return onCourt
-    }
-    return liveMatches[0]
-  }, [activeMatchId, liveMatches, session])
+    if (!activeMatchId || allCourtMatches.length === 0) return null
+    return allCourtMatches.find((m) => String(m.id) === String(activeMatchId)) || null
+  }, [activeMatchId, allCourtMatches])
 
   const drawKey = activeMatch?.drawKey || (currentMatch ? `${currentMatch.id}-${activeMatch?.category || 'Men Singles'}` : '')
   const currentDraw = tournamentDraws[drawKey] || null
+
+  // Realtime Live Draw and Score Sync from Server & Supabase (Every 4s or on manual refresh)
+  const syncDraws = useCallback(async (isManual = false) => {
+    if (isManual) {
+      setIsRefreshing(true)
+    }
+    try {
+      const res = await fetch('/api/tournaments')
+      const data = await res.json()
+      if (data?.liveUmpireMode !== undefined) {
+        setIsLiveUmpireModeActive((prev) => (prev === data.liveUmpireMode ? prev : data.liveUmpireMode))
+      }
+      if (data?.systemSettings?.matchPoints) {
+        setMatchTotalPoints(Number(data.systemSettings.matchPoints))
+      }
+      if (data?.systemSettings?.matchSets) {
+        setMatchTotalSets(Number(data.systemSettings.matchSets))
+      }
+      if (data?.tournamentDraws && typeof data.tournamentDraws === 'object') {
+        setTournamentDraws((prev) => {
+          let changed = false
+          const next = { ...prev }
+          Object.keys(data.tournamentDraws).forEach((k) => {
+            if (Date.now() - (lastLocalUpdateRef.current || 0) < 8000 && k === drawKey) return
+            if (!fastDeepEqual(prev[k], data.tournamentDraws[k])) {
+              next[k] = data.tournamentDraws[k]
+              changed = true
+            }
+          })
+          if (!changed) return prev
+          try {
+            localStorage.setItem('badminton-tournament-draws', JSON.stringify(next))
+          } catch (e) {}
+          return next
+        })
+      }
+    } catch (e) {}
+
+    if (selectedMatchId) {
+      try {
+        const rows = await SupabaseService.getTournamentDraws(selectedMatchId)
+        if (rows && Array.isArray(rows) && rows.length > 0) {
+          const supaDraws = {}
+          rows.forEach((row) => {
+            if (row.id && row.draw_data) {
+              supaDraws[row.id] = row.draw_data
+            }
+          })
+          setTournamentDraws((prev) => {
+            let changed = false
+            const next = { ...prev }
+            Object.keys(supaDraws).forEach((k) => {
+              if (Date.now() - (lastLocalUpdateRef.current || 0) < 8000 && k === drawKey) return
+              if (!fastDeepEqual(prev[k], supaDraws[k])) {
+                next[k] = supaDraws[k]
+                changed = true
+              }
+            })
+            return changed ? next : prev
+          })
+        }
+      } catch (e) {}
+    }
+
+    if (isManual) {
+      setTimeout(() => {
+        setIsRefreshing(false)
+        setToastMessage('✓ Latest Tournament & Matches Synced!')
+      }, 500)
+    }
+  }, [selectedMatchId, drawKey])
+
+  useEffect(() => {
+    syncDraws(false)
+    const timer = setInterval(() => syncDraws(false), 4000)
+    return () => clearInterval(timer)
+  }, [syncDraws])
 
   // Dynamic Match Sets & Points Settings (Configured in Schedule List by Organizer)
   const [matchTotalPoints, setMatchTotalPoints] = useState(() => {
@@ -232,15 +272,19 @@ export function UmpireLiveScoringDashboard({
     }
   }, [])
 
-  // Derived Match Rules based on configured Points & Sets
-  const targetPoints = Number(matchTotalPoints) || 30
-  const totalSets = Number(matchTotalSets) || 3
+  // Derived Match Rules strictly based on configured Points & Sets in Schedule List
+  const targetPoints = Number(activeMatch?.matchPoints || matchTotalPoints) || 30
+  const totalSets = Number(activeMatch?.matchSets || matchTotalSets) || 3
   const setsToWin = totalSets === 1 ? 1 : Math.ceil(totalSets / 2)
   const availableSets = useMemo(() => Array.from({ length: Math.max(1, totalSets) }, (_, i) => i + 1), [totalSets])
 
-  // Cap at 30 for 21 or 30 pts, or standard cap for 15/11 pts
-  const maxCap = targetPoints === 21 ? 30 : targetPoints === 30 ? 30 : targetPoints + Math.min(6, Math.max(2, Math.floor(targetPoints * 0.4)))
-  const deuceThreshold = Math.max(1, targetPoints - 1)
+  // Points ceiling & deuce rules based on configured targetPoints:
+  // 30 pts: sudden death at 30 (maxCap 30)
+  // 21 pts: standard BWF (first to 21 lead by 2, max cap 30)
+  // 15 pts: fast format (first to 15 lead by 2, max cap 21)
+  // 11 pts: sprint format (first to 11 lead by 2, max cap 15)
+  const maxCap = targetPoints === 30 ? 30 : targetPoints === 21 ? 30 : targetPoints === 15 ? 21 : targetPoints === 11 ? 15 : targetPoints + 6
+  const deuceThreshold = targetPoints === 30 ? 29 : Math.max(1, targetPoints - 1)
   const intervalPoint = Math.ceil(targetPoints / 2)
 
   // Live Scoring States
@@ -261,33 +305,40 @@ export function UmpireLiveScoringDashboard({
   const [directP1, setDirectP1] = useState(0)
   const [directP2, setDirectP2] = useState(0)
 
-  // Sync with active match existing scores when match changes
+  const prevActiveMatchIdRef = useRef(null)
+
+  // Sync with active match existing scores ONLY when switching to a DIFFERENT match
   useEffect(() => {
     if (activeMatch) {
-      const initialScores = {
-        set1: { p1: Number(activeMatch.scoreSet1A) || 0, p2: Number(activeMatch.scoreSet1B) || 0 },
-        set2: { p1: Number(activeMatch.scoreSet2A) || 0, p2: Number(activeMatch.scoreSet2B) || 0 },
-        set3: { p1: Number(activeMatch.scoreSet3A) || 0, p2: Number(activeMatch.scoreSet3B) || 0 },
-        set4: { p1: Number(activeMatch.scoreSet4A) || 0, p2: Number(activeMatch.scoreSet4B) || 0 },
-        set5: { p1: Number(activeMatch.scoreSet5A) || 0, p2: Number(activeMatch.scoreSet5B) || 0 },
+      if (activeMatch.id !== prevActiveMatchIdRef.current) {
+        prevActiveMatchIdRef.current = activeMatch.id
+        const initialScores = {
+          set1: { p1: Number(activeMatch.scoreSet1A) || 0, p2: Number(activeMatch.scoreSet1B) || 0 },
+          set2: { p1: Number(activeMatch.scoreSet2A) || 0, p2: Number(activeMatch.scoreSet2B) || 0 },
+          set3: { p1: Number(activeMatch.scoreSet3A) || 0, p2: Number(activeMatch.scoreSet3B) || 0 },
+          set4: { p1: Number(activeMatch.scoreSet4A) || 0, p2: Number(activeMatch.scoreSet4B) || 0 },
+          set5: { p1: Number(activeMatch.scoreSet5A) || 0, p2: Number(activeMatch.scoreSet5B) || 0 },
+        }
+        if (activeMatch.liveScore && typeof activeMatch.liveScore === 'object') {
+          setSetScores({
+            set1: activeMatch.liveScore.set1 || initialScores.set1,
+            set2: activeMatch.liveScore.set2 || initialScores.set2,
+            set3: activeMatch.liveScore.set3 || initialScores.set3,
+            set4: activeMatch.liveScore.set4 || initialScores.set4,
+            set5: activeMatch.liveScore.set5 || initialScores.set5,
+          })
+          setCurrentSet(Math.min(totalSets, activeMatch.liveScore.currentSet || 1))
+          setServingPlayer(activeMatch.liveScore.servingPlayer || 'p1')
+        } else {
+          setSetScores(initialScores)
+          setCurrentSet(1)
+          setServingPlayer('p1')
+        }
+        setIsMatchConcluded(activeMatch.status === 'completed' || Boolean(activeMatch.winner))
+        setScoreHistory([])
       }
-      if (activeMatch.liveScore && typeof activeMatch.liveScore === 'object') {
-        setSetScores({
-          set1: activeMatch.liveScore.set1 || initialScores.set1,
-          set2: activeMatch.liveScore.set2 || initialScores.set2,
-          set3: activeMatch.liveScore.set3 || initialScores.set3,
-          set4: activeMatch.liveScore.set4 || initialScores.set4,
-          set5: activeMatch.liveScore.set5 || initialScores.set5,
-        })
-        setCurrentSet(Math.min(totalSets, activeMatch.liveScore.currentSet || 1))
-        setServingPlayer(activeMatch.liveScore.servingPlayer || 'p1')
-      } else {
-        setSetScores(initialScores)
-        setCurrentSet(1)
-        setServingPlayer('p1')
-      }
-      setIsMatchConcluded(activeMatch.status === 'completed' || Boolean(activeMatch.winner))
-      setScoreHistory([])
+    } else {
+      prevActiveMatchIdRef.current = null
     }
   }, [activeMatch?.id, totalSets])
 
@@ -295,6 +346,7 @@ export function UmpireLiveScoringDashboard({
   const broadcastDrawUpdate = (updatedDraw, targetDrawKey = drawKey) => {
     const key = targetDrawKey || drawKey
     if (!key) return
+    lastLocalUpdateRef.current = Date.now()
     const nextDraws = {
       ...tournamentDraws,
       [key]: updatedDraw,
@@ -303,6 +355,15 @@ export function UmpireLiveScoringDashboard({
     try {
       localStorage.setItem('badminton-tournament-draws', JSON.stringify(nextDraws))
     } catch {}
+
+    // Broadcast across tabs without self-echo
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('badminton_sync')
+        bc.postMessage({ type: 'DRAWS_UPDATED', senderId: localSessionIdRef.current })
+        bc.close()
+      }
+    } catch (e) {}
 
     // Push to server database for live spectator broadcast
     fetch('/api/tournaments', {
@@ -379,7 +440,25 @@ export function UmpireLiveScoringDashboard({
     }
 
     if (isMatchConcluded) {
-      setToastMessage('⚠️ This match is completed.')
+      setToastMessage('⚠️ This match is already completed.')
+      return
+    }
+
+    // 1. Check if match has already reached required sets to win
+    if (setsWonP1 >= setsToWin || setsWonP2 >= setsToWin) {
+      const matchWinnerName = setsWonP1 >= setsToWin ? (activeMatch?.player1?.name || 'Player 1') : (activeMatch?.player2?.name || 'Player 2')
+      setToastMessage(`🏆 Match won by ${matchWinnerName} (${setsToWin} sets)! Tap "Declare Winner" below.`)
+      return
+    }
+
+    // 2. Check if current set has already reached required points
+    if (checkSetWon(p1Score, p2Score) || checkSetWon(p2Score, p1Score)) {
+      const setWinnerName = checkSetWon(p1Score, p2Score) ? (activeMatch?.player1?.name || 'Player 1') : (activeMatch?.player2?.name || 'Player 2')
+      if (currentSet < totalSets) {
+        setToastMessage(`🏸 Set ${currentSet} is won by ${setWinnerName} (${Math.max(p1Score, p2Score)} pts). Tap "Start Set ${currentSet + 1}" below.`)
+      } else {
+        setToastMessage(`🏆 Set ${currentSet} completed. Please declare the match winner.`)
+      }
       return
     }
 
@@ -387,6 +466,9 @@ export function UmpireLiveScoringDashboard({
     const prevP2 = p2Score
     const newP1 = player === 'p1' ? Math.min(maxCap, prevP1 + 1) : prevP1
     const newP2 = player === 'p2' ? Math.min(maxCap, prevP2 + 1) : prevP2
+
+    const isNowWonP1 = checkSetWon(newP1, newP2)
+    const isNowWonP2 = checkSetWon(newP2, newP1)
 
     setScoreHistory((prev) => [
       ...prev,
@@ -415,6 +497,25 @@ export function UmpireLiveScoringDashboard({
 
     setSetScores(nextScores)
 
+    const scoringPlayerName = player === 'p1' ? (activeMatch?.player1?.name || 'Player 1') : (activeMatch?.player2?.name || 'Player 2')
+    if (isNowWonP1 || isNowWonP2) {
+      const futureSetsWonP1 = availableSets.filter((sNum) => {
+        const s = sNum === currentSet ? { p1: newP1, p2: newP2 } : nextScores[`set${sNum}`]
+        return s && checkSetWon(s.p1, s.p2)
+      }).length
+
+      const futureSetsWonP2 = availableSets.filter((sNum) => {
+        const s = sNum === currentSet ? { p1: newP1, p2: newP2 } : nextScores[`set${sNum}`]
+        return s && checkSetWon(s.p2, s.p1)
+      }).length
+
+      if (futureSetsWonP1 >= setsToWin || futureSetsWonP2 >= setsToWin) {
+        setToastMessage(`🏆 MATCH WON by ${scoringPlayerName} (${setsToWin} sets)! Tap "Declare Winner" below.`)
+      } else if (currentSet < totalSets) {
+        setToastMessage(`🏸 SET ${currentSet} WON by ${scoringPlayerName} (${Math.max(newP1, newP2)} pts)! Tap "Start Set ${currentSet + 1}" →`)
+      }
+    }
+
     // Broadcast live score to draw
     if (activeMatch && currentDraw) {
       const updatedMatches = currentDraw.matches.map((m) => {
@@ -432,6 +533,8 @@ export function UmpireLiveScoringDashboard({
             scoreSet4B: nextScores.set4?.p2 || (nextScores.set4?.p1 ? 0 : ''),
             scoreSet5A: nextScores.set5?.p1 || (nextScores.set5?.p2 ? 0 : ''),
             scoreSet5B: nextScores.set5?.p2 || (nextScores.set5?.p1 ? 0 : ''),
+            matchPoints: targetPoints,
+            matchSets: totalSets,
             liveScore: {
               ...nextScores,
               currentSet,
@@ -671,10 +774,17 @@ export function UmpireLiveScoringDashboard({
 
     const updatedMatches = currentDraw.matches.map((m) => {
       if (m.id === activeMatch.id) {
+        const isP1Rep = Boolean(activeMatch.player1?.isReported || activeMatch.player1?.reported)
+        const isP2Rep = Boolean(activeMatch.player2?.isReported || activeMatch.player2?.reported)
+        const isWinRep = Boolean(winnerObj?.isReported || winnerObj?.reported)
+        const finalWinnerObj = { ...winnerObj, isReported: isWinRep, reported: isWinRep }
+
         return {
           ...m,
           status: 'completed',
-          winner: winnerObj,
+          winner: finalWinnerObj,
+          player1: m.player1 ? { ...m.player1, isReported: isP1Rep, reported: isP1Rep } : m.player1,
+          player2: m.player2 ? { ...m.player2, isReported: isP2Rep, reported: isP2Rep } : m.player2,
           score: scoreSummary,
           scoreSet1A: setScores.set1.p1,
           scoreSet1B: setScores.set1.p2,
@@ -695,10 +805,12 @@ export function UmpireLiveScoringDashboard({
       if (m.round === nextRoundNumber) {
         const nextRoundMatches = currentDraw.matches.filter((rm) => rm.round === nextRoundNumber)
         if (nextRoundMatches[nextMatchIndex]?.id === m.id) {
+          const isWinRep = Boolean(winnerObj?.isReported || winnerObj?.reported)
+          const finalWinnerObj = { ...winnerObj, isReported: isWinRep, reported: isWinRep }
           return {
             ...m,
-            player1: isPlayer1Slot ? winnerObj : m.player1,
-            player2: !isPlayer1Slot ? winnerObj : m.player2,
+            player1: isPlayer1Slot ? finalWinnerObj : m.player1,
+            player2: !isPlayer1Slot ? finalWinnerObj : m.player2,
           }
         }
       }
@@ -781,6 +893,22 @@ export function UmpireLiveScoringDashboard({
   // Launch a match to live scoring
   const handleLaunchMatch = (matchToLaunch) => {
     if (!matchToLaunch) return
+    const targetKey = matchToLaunch.drawKey || drawKey
+    const targetDraw = tournamentDraws[targetKey]
+    if (targetDraw && Array.isArray(targetDraw.matches)) {
+      const updatedMatches = targetDraw.matches.map((m) => {
+        if (m.id === matchToLaunch.id) {
+          return {
+            ...m,
+            status: 'live',
+            isLive: true,
+            assignedUmpireUsername: m.assignedUmpireUsername || session?.username || '',
+          }
+        }
+        return m
+      })
+      broadcastDrawUpdate({ ...targetDraw, matches: updatedMatches }, targetKey)
+    }
     setActiveMatchId(matchToLaunch.id)
     setMobileTab('scoring')
     setToastMessage(`🔴 Match #${matchToLaunch.matchNumber || ''} is now LIVE on Court!`)
@@ -820,6 +948,14 @@ export function UmpireLiveScoringDashboard({
         </div>
 
         <div className="topbar-right">
+          <button
+            type="button"
+            onClick={() => syncDraws(true)}
+            className={`mobile-header-btn refresh ${isRefreshing ? 'spinning' : ''}`}
+            title="Refresh Matches & Scores"
+          >
+            🔄
+          </button>
           {onNavigateToPublic && (
             <button
               type="button"
@@ -858,7 +994,6 @@ export function UmpireLiveScoringDashboard({
           onClick={() => setMobileTab('scoresheet')}
         >
           <span>📋 Scoresheet</span>
-          <span className="tab-badge">{scoreHistory.length}</span>
         </button>
 
         <button
@@ -866,7 +1001,7 @@ export function UmpireLiveScoringDashboard({
           className={`mobile-tab-btn ${mobileTab === 'queue' ? 'active' : ''}`}
           onClick={() => setMobileTab('queue')}
         >
-          <span>🎾 Matches ({liveMatches.length})</span>
+          <span>🎾 Matches ({allCourtMatches.length})</span>
         </button>
       </nav>
 
@@ -893,13 +1028,23 @@ export function UmpireLiveScoringDashboard({
                 {/* Match Info Summary Card */}
                 <div className="mobile-match-info-card">
                   <div className="match-info-top">
-                    <span className="match-cat-badge">
-                      🏸 {activeMatch.category || 'Category'} • {totalSets === 1 ? '1 Set (Single)' : `Best of ${totalSets}`} ({targetPoints} Pts)
-                    </span>
-                    <span className="match-round-badge">
-                      🏆 {activeMatch.roundName || (activeMatch.round ? `Round ${activeMatch.round}` : 'Live Match')}
-                    </span>
-                    <span className="match-court-badge">{activeMatch.court || 'Court 1'}</span>
+                    <div className="match-info-badges">
+                      <span className="match-cat-badge">
+                        🏸 {activeMatch.category || 'Category'} • {totalSets === 1 ? '1 Set (Single)' : `Best of ${totalSets}`} ({targetPoints} Pts)
+                      </span>
+                      <span className="match-round-badge">
+                        🏆 {activeMatch.roundName || (activeMatch.round ? `Round ${activeMatch.round}` : 'Live Match')}
+                      </span>
+                      <span className="match-court-badge">{activeMatch.court || 'Court 1'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveMatchId(null)}
+                      className="btn-exit-match"
+                      title="Back to Match Selection"
+                    >
+                      ← Switch Match
+                    </button>
                   </div>
 
                   {/* Set Selector Tabs */}
@@ -990,53 +1135,52 @@ export function UmpireLiveScoringDashboard({
                           setServiceSide(p1Score % 2 === 0 ? 'right' : 'left')
                         }}
                       >
-                        <span>🏸</span>
-                        <span>{servingPlayer === 'p1' ? 'SERVING' : 'Serve'}</span>
+                        {servingPlayer === 'p1' ? '🏸 SERVING' : 'RECEIVE'}
                       </button>
                     </div>
 
-                    {/* Massive LED Digits */}
-                    <div className="mobile-led-box" onClick={handleOpenDirectEditScore} title="Tap to edit score" style={{ cursor: 'pointer' }}>
-                      <span className="mobile-led-num">{String(p1Score).padStart(2, '0')}</span>
-                      {servingPlayer === 'p1' && (
-                        <span className="mobile-serve-side-pill">
-                          {serviceSide.toUpperCase()} COURT (EVEN)
-                        </span>
-                      )}
-                      <span className="led-edit-hint">✏️ Edit</span>
+                    {/* Giant Interactive Touch Digit */}
+                    <div
+                      className="touch-score-digit-box"
+                      onClick={() => handleAddPoint('p1')}
+                      title="Tap to ADD 1 Point to Player 1"
+                    >
+                      <span className="giant-digit">{p1Score}</span>
+                      <span className="tap-hint">+1 POINT</span>
                     </div>
 
-                    {/* Sets Won */}
-                    <div className="mobile-sets-won-row">
-                      <span className="sets-text">Sets:</span>
-                      <div className="sets-dots">
-                        {Array.from({ length: setsToWin }, (_, idx) => (
-                          <span key={idx} className={`dot ${setsWonP1 > idx ? 'won' : ''}`} />
-                        ))}
+                    {/* Footer Controls: Sets Won & Micro Buttons */}
+                    <div className="card-footer-controls">
+                      <div className="sets-won-tag">
+                        <span>Sets:</span>
+                        <strong>{setsWonP1}</strong>
                       </div>
-                    </div>
 
-                    {/* MEGA TOUCH TAP & SUBTRACT BUTTONS */}
-                    <div className="mobile-point-actions-row">
-                      <button
-                        type="button"
-                        className="mobile-sub-point-btn"
-                        disabled={isMatchConcluded || p1Score === 0}
-                        onClick={() => handleSubtractPoint('p1')}
-                        title="Subtract 1 Point / Go Back"
-                      >
-                        <span>↩️ -1</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="mobile-point-tap-btn p1"
-                        disabled={isMatchConcluded}
-                        onClick={() => handleAddPoint('p1')}
-                      >
-                        <span className="btn-plus">+1</span>
-                        <span className="btn-label">POINT (P1)</span>
-                      </button>
+                      <div className="card-quick-actions">
+                        <button
+                          type="button"
+                          className="btn-micro sub"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSubtractPoint('p1')
+                          }}
+                          disabled={p1Score === 0}
+                          title="Subtract 1 Point"
+                        >
+                          -1
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-micro edit"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenDirectEditScore()
+                          }}
+                          title="Direct Edit Score"
+                        >
+                          ✏️ Edit
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -1063,115 +1207,279 @@ export function UmpireLiveScoringDashboard({
                           setServiceSide(p2Score % 2 === 0 ? 'right' : 'left')
                         }}
                       >
-                        <span>🏸</span>
-                        <span>{servingPlayer === 'p2' ? 'SERVING' : 'Serve'}</span>
+                        {servingPlayer === 'p2' ? '🏸 SERVING' : 'RECEIVE'}
                       </button>
                     </div>
 
-                    {/* Massive LED Digits */}
-                    <div className="mobile-led-box" onClick={handleOpenDirectEditScore} title="Tap to edit score" style={{ cursor: 'pointer' }}>
-                      <span className="mobile-led-num">{String(p2Score).padStart(2, '0')}</span>
-                      {servingPlayer === 'p2' && (
-                        <span className="mobile-serve-side-pill">
-                          {serviceSide.toUpperCase()} COURT (ODD)
-                        </span>
-                      )}
-                      <span className="led-edit-hint">✏️ Edit</span>
+                    {/* Giant Interactive Touch Digit */}
+                    <div
+                      className="touch-score-digit-box"
+                      onClick={() => handleAddPoint('p2')}
+                      title="Tap to ADD 1 Point to Player 2"
+                    >
+                      <span className="giant-digit">{p2Score}</span>
+                      <span className="tap-hint">+1 POINT</span>
                     </div>
 
-                    {/* Sets Won */}
-                    <div className="mobile-sets-won-row">
-                      <span className="sets-text">Sets:</span>
-                      <div className="sets-dots">
-                        {Array.from({ length: setsToWin }, (_, idx) => (
-                          <span key={idx} className={`dot ${setsWonP2 > idx ? 'won' : ''}`} />
-                        ))}
+                    {/* Footer Controls: Sets Won & Micro Buttons */}
+                    <div className="card-footer-controls">
+                      <div className="sets-won-tag">
+                        <span>Sets:</span>
+                        <strong>{setsWonP2}</strong>
                       </div>
-                    </div>
 
-                    {/* MEGA TOUCH TAP & SUBTRACT BUTTONS */}
-                    <div className="mobile-point-actions-row">
-                      <button
-                        type="button"
-                        className="mobile-sub-point-btn"
-                        disabled={isMatchConcluded || p2Score === 0}
-                        onClick={() => handleSubtractPoint('p2')}
-                        title="Subtract 1 Point / Go Back"
-                      >
-                        <span>↩️ -1</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="mobile-point-tap-btn p2"
-                        disabled={isMatchConcluded}
-                        onClick={() => handleAddPoint('p2')}
-                      >
-                        <span className="btn-plus">+1</span>
-                        <span className="btn-label">POINT (P2)</span>
-                      </button>
+                      <div className="card-quick-actions">
+                        <button
+                          type="button"
+                          className="btn-micro sub"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleSubtractPoint('p2')
+                          }}
+                          disabled={p2Score === 0}
+                          title="Subtract 1 Point"
+                        >
+                          -1
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-micro edit"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleOpenDirectEditScore()
+                          }}
+                          title="Direct Edit Score"
+                        >
+                          ✏️ Edit
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* QUICK UNDO & DIRECT ADJUST STRIP */}
-                <div className="mobile-quick-undo-strip">
+                {/* In-Game Action Bar: Next Set or Declare Winner */}
+                {currentSet < totalSets && (isSetWinnerP1 || isSetWinnerP2) && !isMatchConcluded && setsWonP1 < setsToWin && setsWonP2 < setsToWin && (
                   <button
                     type="button"
-                    className={`btn-strip-undo ${scoreHistory.length > 0 ? 'has-history' : ''}`}
-                    disabled={scoreHistory.length === 0}
-                    onClick={handleUndoPoint}
-                    title="Undo previous rally point"
-                  >
-                    <span>↩️ Undo Last Point (பின்செல்)</span>
-                    {scoreHistory.length > 0 && <span className="undo-badge">Rally #{scoreHistory.length}</span>}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="btn-strip-direct"
-                    onClick={handleOpenDirectEditScore}
-                    title="Manually adjust set scores"
-                  >
-                    <span>✏️ Direct Adjust Score</span>
-                  </button>
-                </div>
-
-                {/* Next Set Quick Action Banner */}
-                {(isSetWinnerP1 || isSetWinnerP2) && currentSet < totalSets && !isMatchConcluded && setsWonP1 < setsToWin && setsWonP2 < setsToWin && (
-                  <button
-                    type="button"
-                    onClick={handleNextSet}
                     className="mobile-next-set-banner"
+                    onClick={handleNextSet}
                   >
-                    <span>⏩ Set {currentSet} Concluded! Tap for Set {currentSet + 1}</span>
+                    <span>🏸 Set {currentSet} Won! Tap to Start Set {currentSet + 1} →</span>
                   </button>
                 )}
 
-                {/* Match Win Action Banner */}
                 {(setsWonP1 >= setsToWin || setsWonP2 >= setsToWin) && !isMatchConcluded && (
                   <button
                     type="button"
-                    onClick={() => handleTriggerDeclareWinner(setsWonP1 >= setsToWin ? 'p1' : 'p2')}
                     className="mobile-next-set-banner"
-                    style={{
-                      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                      boxShadow: '0 4px 15px rgba(16, 185, 129, 0.45)',
-                      marginTop: '10px',
-                    }}
+                    style={{ background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)', borderColor: '#4ade80' }}
+                    onClick={() => handleTriggerDeclareWinner(setsWonP1 >= setsToWin ? 'p1' : 'p2')}
                   >
                     <span>🏆 {setsWonP1 >= setsToWin ? (activeMatch.player1?.name || 'Player 1') : (activeMatch.player2?.name || 'Player 2')} has won {setsToWin} sets! Tap to Declare Winner →</span>
                   </button>
                 )}
               </div>
             ) : (
-              <div className="mobile-empty-desk">
-                <span className="empty-icon">⏳</span>
-                <h3>Waiting for Match to Start</h3>
-                <p>
-                  Schedule list-la organizer ungaluku match assign panni <strong>"🔴 Start Live"</strong> nu launch pannum pothu, antha match automatic-ah inga live scoring ku open aagum.
-                </p>
+              <div className="mobile-match-select-desk">
+                <div className="match-select-hero">
+                  <div className="select-hero-top">
+                    <div className="hero-court-tag">
+                      🏸 {session?.assignedCourt || session?.courtName || 'Court 1'} LIVE DESK
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => syncDraws(true)}
+                      className={`btn-sync-hero ${isRefreshing ? 'spinning' : ''}`}
+                      title="Refresh Matches"
+                    >
+                      🔄 Refresh Matches
+                    </button>
+                  </div>
+                  <h2>Match Live Scoring & Queue</h2>
+                  <p>
+                    Ungal court-la match live score seiya vendiya match-ai keela irunthu choose panni <strong>"Start Live Scoring"</strong> click seiyavum.
+                  </p>
+                </div>
 
+                {allCourtMatches.length === 0 ? (
+                  <div className="mobile-empty-desk">
+                    <span className="empty-icon">⏳</span>
+                    <h3>No Matches on Your Court</h3>
+                    <p>
+                      Schedule list-il match assign aagum pothu inga auto-sync aagum.
+                    </p>
+                    <button
+                      type="button"
+                      className="btn-refresh-empty"
+                      onClick={() => syncDraws(true)}
+                    >
+                      🔄 Refresh / Check Matches
+                    </button>
+                  </div>
+                ) : (
+                  <div className="match-select-cards-list">
+                    {/* 1. LIVE ON-COURT MATCHES */}
+                    {liveMatches.length > 0 && (
+                      <>
+                        <div className="select-section-heading">
+                          <span>🔴 Live on Your Court ({liveMatches.length})</span>
+                          <span className="live-pulse-dot" style={{ width: '8px', height: '8px', background: '#ef4444' }} />
+                        </div>
+                        {liveMatches.map((m) => {
+                          const s1 = `${m.scoreSet1A || 0} - ${m.scoreSet1B || 0}`
+                          const s2 = `${m.scoreSet2A || 0} - ${m.scoreSet2B || 0}`
+                          return (
+                            <div key={m.id} className="match-select-card" style={{ borderColor: 'rgba(239, 68, 68, 0.45)', background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(239, 68, 68, 0.08) 100%)' }}>
+                              <div className="ms-card-header">
+                                <span className="ms-match-badge" style={{ background: '#ef4444', color: '#fff' }}>M#{m.matchNumber || ''} • 🔴 LIVE</span>
+                                <span className="ms-cat-pill">{m.category || 'Category'}</span>
+                                <span className="ms-format-pill" style={{ fontSize: '10.5px', fontWeight: '800', background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', padding: '2px 7px', borderRadius: '6px' }}>
+                                  {totalSets === 1 ? '1 Set' : `Best of ${totalSets}`} ({targetPoints} Pts)
+                                </span>
+                                <span className="ms-court-pill">{m.court || session?.assignedCourt || 'Court 1'}</span>
+                              </div>
+
+                              <div className="ms-players-box">
+                                <div className="ms-player-row p1">
+                                  <span className="player-indicator p1">P1</span>
+                                  <span className="player-name">{m.player1?.name ? formatPersonName(m.player1.name) : 'Player 1'}</span>
+                                  {m.player1?.place && <span className="player-club">({m.player1.place})</span>}
+                                </div>
+                                <div className="ms-vs-divider">VS</div>
+                                <div className="ms-player-row p2">
+                                  <span className="player-indicator p2">P2</span>
+                                  <span className="player-name">{m.player2?.name ? formatPersonName(m.player2.name) : 'Player 2'}</span>
+                                  {m.player2?.place && <span className="player-club">({m.player2.place})</span>}
+                                </div>
+                              </div>
+
+                              {(m.scoreSet1A || m.scoreSet1B || m.scoreSet2A || m.scoreSet2B) && (
+                                <div className="ms-current-score-preview">
+                                  <span>Live Score: Set 1 ({s1})</span>
+                                  {(m.scoreSet2A || m.scoreSet2B) && <span> • Set 2 ({s2})</span>}
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                className="btn-start-match-cta"
+                                style={{ background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' }}
+                                onClick={() => handleLaunchMatch(m)}
+                              >
+                                <span>🔴 Continue Live Scoring Match #{m.matchNumber || ''} →</span>
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
+
+                    {/* 2. UPCOMING / SCHEDULED MATCHES */}
+                    {upcomingMatches.length > 0 && (
+                      <>
+                        <div className="select-section-heading" style={{ marginTop: '16px' }}>
+                          <span>⏰ Upcoming / Scheduled Matches ({upcomingMatches.length})</span>
+                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>Ready to Play</span>
+                        </div>
+                        {upcomingMatches.map((m) => {
+                          return (
+                            <div key={m.id} className="match-select-card">
+                              <div className="ms-card-header">
+                                <span className="ms-match-badge">Match #{m.matchNumber || ''}</span>
+                                <span className="ms-cat-pill">{m.category || 'Category'}</span>
+                                <span className="ms-format-pill" style={{ fontSize: '10.5px', fontWeight: '800', background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', padding: '2px 7px', borderRadius: '6px' }}>
+                                  {totalSets === 1 ? '1 Set' : `Best of ${totalSets}`} ({targetPoints} Pts)
+                                </span>
+                                <span className="ms-court-pill">{m.court || session?.assignedCourt || 'Court 1'}</span>
+                              </div>
+
+                              <div className="ms-players-box">
+                                <div className="ms-player-row p1">
+                                  <span className="player-indicator p1">P1</span>
+                                  <span className="player-name">{m.player1?.name ? formatPersonName(m.player1.name) : 'Player 1'}</span>
+                                  {m.player1?.place && <span className="player-club">({m.player1.place})</span>}
+                                </div>
+                                <div className="ms-vs-divider">VS</div>
+                                <div className="ms-player-row p2">
+                                  <span className="player-indicator p2">P2</span>
+                                  <span className="player-name">{m.player2?.name ? formatPersonName(m.player2.name) : 'Player 2'}</span>
+                                  {m.player2?.place && <span className="player-club">({m.player2.place})</span>}
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="btn-start-match-cta"
+                                onClick={() => handleLaunchMatch(m)}
+                              >
+                                <span>🏸 Start Live Scoring Match #{m.matchNumber || ''} →</span>
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
+
+                    {/* 3. COMPLETED MATCHES */}
+                    {completedMatches.length > 0 && (
+                      <>
+                        <div className="select-section-heading" style={{ marginTop: '16px' }}>
+                          <span>✓ Completed Matches ({completedMatches.length})</span>
+                          <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: '700' }}>Finished</span>
+                        </div>
+                        {completedMatches.map((m) => {
+                          const s1 = `${m.scoreSet1A || 0} - ${m.scoreSet1B || 0}`
+                          const s2 = (m.scoreSet2A || m.scoreSet2B) ? ` • S2: ${m.scoreSet2A || 0} - ${m.scoreSet2B || 0}` : ''
+                          const s3 = (m.scoreSet3A || m.scoreSet3B) ? ` • S3: ${m.scoreSet3A || 0} - ${m.scoreSet3B || 0}` : ''
+                          return (
+                            <div key={m.id} className="match-select-card" style={{ opacity: 0.9, borderColor: 'rgba(74, 222, 128, 0.3)' }}>
+                              <div className="ms-card-header">
+                                <span className="ms-match-badge" style={{ background: '#059669', color: '#fff' }}>M#{m.matchNumber || ''} • ✓ Finished</span>
+                                <span className="ms-cat-pill">{m.category || 'Category'}</span>
+                                <span className="ms-court-pill">{m.court || session?.assignedCourt || 'Court 1'}</span>
+                              </div>
+
+                              <div className="ms-players-box">
+                                <div className="ms-player-row p1">
+                                  <span className="player-indicator p1">P1</span>
+                                  <span className="player-name" style={{ color: m.winner?.id === m.player1?.id ? '#4ade80' : '#94a3b8' }}>
+                                    {m.player1?.name ? formatPersonName(m.player1.name) : 'Player 1'}
+                                    {m.winner?.id === m.player1?.id && ' 👑'}
+                                  </span>
+                                </div>
+                                <div className="ms-vs-divider">VS</div>
+                                <div className="ms-player-row p2">
+                                  <span className="player-indicator p2">P2</span>
+                                  <span className="player-name" style={{ color: m.winner?.id === m.player2?.id ? '#4ade80' : '#94a3b8' }}>
+                                    {m.player2?.name ? formatPersonName(m.player2.name) : 'Player 2'}
+                                    {m.winner?.id === m.player2?.id && ' 👑'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="ms-current-score-preview" style={{ color: '#94a3b8' }}>
+                                <span>Score: S1: {s1}{s2}{s3}</span>
+                                {m.winner?.name && <strong style={{ color: '#4ade80', marginLeft: '6px' }}>• Winner: {m.winner.name}</strong>}
+                              </div>
+
+                              <button
+                                type="button"
+                                className="btn-start-match-cta"
+                                style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(148, 163, 184, 0.3)', color: '#93c5fd' }}
+                                onClick={() => {
+                                  setActiveMatchId(m.id)
+                                  setMobileTab('scoresheet')
+                                }}
+                              >
+                                <span>📋 View Scorecard →</span>
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -1302,7 +1610,7 @@ export function UmpireLiveScoringDashboard({
                         <div className="q-bottom">
                           <span>{m.category || 'Category'} • {m.court || 'Court 1'}</span>
                           <button type="button" className="btn-score-now">
-                            {isSelected ? 'Scoring Desk 🏸' : 'Open Scoresheet →'}
+                            {isSelected ? 'Scoring Desk 🏸' : 'Open Live Scoring →'}
                           </button>
                         </div>
                       </div>
@@ -1312,7 +1620,85 @@ export function UmpireLiveScoringDashboard({
               )}
             </div>
 
+            {/* Upcoming / Scheduled Matches List */}
+            <div className="queue-section" style={{ marginTop: '20px' }}>
+              <h3 className="section-title">⏰ Scheduled Matches ({upcomingMatches.length})</h3>
+              {upcomingMatches.length === 0 ? (
+                <div className="queue-empty-text">No upcoming scheduled matches found on this court.</div>
+              ) : (
+                <div className="queue-cards-list">
+                  {upcomingMatches.map((m) => {
+                    return (
+                      <div
+                        key={m.id}
+                        className="queue-match-card"
+                        onClick={() => handleLaunchMatch(m)}
+                      >
+                        <div className="q-top">
+                          <span className="q-match-num">Match #{m.matchNumber || ''}</span>
+                          <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800' }}>⏰ Scheduled</span>
+                        </div>
+                        <div className="q-players">
+                          <span className="p1">{m.player1?.name || 'Player 1'}</span>
+                          <span className="vs">vs</span>
+                          <span className="p2">{m.player2?.name || 'Player 2'}</span>
+                        </div>
+                        <div className="q-bottom">
+                          <span>{m.category || 'Category'} • {m.court || 'Court 1'}</span>
+                          <button type="button" className="btn-score-now">
+                            Start Live →
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
 
+            {/* Completed Matches List */}
+            {completedMatches.length > 0 && (
+              <div className="queue-section" style={{ marginTop: '20px' }}>
+                <h3 className="section-title">✓ Completed Matches ({completedMatches.length})</h3>
+                <div className="queue-cards-list">
+                  {completedMatches.map((m) => {
+                    return (
+                      <div
+                        key={m.id}
+                        className="queue-match-card"
+                        style={{ opacity: 0.85, borderColor: 'rgba(74, 222, 128, 0.3)' }}
+                        onClick={() => {
+                          setActiveMatchId(m.id)
+                          setMobileTab('scoresheet')
+                        }}
+                      >
+                        <div className="q-top">
+                          <span className="q-match-num">Match #{m.matchNumber || ''}</span>
+                          <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: '800' }}>✓ Finished</span>
+                        </div>
+                        <div className="q-players">
+                          <span className="p1" style={{ color: m.winner?.id === m.player1?.id ? '#4ade80' : '#94a3b8' }}>
+                            {m.player1?.name || 'Player 1'}
+                            {m.winner?.id === m.player1?.id && ' 👑'}
+                          </span>
+                          <span className="vs">vs</span>
+                          <span className="p2" style={{ color: m.winner?.id === m.player2?.id ? '#4ade80' : '#94a3b8' }}>
+                            {m.player2?.name || 'Player 2'}
+                            {m.winner?.id === m.player2?.id && ' 👑'}
+                          </span>
+                        </div>
+                        <div className="q-bottom">
+                          <span>Winner: <strong style={{ color: '#4ade80' }}>{m.winner?.name || 'Declared'}</strong></span>
+                          <button type="button" className="btn-score-now" style={{ background: 'rgba(30, 41, 59, 0.8)' }}>
+                            View Scorecard
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>
