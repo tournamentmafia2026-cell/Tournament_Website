@@ -203,8 +203,7 @@ export default function App() {
     if (!isLiveStreamActive) {
       setIsLiveStreamSetupModalOpen(true)
     } else {
-      setIsStadiumTvCastOpen(true)
-      setSuccessToast('📺 Live Stream is active. To stop streaming, click "Stop Live Stream" inside the Live Cast screen.')
+      handlePopoutLiveTv(selectedMatch?.id)
     }
   }
 
@@ -646,6 +645,29 @@ export default function App() {
     setActivePage('fixturesManagement')
   }
 
+  // DEDICATED STANDALONE LIVE STREAM TV BROADCAST PAGE (Zero-Flicker Isolated Route)
+  const isDedicatedLiveCast = typeof window !== 'undefined' && (
+    window.location.search.includes('livecast=true') ||
+    window.location.search.includes('stadium=true') ||
+    window.location.search.includes('tv=true')
+  )
+
+  if (isDedicatedLiveCast) {
+    const targetMatch = selectedMatch || publishedMatches[0]
+    return (
+      <StadiumTvLiveCast
+        isOpen={true}
+        tournament={targetMatch}
+        allTournaments={publishedMatches}
+        onClose={() => {
+          window.location.href = window.location.pathname
+        }}
+        onStopStream={handleStopLiveStream}
+        isPublicView={false}
+      />
+    )
+  }
+
   return (
     <div className="app-container">
       {/* 1. PUBLIC TOURNAMENT PORTAL VIEW */}
@@ -948,17 +970,6 @@ export default function App() {
         message={deleteConfirmState?.message}
         itemName={deleteConfirmState?.itemName}
       />
-
-      {/* Stadium TV Cast Overlay */}
-      {isStadiumTvCastOpen && (
-        <StadiumTvLiveCast
-          isOpen={isStadiumTvCastOpen}
-          onClose={() => setIsStadiumTvCastOpen(false)}
-          onStopBroadcast={handleStopLiveStream}
-          tournamentId={selectedMatch?.id}
-          onOpenPopout={() => handlePopoutLiveTv(selectedMatch?.id)}
-        />
-      )}
 
       {/* Live Stream Setup Modal */}
       <CourtConfigModal
