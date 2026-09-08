@@ -104,14 +104,24 @@ export function OrganizerPortalHeader({
             onClick={() => {
               if (authSession?.assignedMatchId) {
                 const target = publishedMatches.find((m) => String(m.id) === String(authSession.assignedMatchId))
-                onSelectMatch(target || null)
-              } else {
-                onSelectMatch(null)
+                if (target) onSelectMatch(target)
               }
               setActivePage('fixturesManagement')
             }}
           >
             ⚡ Fixtures
+          </button>
+
+          <button
+            type="button"
+            className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
+              activePage === 'liveScoreboard'
+                ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
+                : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
+            }`}
+            onClick={() => setActivePage('liveScoreboard')}
+          >
+            📊 Live Scoring
           </button>
 
           <button

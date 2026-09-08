@@ -56,7 +56,10 @@ export const BadmintonFixturesManager = ({
 }) => {
   // Navigation level: 'tournaments' | 'categories' | 'draw'
   const [fixturesLevel, setFixturesLevel] = useState(() => {
-    return (initialSelectedMatch && (initialCategory || isPublicView)) ? 'draw' : 'tournaments'
+    if (initialSelectedMatch) {
+      return (initialCategory || isPublicView) ? 'draw' : 'categories'
+    }
+    return 'tournaments'
   })
 
   const [selectedMatchId, setSelectedMatchId] = useState(() => {
@@ -64,14 +67,20 @@ export const BadmintonFixturesManager = ({
   })
 
   useEffect(() => {
-    if (initialSelectedMatch && initialCategory) {
+    if (initialSelectedMatch) {
       setSelectedMatchId(initialSelectedMatch.id)
-      setSelectedCategory(initialCategory)
-      setFixturesLevel('draw')
-    } else if (!initialSelectedMatch) {
+      if (initialCategory) {
+        setSelectedCategory(initialCategory)
+        setFixturesLevel('draw')
+      } else if (isPublicView) {
+        setFixturesLevel('draw')
+      } else {
+        setFixturesLevel('categories')
+      }
+    } else {
       setFixturesLevel('tournaments')
     }
-  }, [initialSelectedMatch?.id, initialCategory])
+  }, [initialSelectedMatch?.id, initialCategory, isPublicView])
 
   const selectedMatch = publishedMatches.find((m) => String(m.id) === String(selectedMatchId)) || publishedMatches[0] || null
 
