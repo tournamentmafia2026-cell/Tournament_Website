@@ -324,13 +324,15 @@ export const StadiumTvLiveCast = ({
   const [adminOpenedNotice, setAdminOpenedNotice] = useState(false)
   const [isCastTabGuideOpen, setIsCastTabGuideOpen] = useState(false)
 
-  // Persist URL in livecast mode so page refresh never exits the live broadcast
+  // Persist URL in livecast mode ONLY if already in standalone pop-out window
   useEffect(() => {
     try {
-      if (!window.location.search.includes('livecast=true')) {
+      if (window.location.search.includes('livecast=true')) {
         const tid = selectedTournamentId || tournament?.id || ''
-        const newUrl = `${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
-        window.history.replaceState(null, '', newUrl)
+        if (tid && !window.location.search.includes(`tid=${tid}`)) {
+          const newUrl = `${window.location.pathname}?livecast=true&tid=${encodeURIComponent(tid)}`
+          window.history.replaceState(null, '', newUrl)
+        }
       }
     } catch {}
   }, [selectedTournamentId, tournament?.id])
@@ -571,12 +573,21 @@ export const StadiumTvLiveCast = ({
     return { displayLiveMatches: activeLive, displayUpcomingMatches: upcomingQueue }
   }, [activePool])
 
-  // Score change watcher for international TV point flash burst
-  useEffect(() => {
-    displayLiveMatches.forEach((m) => {
+  // Score change watcher for international TV point flash burst (memoized signature prevents infinite re-renders)
+  const scoresSignature = useMemo(() => {
+    return (displayLiveMatches || []).map((m) => {
       const currentSet = m.liveScore?.currentSet || 1
       const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
       const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
+      return `${m.id}:${currentSet}:${p1Pts}:${p2Pts}`
+    }).join('|')
+  }, [displayLiveMatches])
+
+  useEffect(() => {
+    (displayLiveMatches || []).forEach((m) => {
+      const currentSet = m.liveScore?.currentSet || 1
+      const p1Pts = Number(m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0)
+      const p2Pts = Number(m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0)
       const key1 = `${m.id}-p1`
       const key2 = `${m.id}-p2`
       const prev1 = prevScoresMapRef.current[key1]
@@ -597,7 +608,7 @@ export const StadiumTvLiveCast = ({
       prevScoresMapRef.current[key1] = p1Pts
       prevScoresMapRef.current[key2] = p2Pts
     })
-  }, [displayLiveMatches])
+  }, [scoresSignature])
 
   // --- SPONSOR VISUAL DATA & FULL-SCREEN SHOWCASE LOGIC ---
   const [fullScreenAdIndex, setFullScreenAdIndex] = useState(0)
