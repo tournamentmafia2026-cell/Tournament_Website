@@ -252,9 +252,9 @@ export default function App() {
   const handleConfirmLiveStreamSetup = (countOverride) => {
     const nextCfg = {
       count: typeof countOverride === 'number' ? countOverride : streamCourtsCount,
-      format: streamCourtFormat,
-      prefix: streamCourtPrefix.trim(),
-      customNames: streamCourtCustomNames.trim(),
+      format: streamCourtFormat || 'numbers',
+      prefix: String(streamCourtPrefix || 'Court').trim(),
+      customNames: String(streamCourtCustomNames || '').trim(),
     }
     saveCourtConfig(nextCfg)
     setStreamCourtConfig(nextCfg)

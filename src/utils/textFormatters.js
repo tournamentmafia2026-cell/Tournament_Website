@@ -27,7 +27,7 @@ const MINOR_WORDS = new Set([
  * Capitalizes a single word properly taking acronyms, roman numerals, and hyphenations into account
  */
 export const formatWord = (word, isFirstOrLast = false) => {
-  if (!word) return ''
+  if (!word || typeof word !== 'string') return ''
   const trimmed = word.trim()
   if (!trimmed) return ''
 
@@ -415,8 +415,8 @@ export const splitDoublesNames = (rawName) => {
  * Combines two doubles player names with standard slash separator
  */
 export const joinDoublesNames = (name1, name2) => {
-  const p1 = formatPersonName(name1 || '', '').trim()
-  const p2 = formatPersonName(name2 || '', '').trim()
+  const p1 = (formatPersonName(name1 || '', '') || '').trim()
+  const p2 = (formatPersonName(name2 || '', '') || '').trim()
   if (p1 && p2) return `${p1} / ${p2}`
   return p1 || p2 || ''
 }
@@ -430,8 +430,8 @@ export const getMatchStartTimestamp = (match) => {
   const dateStr = match.startDate || match.date || ''
   if (!dateStr || typeof dateStr !== 'string') return 9999999999999
 
-  const trimmed = dateStr.trim()
-  const timeStr = (match.startTime || match.time || '00:00').trim()
+  const trimmed = String(dateStr).trim()
+  const timeStr = String(match.startTime || match.time || '00:00').trim()
   let [h, m] = [0, 0]
   if (/^\d{1,2}:\d{2}/.test(timeStr)) {
     const parts = timeStr.split(':').map(Number)

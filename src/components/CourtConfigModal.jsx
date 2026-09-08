@@ -43,9 +43,9 @@ export function CourtConfigModal({
     const finalCount = Math.max(1, parseInt(courtCount, 10) || 1)
     const nextConfig = {
       count: finalCount,
-      format: namingFormat,
-      prefix: courtPrefix.trim(),
-      customNames: customNamesInput.trim(),
+      format: namingFormat || 'numbers',
+      prefix: String(courtPrefix || 'Court').trim(),
+      customNames: String(customNamesInput || '').trim(),
     }
     saveCourtConfig(nextConfig)
     onSave?.(nextConfig, generateCourtsList(nextConfig))
