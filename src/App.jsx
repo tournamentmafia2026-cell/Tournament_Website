@@ -813,8 +813,8 @@ export default function App() {
                     authenticators={authenticators}
                     selectedMatch={
                       !isChiefOrganizer && assignedMatchId
-                        ? (effectivePublishedMatches.find((m) => String(m.id) === String(assignedMatchId)) || effectivePublishedMatches[0] || null)
-                        : (selectedMatch || effectivePublishedMatches[0] || null)
+                        ? (effectivePublishedMatches.find((m) => String(m.id) === String(assignedMatchId)) || null)
+                        : selectedMatch
                     }
                     initialCategory={fixturesCategory}
                     onSelectMatch={(match) => {

@@ -105,6 +105,8 @@ export function OrganizerPortalHeader({
               if (authSession?.assignedMatchId) {
                 const target = publishedMatches.find((m) => String(m.id) === String(authSession.assignedMatchId))
                 if (target) onSelectMatch(target)
+              } else {
+                onSelectMatch(null)
               }
               setActivePage('fixturesManagement')
             }}
