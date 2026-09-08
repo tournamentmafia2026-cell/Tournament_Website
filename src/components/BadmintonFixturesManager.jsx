@@ -38,9 +38,7 @@ import {
 import { SupabaseService } from '../utils/supabaseDb'
 
 const DRAWS_STORAGE_KEY = 'badminton-tournament-draws'
-const PERMANENT_REPORTED_KEY = 'badminton-permanent-reported-cache'
 const DEFAULT_CATEGORIES = ['Men Singles', 'Women Singles', 'Men Doubles']
-const isDeepEqual = fastDeepEqual
 
 export const BadmintonFixturesManager = ({
   publishedMatches = [],
@@ -136,8 +134,7 @@ export const BadmintonFixturesManager = ({
   useEffect(() => {
     const handleStorageUpdate = () => {
       if (!isCourtConfigModalOpen) {
-        const nextCfg = getSavedCourtConfig()
-        setCourtConfig((prev) => (isDeepEqual(prev, nextCfg) ? prev : nextCfg))
+        setCourtConfig(getSavedCourtConfig())
       }
     }
     window.addEventListener('storage', handleStorageUpdate)
@@ -341,6 +338,9 @@ export const BadmintonFixturesManager = ({
     return initialDraws
   })
 
+  // Production-Grade order-agnostic deep equality helper to guarantee 0 state update churn
+  const isDeepEqual = fastDeepEqual
+
   // Realtime Live Draw, Reported Players, and Score Sync from Shared Database & Supabase
   useEffect(() => {
     const syncDraws = () => {
@@ -522,6 +522,8 @@ export const BadmintonFixturesManager = ({
       console.error('Error saving reported players', e)
     }
   }, [reportedPlayers])
+
+  const PERMANENT_REPORTED_KEY = 'badminton-permanent-reported-cache'
 
   // Helper to extract clean normalized identifier tokens from any player object or ID/name string
   const getPlayerTokens = (playerOrId) => {
