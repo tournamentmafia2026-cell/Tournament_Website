@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { formatTournamentName, formatCategoryName } from '../utils/textFormatters'
+import {
+  formatTournamentName,
+  formatCategoryName,
+  formatCourtName,
+  formatAddress,
+} from '../utils/textFormatters'
 import { generateCourtsList, saveCourtConfig, getSavedCourtConfig } from '../utils/courtConfig'
 
 export function LiveStreamSetupModal({
@@ -163,44 +168,40 @@ export function LiveStreamSetupModal({
               ⚠️ No published tournaments found. Please create or publish a tournament first.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto', paddingRight: '4px' }}>
               {publishedMatches.map((m) => {
                 const isSelected = String(m.id) === String(selectedTournamentId)
                 const title = formatTournamentName(m.matchName || m.tournamentName || m.name || m.title || 'Badminton Tournament')
-                const catList = Array.isArray(m.categories) && m.categories.length > 0
-                  ? m.categories.map((c) => formatCategoryName(c)).join(', ')
-                  : formatCategoryName(m.category || m.categoryName || 'Open Tournament')
-                const dateStr = m.startDate
-                  ? (m.endDate && m.endDate !== m.startDate ? `${m.startDate} to ${m.endDate}` : m.startDate)
-                  : (m.date || m.tournamentDate || 'Today')
-                const courtStr = m.courtName ? formatCourtName(m.courtName) : ''
-                const venueStr = m.matchAddress ? formatAddress(m.matchAddress) : (m.venue || m.location || '')
+                const category = formatCategoryName(m.category || m.categoryName || (Array.isArray(m.categories) ? m.categories.join(', ') : 'Open Tournament'))
+                const dateStr = m.startDate && m.endDate ? `${m.startDate} - ${m.endDate}` : (m.startDate || m.date || m.tournamentDate || 'Today')
+                const venueStr = formatAddress(m.matchAddress || m.venue || m.location || '')
+                const courtStr = formatCourtName(m.courtName || 'Court 1')
 
                 return (
                   <div
                     key={m.id}
                     onClick={() => setSelectedTournamentId(m.id)}
                     style={{
-                      padding: '14px 18px',
-                      borderRadius: '14px',
+                      padding: '14px 16px',
+                      borderRadius: '12px',
                       background: isSelected
-                        ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.3) 100%)'
-                        : 'rgba(15, 23, 42, 0.75)',
-                      border: isSelected ? '2px solid #ef4444' : '1px solid rgba(148, 163, 184, 0.25)',
-                      boxShadow: isSelected ? '0 0 20px rgba(239, 68, 68, 0.35)' : 'none',
+                        ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.25) 100%)'
+                        : 'rgba(15, 23, 42, 0.7)',
+                      border: isSelected ? '2px solid #ef4444' : '1px solid rgba(148, 163, 184, 0.2)',
+                      boxShadow: isSelected ? '0 0 16px rgba(239, 68, 68, 0.35)' : 'none',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      gap: '14px',
+                      gap: '12px',
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                       <div
                         style={{
-                          width: '22px',
-                          height: '22px',
+                          width: '20px',
+                          height: '20px',
                           borderRadius: '50%',
                           border: isSelected ? '6px solid #ef4444' : '2px solid #64748b',
                           background: isSelected ? '#ffffff' : 'transparent',
@@ -209,13 +210,11 @@ export function LiveStreamSetupModal({
                         }}
                       />
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: '15px', fontWeight: '900', color: isSelected ? '#ffffff' : '#f1f5f9', letterSpacing: '-0.01em' }}>
-                            🏸 {title}
-                          </span>
+                        <div style={{ fontSize: '15px', fontWeight: '900', color: isSelected ? '#ffffff' : '#f1f5f9', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          🏸 {title}
                         </div>
-                        <div style={{ fontSize: '12px', color: isSelected ? '#fca5a5' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                          <span>🏆 <strong style={{ color: isSelected ? '#ffffff' : '#cbd5e1' }}>{catList}</strong></span>
+                        <div style={{ fontSize: '11.5px', color: isSelected ? '#fca5a5' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px', flexWrap: 'wrap' }}>
+                          <span>🏆 {category}</span>
                           <span>•</span>
                           <span>📅 {dateStr}</span>
                           {courtStr && (
@@ -242,13 +241,13 @@ export function LiveStreamSetupModal({
                           background: '#ef4444',
                           color: '#ffffff',
                           fontSize: '11px',
-                          fontWeight: '900',
+                          fontWeight: '800',
                           letterSpacing: '0.04em',
                           flexShrink: 0,
-                          boxShadow: '0 2px 10px rgba(239, 68, 68, 0.5)',
+                          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5)',
                         }}
                       >
-                        ✓ Selected Match
+                        ✓ Selected
                       </span>
                     )}
                   </div>
@@ -487,7 +486,7 @@ export function LiveStreamSetupModal({
           >
             <span>🔴 Start Live Stream:</span>
             <span style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {formatTournamentName(activeTournament?.matchName || activeTournament?.tournamentName || activeTournament?.name || activeTournament?.title || 'Selected Tournament')}
+              {activeTournament?.matchName || activeTournament?.tournamentName || activeTournament?.name || activeTournament?.title || 'Selected Tournament'}
             </span>
           </button>
         </div>
