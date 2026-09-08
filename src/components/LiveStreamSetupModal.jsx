@@ -163,39 +163,44 @@ export function LiveStreamSetupModal({
               ⚠️ No published tournaments found. Please create or publish a tournament first.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '240px', overflowY: 'auto', paddingRight: '4px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '280px', overflowY: 'auto', paddingRight: '4px' }}>
               {publishedMatches.map((m) => {
                 const isSelected = String(m.id) === String(selectedTournamentId)
-                const title = formatTournamentName(m.tournamentName || m.name || m.title || 'Badminton Tournament')
-                const category = formatCategoryName(m.category || m.categoryName || 'Open Tournament')
-                const dateStr = m.date || m.tournamentDate || 'Today'
-                const venueStr = m.venue || m.location || ''
+                const title = formatTournamentName(m.matchName || m.tournamentName || m.name || m.title || 'Badminton Tournament')
+                const catList = Array.isArray(m.categories) && m.categories.length > 0
+                  ? m.categories.map((c) => formatCategoryName(c)).join(', ')
+                  : formatCategoryName(m.category || m.categoryName || 'Open Tournament')
+                const dateStr = m.startDate
+                  ? (m.endDate && m.endDate !== m.startDate ? `${m.startDate} to ${m.endDate}` : m.startDate)
+                  : (m.date || m.tournamentDate || 'Today')
+                const courtStr = m.courtName ? formatCourtName(m.courtName) : ''
+                const venueStr = m.matchAddress ? formatAddress(m.matchAddress) : (m.venue || m.location || '')
 
                 return (
                   <div
                     key={m.id}
                     onClick={() => setSelectedTournamentId(m.id)}
                     style={{
-                      padding: '14px 16px',
-                      borderRadius: '12px',
+                      padding: '14px 18px',
+                      borderRadius: '14px',
                       background: isSelected
-                        ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(185, 28, 28, 0.25) 100%)'
-                        : 'rgba(15, 23, 42, 0.7)',
-                      border: isSelected ? '2px solid #ef4444' : '1px solid rgba(148, 163, 184, 0.2)',
-                      boxShadow: isSelected ? '0 0 16px rgba(239, 68, 68, 0.35)' : 'none',
+                        ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(185, 28, 28, 0.3) 100%)'
+                        : 'rgba(15, 23, 42, 0.75)',
+                      border: isSelected ? '2px solid #ef4444' : '1px solid rgba(148, 163, 184, 0.25)',
+                      boxShadow: isSelected ? '0 0 20px rgba(239, 68, 68, 0.35)' : 'none',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      gap: '12px',
+                      gap: '14px',
                       transition: 'all 0.15s ease',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
                       <div
                         style={{
-                          width: '20px',
-                          height: '20px',
+                          width: '22px',
+                          height: '22px',
                           borderRadius: '50%',
                           border: isSelected ? '6px solid #ef4444' : '2px solid #64748b',
                           background: isSelected ? '#ffffff' : 'transparent',
@@ -204,13 +209,21 @@ export function LiveStreamSetupModal({
                         }}
                       />
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: '14px', fontWeight: '800', color: isSelected ? '#ffffff' : '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {title}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '15px', fontWeight: '900', color: isSelected ? '#ffffff' : '#f1f5f9', letterSpacing: '-0.01em' }}>
+                            🏸 {title}
+                          </span>
                         </div>
-                        <div style={{ fontSize: '11.5px', color: isSelected ? '#fca5a5' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                          <span>🏆 {category}</span>
+                        <div style={{ fontSize: '12px', color: isSelected ? '#fca5a5' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                          <span>🏆 <strong style={{ color: isSelected ? '#ffffff' : '#cbd5e1' }}>{catList}</strong></span>
                           <span>•</span>
                           <span>📅 {dateStr}</span>
+                          {courtStr && (
+                            <>
+                              <span>•</span>
+                              <span>🏟️ {courtStr}</span>
+                            </>
+                          )}
                           {venueStr && (
                             <>
                               <span>•</span>
@@ -224,18 +237,18 @@ export function LiveStreamSetupModal({
                     {isSelected && (
                       <span
                         style={{
-                          padding: '3px 10px',
+                          padding: '4px 12px',
                           borderRadius: '20px',
                           background: '#ef4444',
                           color: '#ffffff',
                           fontSize: '11px',
-                          fontWeight: '800',
+                          fontWeight: '900',
                           letterSpacing: '0.04em',
                           flexShrink: 0,
-                          boxShadow: '0 2px 8px rgba(239, 68, 68, 0.5)',
+                          boxShadow: '0 2px 10px rgba(239, 68, 68, 0.5)',
                         }}
                       >
-                        ✓ Selected for Live Stream
+                        ✓ Selected Match
                       </span>
                     )}
                   </div>
@@ -473,8 +486,8 @@ export function LiveStreamSetupModal({
             }}
           >
             <span>🔴 Start Live Stream:</span>
-            <span style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {activeTournament?.tournamentName || activeTournament?.name || activeTournament?.title || 'Selected Tournament'}
+            <span style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {formatTournamentName(activeTournament?.matchName || activeTournament?.tournamentName || activeTournament?.name || activeTournament?.title || 'Selected Tournament')}
             </span>
           </button>
         </div>
