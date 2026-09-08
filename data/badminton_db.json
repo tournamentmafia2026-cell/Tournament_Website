@@ -28,22 +28,7 @@
   },
   "authenticators": {},
   "tournamentDraws": {},
-  "temporaryCredentials": [
-    {
-      "id": "temp_1788586260055",
-      "username": "umpire_1",
-      "password": "1234",
-      "name": "Santhosh",
-      "assignedMatchId": 1788505193676,
-      "assignedMatchName": "Gtn Trophy",
-      "courtName": "Pushkaram",
-      "scope": "umpire",
-      "expiry": "24 Hours",
-      "role": "umpire",
-      "createdAt": "05/09/2026",
-      "status": "active"
-    }
-  ],
+  "temporaryCredentials": [],
   "reportedPlayers": {},
   "liveUmpireMode": false,
   "liveStreamActive": true,
@@ -66,11 +51,6 @@
     "prefix": "Court",
     "customNames": ""
   },
-  "organizerCredentials": {
-    "username": "9345869696",
-    "mobile": "9345869696",
-    "password": "2122",
-    "email": "tournamentmafia2026@gmail.com"
-  },
+  "organizerCredentials": {},
   "reportedPlayers": {}
 }

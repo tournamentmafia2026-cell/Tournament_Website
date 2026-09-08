@@ -5,10 +5,10 @@ let credentialsStore = Array.isArray(initialDb.temporaryCredentials)
   : []
 
 let adminCredsStore = initialDb.organizerCredentials || {
-  username: 'admin',
-  mobile: '9840012345',
-  password: 'password123',
-  email: 'tournamentmafia2026@gmail.com',
+  username: '',
+  mobile: '',
+  password: '',
+  email: '',
 }
 
 export const handler = async (event) => {

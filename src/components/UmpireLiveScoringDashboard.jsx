@@ -42,7 +42,8 @@ export function UmpireLiveScoringDashboard({
     return publishedMatches.find((m) => String(m.id) === String(selectedMatchId)) || publishedMatches[0]
   }, [publishedMatches, selectedMatchId])
 
-  const localSessionIdRef = useRef(`umpire_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`)
+  const [localSessionId] = useState(() => `umpire_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`)
+  const localSessionIdRef = useRef(localSessionId)
   const lastLocalUpdateRef = useRef(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
 

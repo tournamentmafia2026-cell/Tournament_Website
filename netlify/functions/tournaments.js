@@ -9,10 +9,10 @@ let dbState = {
   tournamentDraws: initialDb.tournamentDraws || {},
   reportedPlayers: initialDb.reportedPlayers || {},
   organizerCredentials: initialDb.organizerCredentials || {
-    username: 'admin',
-    mobile: '9840012345',
-    password: 'password123',
-    email: 'tournamentmafia2026@gmail.com',
+    username: '',
+    mobile: '',
+    password: '',
+    email: '',
   },
   courtConfig: initialDb.courtConfig || {},
   systemSettings: initialDb.systemSettings || {
@@ -72,17 +72,15 @@ export const handler = async (event) => {
       // Merge incoming payload fields
       Object.keys(payload).forEach((key) => {
         if (key === 'matches') {
-          if (Array.isArray(payload.matches) && payload.matches.length > 0) {
+          if (Array.isArray(payload.matches)) {
             dbState.matches = sanitizeMatchesData(payload.matches)
-          } else if (Array.isArray(payload.matches) && payload.matches.length === 0 && dbState.matches.length === 0) {
-            dbState.matches = []
           }
           return
         }
 
         if (key === 'authenticators') {
           if (payload.authenticators && typeof payload.authenticators === 'object') {
-            dbState.authenticators = { ...(dbState.authenticators || {}), ...payload.authenticators }
+            dbState.authenticators = payload.authenticators
           }
           return
         }
@@ -103,7 +101,7 @@ export const handler = async (event) => {
 
         if (key === 'publishedStatus' || key === 'publishedStatusMap') {
           if (payload[key] && typeof payload[key] === 'object') {
-            dbState.publishedStatus = { ...(dbState.publishedStatus || {}), ...payload[key] }
+            dbState.publishedStatus = payload[key]
           }
           return
         }

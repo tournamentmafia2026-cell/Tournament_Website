@@ -8,10 +8,10 @@ let dbState = {
   tournamentDraws: initialDb.tournamentDraws || {},
   reportedPlayers: initialDb.reportedPlayers || {},
   organizerCredentials: initialDb.organizerCredentials || {
-    username: 'admin',
-    mobile: '9840012345',
-    password: 'password123',
-    email: 'tournamentmafia2026@gmail.com',
+    username: '',
+    mobile: '',
+    password: '',
+    email: '',
   },
   courtConfig: initialDb.courtConfig || {},
   systemSettings: initialDb.systemSettings || {

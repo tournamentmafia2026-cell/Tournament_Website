@@ -382,6 +382,7 @@ export default function App() {
     }
 
     let updatedTargetMatch = null
+    let updatedMatchesForSync = null
     setPublishedMatches((prev) => {
       const updated = prev.map((m) => {
         if (m.id === matchId) {
@@ -401,12 +402,13 @@ export default function App() {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
       } catch (e) {}
+      updatedMatchesForSync = updated
       return updated
     })
 
-    if (updatedTargetMatch) {
+    if (updatedTargetMatch && updatedMatchesForSync) {
       SupabaseService.upsertTournament(updatedTargetMatch).catch(() => {})
-      syncServerData({ matches: [updatedTargetMatch] })
+      syncServerData({ matches: updatedMatchesForSync })
     }
 
     if (selectedMatch?.id === matchId) {

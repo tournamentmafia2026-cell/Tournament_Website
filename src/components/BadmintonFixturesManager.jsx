@@ -118,7 +118,8 @@ export const BadmintonFixturesManager = ({
   const [isStadiumTvCastOpen, setIsStadiumTvCastOpen] = useState(false)
 
   // Unique session identifier to prevent self-broadcast echo loops
-  const localSessionIdRef = useRef(`session_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`)
+  const [localSessionId] = useState(() => `session_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`)
+  const localSessionIdRef = useRef(localSessionId)
   const isModalActiveRef = useRef(false)
 
   // Live Cast Sponsor Advertisement Manager State

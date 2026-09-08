@@ -5,10 +5,10 @@ import { SupabaseService } from '../utils/supabaseDb'
 const ORGANIZER_CREDS_KEY = 'badminton-organizer-credentials'
 
 const DEFAULT_CREDS = {
-  username: 'admin',
-  password: 'password123',
-  email: 'tournamentmafia2026@gmail.com',
-  mobile: '9840012345',
+  username: '',
+  password: '',
+  email: '',
+  mobile: '',
 }
 
 export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
@@ -277,20 +277,17 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
 
       // 6. Check LocalStorage fallback for Admin credentials
       const creds = getSavedCreds()
-      const cleanMobile = (creds.mobile || '9840012345').replace(/[^0-9]/g, '')
+      const cleanMobile = String(creds.mobile || '').replace(/[^0-9]/g, '')
 
       const isAdminMatch =
         (inputDigits.length >= 7 && (cleanMobile.endsWith(inputDigits) || inputDigits.endsWith(cleanMobile))) ||
-        cleanId === (creds.username || 'admin').toLowerCase() ||
-        cleanId === 'admin' ||
-        cleanId === 'organizer'
+        (creds.username && cleanId === String(creds.username).toLowerCase())
 
       const isPassMatch =
-        cleanPass === creds.password ||
-        cleanPass.toLowerCase() === (creds.password || '').toLowerCase() ||
-        cleanPass === 'password123' ||
-        cleanPass === 'admin123' ||
-        cleanPass === 'admin'
+        Boolean(creds.password) && (
+          cleanPass === creds.password ||
+          cleanPass.toLowerCase() === String(creds.password).toLowerCase()
+        )
 
       if (isAdminMatch && isPassMatch) {
         const adminSession = {
