@@ -44,6 +44,7 @@ export function MatchManagementView({
   onRemoveParticipant,
   onOpenEditMatchModal,
   onDeleteMatch,
+  onStartLiveStream,
   authSession,
   successToast,
 }) {
@@ -167,6 +168,33 @@ export function MatchManagementView({
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        type="button"
+                        title="Start TV Live Stream Broadcast for this tournament"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onStartLiveStream?.(match)
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(239, 68, 68, 0.6)',
+                          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.4) 100%)',
+                          color: '#ffffff',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                          boxShadow: '0 0 10px rgba(239, 68, 68, 0.25)',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        🔴 Live Stream
+                      </button>
+
                       <button
                         type="button"
                         title="Edit Match Details & Categories"
@@ -383,6 +411,30 @@ export function MatchManagementView({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                title="Start Stadium TV Live Stream for this tournament"
+                onClick={() => onStartLiveStream?.(selectedMatch)}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid #ef4444',
+                  background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '800',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  whiteSpace: 'nowrap',
+                  boxShadow: '0 4px 14px rgba(220, 38, 38, 0.4)',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                🔴 Live Stream
+              </button>
+
               <div
                 style={{
                   background: 'rgba(15, 23, 42, 0.65)',
@@ -520,11 +572,11 @@ export function MatchManagementView({
             {(() => {
               const effectiveFormCategory = (activeCategory && activeCategory !== 'ALL')
                 ? activeCategory
-                : (participantForm.category || selectedMatchCategories[0] || 'Men Singles')
+                : (participantForm?.category || selectedMatchCategories[0] || 'Men Singles')
               const isFormDoubles = isDoublesCategory(effectiveFormCategory)
               const isFormValid = isFormDoubles
-                ? Boolean((participantForm.name1?.trim() && participantForm.name2?.trim()) || participantForm.name?.trim())
-                : Boolean(participantForm.name?.trim())
+                ? Boolean((String(participantForm?.name1 || '').trim() && String(participantForm?.name2 || '').trim()) || String(participantForm?.name || '').trim())
+                : Boolean(String(participantForm?.name || '').trim() || String(participantForm?.name1 || '').trim())
 
               return (
                 <div style={{ background: 'rgba(15, 23, 42, 0.45)', padding: '16px', borderRadius: '12px', border: isFormDoubles ? '1.5px solid rgba(168, 85, 247, 0.35)' : '1px solid rgba(148, 163, 184, 0.15)', boxShadow: isFormDoubles ? '0 4px 20px rgba(168, 85, 247, 0.08)' : 'none' }}>
@@ -546,22 +598,22 @@ export function MatchManagementView({
                         type="button"
                         onClick={onResetParticipantForm}
                         style={{
-                          padding: '3px 10px',
-                          borderRadius: '6px',
-                          background: 'rgba(239, 68, 68, 0.15)',
-                          border: '1px solid rgba(248, 113, 113, 0.4)',
+                          background: 'rgba(239, 68, 68, 0.2)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
                           color: '#fca5a5',
+                          padding: '4px 10px',
+                          borderRadius: '6px',
                           fontSize: '11px',
-                          fontWeight: '700',
                           cursor: 'pointer',
+                          fontWeight: '700',
                         }}
                       >
-                        Cancel Edit ✕
+                        ✕ Cancel Editing
                       </button>
                     )}
                   </div>
 
-                  <div className={`grid ${isFormDoubles ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'} gap-3 items-end`}>
+                  <div style={{ display: 'grid', gridTemplateColumns: isFormDoubles ? '1fr 1fr 120px 140px auto' : '1.5fr 120px 140px auto', gap: '10px', alignItems: 'flex-end' }}>
                     {isFormDoubles ? (
                       <>
                         <label style={{ color: '#cbd5e1' }}>
@@ -570,13 +622,13 @@ export function MatchManagementView({
                           </span>
                           <input 
                             type="text"
-                            value={participantForm.name1}
+                            value={participantForm?.name1 || ''}
                             onChange={(e) => {
                               const val = e.target.value
                               setParticipantForm((prev) => ({
                                 ...prev,
                                 name1: val,
-                                name: joinDoublesNames(val, prev.name2),
+                                name: joinDoublesNames(val, prev?.name2),
                               }))
                             }}
                             onKeyDown={(e) => {
@@ -590,7 +642,7 @@ export function MatchManagementView({
                               width: '100%',
                               padding: '10px 12px',
                               marginTop: '6px',
-                              border: !participantForm.name1?.trim() ? '1px solid rgba(96, 165, 250, 0.3)' : '1.5px solid rgba(59, 130, 246, 0.8)',
+                              border: !String(participantForm?.name1 || '').trim() ? '1px solid rgba(96, 165, 250, 0.3)' : '1.5px solid rgba(59, 130, 246, 0.8)',
                               borderRadius: '6px',
                               backgroundColor: 'rgba(15, 23, 42, 0.85)',
                               color: '#f8fafc',
@@ -606,13 +658,13 @@ export function MatchManagementView({
                           </span>
                           <input 
                             type="text"
-                            value={participantForm.name2}
+                            value={participantForm?.name2 || ''}
                             onChange={(e) => {
                               const val = e.target.value
                               setParticipantForm((prev) => ({
                                 ...prev,
                                 name2: val,
-                                name: joinDoublesNames(prev.name1, val),
+                                name: joinDoublesNames(prev?.name1, val),
                               }))
                             }}
                             onKeyDown={(e) => {
@@ -626,7 +678,7 @@ export function MatchManagementView({
                               width: '100%',
                               padding: '10px 12px',
                               marginTop: '6px',
-                              border: !participantForm.name2?.trim() ? '1px solid rgba(192, 132, 252, 0.3)' : '1.5px solid rgba(168, 85, 247, 0.8)',
+                              border: !String(participantForm?.name2 || '').trim() ? '1px solid rgba(192, 132, 252, 0.3)' : '1.5px solid rgba(168, 85, 247, 0.8)',
                               borderRadius: '6px',
                               backgroundColor: 'rgba(15, 23, 42, 0.85)',
                               color: '#f8fafc',
@@ -643,7 +695,7 @@ export function MatchManagementView({
                         </span>
                         <input 
                           type="text"
-                          value={participantForm.name}
+                          value={participantForm?.name || ''}
                           onChange={(e) => {
                             const val = e.target.value
                             setParticipantForm((prev) => ({
@@ -664,7 +716,7 @@ export function MatchManagementView({
                             width: '100%',
                             padding: '10px 12px',
                             marginTop: '6px',
-                            border: !participantForm.name?.trim() ? '1px solid rgba(96, 165, 250, 0.3)' : '1px solid rgba(59, 130, 246, 0.8)',
+                            border: !String(participantForm?.name || '').trim() ? '1px solid rgba(96, 165, 250, 0.3)' : '1px solid rgba(59, 130, 246, 0.8)',
                             borderRadius: '6px',
                             backgroundColor: 'rgba(15, 23, 42, 0.85)',
                             color: '#f8fafc',
@@ -918,15 +970,17 @@ export function MatchManagementView({
 
               const filtered = allList
                 .filter((participant) => {
-                  const cat = (participant.category || selectedMatchCategories[0] || 'Men Singles').trim()
-                  const matchesCat = activeCategory === 'ALL' || cat.toLowerCase() === activeCategory.trim().toLowerCase()
+                  const cat = String(participant?.category || selectedMatchCategories[0] || 'Men Singles').trim()
+                  const activeCatStr = typeof activeCategory === 'string' ? activeCategory.trim() : (activeCategory || 'ALL')
+                  const matchesCat = !activeCatStr || activeCatStr === 'ALL' || cat.toLowerCase() === activeCatStr.toLowerCase()
                   if (!matchesCat) return false
 
-                  if (!playerFilterSearch.trim()) return true
-                  const query = playerFilterSearch.toLowerCase()
-                  const nameMatch = (participant.name || '').toLowerCase().includes(query)
-                  const placeMatch = (participant.place || '').toLowerCase().includes(query)
-                  const courtMatch = (participant.court || '').toLowerCase().includes(query)
+                  const searchStr = typeof playerFilterSearch === 'string' ? playerFilterSearch.trim() : ''
+                  if (!searchStr) return true
+                  const query = searchStr.toLowerCase()
+                  const nameMatch = (participant?.name || '').toLowerCase().includes(query)
+                  const placeMatch = (participant?.place || '').toLowerCase().includes(query)
+                  const courtMatch = (participant?.court || '').toLowerCase().includes(query)
                   const catMatch = cat.toLowerCase().includes(query)
                   return nameMatch || placeMatch || courtMatch || catMatch
                 })

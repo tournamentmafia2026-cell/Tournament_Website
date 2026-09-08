@@ -32,161 +32,6 @@ const calculateMatchDuration = (startDate, endDate) => {
   return diffInDays >= 0 ? diffInDays + 1 : 0
 }
 
-const PublicTournamentCard = React.memo(function PublicTournamentCard({
-  match,
-  idx,
-  publishedStatusMap,
-  onSelectMatch,
-  onOpenFixtures,
-  onOpenResultModal,
-}) {
-  const status = getMatchStatus(match)
-  const publishedCategories = (match.categories || []).filter((cat) => publishedStatusMap[`${match.id}-${cat}`])
-  const hasPublishedDraw = publishedCategories.length > 0
-
-  return (
-    <article 
-      className={`pro-tournament-card ${status === 'ongoing' ? 'is-ongoing' : ''}`}
-      style={{ '--card-index': idx, cursor: 'pointer' }}
-      onClick={() => onSelectMatch(match)}
-    >
-      <div className="pro-card-banner">
-        {match.image ? (
-          <img src={match.image} alt={match.matchName} className="pro-card-img" />
-        ) : (
-          <div className="pro-img-placeholder">
-            <span className="pro-placeholder-icon">🏸</span>
-          </div>
-        )}
-
-        <div className="pro-banner-gradient" />
-
-        <span className={`pro-status-pill status-${status}`}>
-          {status === 'ongoing' && <span className="pro-radar-beacon" />}
-          <span>{status === 'completed' ? '🏆 Completed' : status === 'ongoing' ? 'Live' : 'Upcoming'}</span>
-        </span>
-
-        {hasPublishedDraw && (
-          <div className="pro-draw-live-ribbon">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 6h4v4H4" />
-              <path d="M4 14h4v4H4" />
-              <path d="M8 8h6v8H8" />
-              <path d="M14 12h6" />
-            </svg>
-            <span>DRAW PUBLISHED</span>
-          </div>
-        )}
-      </div>
-
-      <div className="pro-card-body">
-        <div className="pro-card-header-row">
-          <div className="pro-title-meta-block">
-            <h2 className="pro-tournament-title">
-              {match.matchName}
-            </h2>
-            <div className="pro-venue-row">
-              <span className="venue-pin-icon">📍</span>
-              <span className="venue-text">{match.matchAddress || match.courtName}</span>
-            </div>
-          </div>
-
-          <div className="pro-card-right-date">
-            <div className="pro-date-range-badge">
-              <span className="pro-date-icon">📅</span>
-              <span className="pro-date-text">
-                {match?.startDate ? formatDisplayDate(match.startDate) : ''} - {match?.endDate ? formatDisplayDate(match.endDate) : ''}
-              </span>
-            </div>
-            <div className="pro-days-count-tag">
-              <span className="pro-clock-icon">⏱️</span>
-              <span>{match?.matchDuration ?? calculateMatchDuration(match?.startDate, match?.endDate)} Days Tournament</span>
-            </div>
-          </div>
-        </div>
-
-        {((match.categoryWinners && Object.keys(match.categoryWinners).length > 0) || match.winner) && (
-          <div className="pro-champion-banner">
-            <span className="pro-trophy-icon">🏆</span>
-            <div className="pro-champion-text">
-              <div className="pro-champion-head">
-                {getMatchStatus(match) === 'completed' ? 'Tournament Champions' : 'Category Winners'}
-              </div>
-              {match.categoryWinners && Object.keys(match.categoryWinners).length > 0 ? (
-                <div className="pro-winners-grid">
-                  {Object.entries(match.categoryWinners).map(([cat, wName]) => (
-                    <div key={cat} className="pro-winner-line">
-                      <span className="cat-prefix">{cat}:</span> {formatPersonName(wName)}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="pro-winner-single">{formatPersonName(match.winner)}</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="pro-categories-wrap">
-          {publishedCategories.map((category) => (
-            <span
-              key={`${match.id}-${category}`}
-              className="pro-cat-pill"
-            >
-              <span className="pro-cat-dot" />
-              <span>🏸 {category}</span>
-            </span>
-          ))}
-        </div>
-
-        <div className="pro-card-footer mt-2">
-          <div className={`pro-btn-grid grid ${hasPublishedDraw ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'} gap-2.5 w-full`}>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                onSelectMatch(match)
-              }}
-              className="pro-btn-action btn-details flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
-            >
-              <span>📋</span>
-              <span>Details</span>
-            </button>
-
-            {hasPublishedDraw && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onOpenFixtures(match, publishedCategories[0])
-                }}
-                className="pro-btn-action btn-fixtures flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
-              >
-                <span>🎯</span>
-                <span>Fixtures</span>
-              </button>
-            )}
-
-            {hasPublishedDraw && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onOpenResultModal(match)
-                }}
-                className="pro-btn-action btn-result flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
-              >
-                <span>🏆</span>
-                <span>Result</span>
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </article>
-  )
-})
-
 export function PublicPortal({
   publishedMatches = [],
   publishedStatusMap = {},
@@ -510,17 +355,154 @@ export function PublicPortal({
           {/* Tournament Feed Grid */}
           <div className="public-feed-pro">
             {filteredPublicMatches.length > 0 ? (
-              filteredPublicMatches.map((match, idx) => (
-                <PublicTournamentCard
-                  key={match.id}
-                  match={match}
-                  idx={idx}
-                  publishedStatusMap={publishedStatusMap}
-                  onSelectMatch={setSelectedMatch}
-                  onOpenFixtures={onOpenFixtures}
-                  onOpenResultModal={onOpenResultModal}
-                />
-              ))
+              filteredPublicMatches.map((match, idx) => {
+                const status = getMatchStatus(match)
+                const publishedCategories = (match.categories || []).filter((cat) => publishedStatusMap[`${match.id}-${cat}`])
+                const hasPublishedDraw = publishedCategories.length > 0
+
+                return (
+                  <article 
+                    key={match.id} 
+                    className={`pro-tournament-card ${status === 'ongoing' ? 'is-ongoing' : ''}`}
+                    style={{ '--card-index': idx, cursor: 'pointer' }}
+                    onClick={() => setSelectedMatch(match)}
+                  >
+                    <div className="pro-card-banner">
+                      {match.image ? (
+                        <img src={match.image} alt={match.matchName} className="pro-card-img" />
+                      ) : (
+                        <div className="pro-img-placeholder">
+                          <span className="pro-placeholder-icon">🏸</span>
+                        </div>
+                      )}
+
+                      <div className="pro-banner-gradient" />
+
+                      <span className={`pro-status-pill status-${status}`}>
+                        {status === 'ongoing' && <span className="pro-radar-beacon" />}
+                        <span>{status === 'completed' ? '🏆 Completed' : status === 'ongoing' ? 'Live' : 'Upcoming'}</span>
+                      </span>
+
+                      {hasPublishedDraw && (
+                        <div className="pro-draw-live-ribbon">
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M4 6h4v4H4" />
+                            <path d="M4 14h4v4H4" />
+                            <path d="M8 8h6v8H8" />
+                            <path d="M14 12h6" />
+                          </svg>
+                          <span>DRAW PUBLISHED</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="pro-card-body">
+                      <div className="pro-card-header-row">
+                        <div className="pro-title-meta-block">
+                          <h2 className="pro-tournament-title">
+                            {match.matchName}
+                          </h2>
+                          <div className="pro-venue-row">
+                            <span className="venue-pin-icon">📍</span>
+                            <span className="venue-text">{match.matchAddress || match.courtName}</span>
+                          </div>
+                        </div>
+
+                        <div className="pro-card-right-date">
+                          <div className="pro-date-range-badge">
+                            <span className="pro-date-icon">📅</span>
+                            <span className="pro-date-text">
+                              {match?.startDate ? formatDisplayDate(match.startDate) : ''} - {match?.endDate ? formatDisplayDate(match.endDate) : ''}
+                            </span>
+                          </div>
+                          <div className="pro-days-count-tag">
+                            <span className="pro-clock-icon">⏱️</span>
+                            <span>{match?.matchDuration ?? calculateMatchDuration(match?.startDate, match?.endDate)} Days Tournament</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {((match.categoryWinners && Object.keys(match.categoryWinners).length > 0) || match.winner) && (
+                        <div className="pro-champion-banner">
+                          <span className="pro-trophy-icon">🏆</span>
+                          <div className="pro-champion-text">
+                            <div className="pro-champion-head">
+                              {getMatchStatus(match) === 'completed' ? 'Tournament Champions' : 'Category Winners'}
+                            </div>
+                            {match.categoryWinners && Object.keys(match.categoryWinners).length > 0 ? (
+                              <div className="pro-winners-grid">
+                                {Object.entries(match.categoryWinners).map(([cat, wName]) => (
+                                  <div key={cat} className="pro-winner-line">
+                                    <span className="cat-prefix">{cat}:</span> {formatPersonName(wName)}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="pro-winner-single">{formatPersonName(match.winner)}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="pro-categories-wrap">
+                        {publishedCategories.map((category) => (
+                          <span
+                            key={`${match.id}-${category}`}
+                            className="pro-cat-pill"
+                          >
+                            <span className="pro-cat-dot" />
+                            <span>🏸 {category}</span>
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="pro-card-footer mt-2">
+                        <div className={`pro-btn-grid grid ${hasPublishedDraw ? 'grid-cols-1 sm:grid-cols-3' : 'grid-cols-1'} gap-2.5 w-full`}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedMatch(match)
+                            }}
+                            className="pro-btn-action btn-details flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
+                          >
+                            <span>📋</span>
+                            <span>Details</span>
+                          </button>
+
+                          {hasPublishedDraw && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onOpenFixtures(match, publishedCategories[0])
+                              }}
+                              className="pro-btn-action btn-fixtures flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
+                            >
+                              <span>🎯</span>
+                              <span>Fixtures</span>
+                            </button>
+                          )}
+
+                          {hasPublishedDraw && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onOpenResultModal(match)
+                              }}
+                              className="pro-btn-action btn-result flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
+                            >
+                              <span>🏆</span>
+                              <span>Result</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })
             ) : (
               <div className="pro-empty-feed">
                 <div className="pro-empty-icon">🏸</div>

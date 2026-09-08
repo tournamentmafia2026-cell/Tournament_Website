@@ -12,10 +12,10 @@ export function ModifyParticipantModal({
 }) {
   if (!modifyingParticipant) return null
 
-  const isDoubles = isDoublesCategory(modifyForm.category)
+  const isDoubles = isDoublesCategory(modifyForm?.category)
   const isFormValid = isDoubles
-    ? Boolean((modifyForm.name1?.trim() && modifyForm.name2?.trim()) || modifyForm.name?.trim())
-    : Boolean(modifyForm.name?.trim() || modifyForm.name1?.trim())
+    ? Boolean((String(modifyForm?.name1 || '').trim() && String(modifyForm?.name2 || '').trim()) || String(modifyForm?.name || '').trim())
+    : Boolean(String(modifyForm?.name || '').trim() || String(modifyForm?.name1 || '').trim())
 
   return (
     <div

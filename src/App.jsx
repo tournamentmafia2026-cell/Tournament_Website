@@ -15,6 +15,7 @@ import { TournamentResultsModal } from './components/TournamentResultsModal'
 import { ModifyParticipantModal } from './components/ModifyParticipantModal'
 import { ConfirmDeleteModal } from './components/ConfirmDeleteModal'
 import { CourtConfigModal } from './components/CourtConfigModal'
+import { LiveStreamSetupModal } from './components/LiveStreamSetupModal'
 import { StadiumTvLiveCast } from './components/StadiumTvLiveCast'
 import { PublicSponsorShowcase } from './components/PublicSponsorShowcase'
 import { FixtureSeedingModal } from './components/FixtureSeedingModal'
@@ -76,7 +77,7 @@ export default function App() {
   const [activePage, setActivePage] = useState('fixturesManagement')
   const [fixturesCategory, setFixturesCategory] = useState(null)
   const [selectedMatch, setSelectedMatch] = useState(null)
-  const [activeCategory, setActiveCategory] = useState(null)
+  const [activeCategory, setActiveCategory] = useState('ALL')
   const [publicFilter, setPublicFilter] = useState('all')
 
   // Form State for Creating / Editing Tournaments
@@ -200,11 +201,7 @@ export default function App() {
 
   // Live Stream Broadcast Handlers
   const handleToggleLiveStream = () => {
-    if (!isLiveStreamActive) {
-      setIsLiveStreamSetupModalOpen(true)
-    } else {
-      handlePopoutLiveTv(selectedMatch?.id)
-    }
+    setIsLiveStreamSetupModalOpen(true)
   }
 
   const handleStopLiveStream = () => {
@@ -231,22 +228,31 @@ export default function App() {
     setSuccessToast('📺 TV Live Stream opened in a new tab!')
   }
 
-  const handleLaunchPopoutBroadcast = (selectedCourts) => {
-    const courtsNum = Number(selectedCourts) || streamCourtsCount || 4
-    setStreamCourtsCount(courtsNum)
+  const handleLaunchPopoutBroadcast = (selectedTournamentId, courtCfg) => {
+    if (courtCfg) {
+      setStreamCourtConfig(courtCfg)
+      setStreamCourtsCount(courtCfg.count)
+    }
+    const matched = publishedMatches.find((m) => String(m.id) === String(selectedTournamentId))
+    if (matched) {
+      setSelectedMatch(matched)
+    }
+    const tid = selectedTournamentId || matched?.id || selectedMatch?.id || publishedMatches[0]?.id || ''
     setIsLiveStreamActive(true)
     setIsLiveStreamSetupModalOpen(false)
     try {
-      localStorage.setItem('badminton-stadium-courts-count', String(courtsNum))
       localStorage.setItem('badminton-live-stream-active', 'true')
+      if (courtCfg?.count) {
+        localStorage.setItem('badminton-stadium-courts-count', String(courtCfg.count))
+      }
       syncServerData({ liveStreamActive: true })
     } catch (e) {}
 
-    const tid = selectedMatch?.id || publishedMatches[0]?.id || ''
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
     const win = window.open(url, '_blank')
     if (win) win.focus()
-    setSuccessToast(`📺 TV Live Broadcast opened in a new tab!`)
+    const tName = matched?.tournamentName || matched?.name || matched?.title || 'Tournament'
+    setSuccessToast(`📺 TV Live Broadcast opened for "${tName}"!`)
   }
 
   const handleConfirmLiveStreamSetup = (countOverride) => {
@@ -653,7 +659,9 @@ export default function App() {
   )
 
   if (isDedicatedLiveCast) {
-    const targetMatch = selectedMatch || publishedMatches[0]
+    const urlParams = new URLSearchParams(window.location.search)
+    const urlTid = urlParams.get('tid')
+    const targetMatch = publishedMatches.find((m) => String(m.id) === String(urlTid)) || selectedMatch || publishedMatches[0]
     return (
       <StadiumTvLiveCast
         isOpen={true}
@@ -886,6 +894,7 @@ export default function App() {
                       onConfirm: () => handleDeleteMatch(match.id),
                     })
                   }}
+                  onStartLiveStream={(match) => handleLaunchPopoutBroadcast(match?.id)}
                   authSession={authSession}
                   successToast={successToast}
                 />
@@ -972,20 +981,14 @@ export default function App() {
         itemName={deleteConfirmState?.itemName}
       />
 
-      {/* Live Stream Setup Modal */}
-      <CourtConfigModal
+      {/* Live Stream Setup Modal with Tournament & Court Selector */}
+      <LiveStreamSetupModal
         isOpen={isLiveStreamSetupModalOpen}
         onClose={() => setIsLiveStreamSetupModalOpen(false)}
-        streamCourtsCount={streamCourtsCount}
-        setStreamCourtsCount={setStreamCourtsCount}
-        streamCourtFormat={streamCourtFormat}
-        setStreamCourtFormat={setStreamCourtFormat}
-        streamCourtPrefix={streamCourtPrefix}
-        setStreamCourtPrefix={setStreamCourtPrefix}
-        streamCourtCustomNames={streamCourtCustomNames}
-        setStreamCourtCustomNames={setStreamCourtCustomNames}
-        streamPreviewCourts={streamPreviewCourts}
-        onSave={handleConfirmLiveStreamSetup}
+        publishedMatches={publishedMatches}
+        selectedMatch={selectedMatch}
+        initialCourtConfig={streamCourtConfig}
+        onLaunchStream={handleLaunchPopoutBroadcast}
       />
     </div>
   )
