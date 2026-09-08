@@ -54,10 +54,10 @@ export const BadmintonFixturesManager = ({
   onBackToPublicFeed = null,
   onOpenOrganizerLogin = null,
 }) => {
-  // Navigation level: 'tournaments' | 'categories' | 'draw'
+  // Navigation level: 'tournaments' | 'draw' (Direct Draw Access - Intermediate categories page bypassed)
   const [fixturesLevel, setFixturesLevel] = useState(() => {
     if (initialSelectedMatch) {
-      return (initialCategory || isPublicView) ? 'draw' : 'categories'
+      return 'draw'
     }
     return 'tournaments'
   })
@@ -71,12 +71,8 @@ export const BadmintonFixturesManager = ({
       setSelectedMatchId(initialSelectedMatch.id)
       if (initialCategory) {
         setSelectedCategory(initialCategory)
-        setFixturesLevel('draw')
-      } else if (isPublicView) {
-        setFixturesLevel('draw')
-      } else {
-        setFixturesLevel('categories')
       }
+      setFixturesLevel('draw')
     } else {
       setFixturesLevel('tournaments')
     }
@@ -2630,7 +2626,7 @@ export const BadmintonFixturesManager = ({
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '160px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '160px' }}>
                     <button
                       type="button"
                       className="btn-primary-gradient"
@@ -2647,6 +2643,44 @@ export const BadmintonFixturesManager = ({
                     >
                       ⚡ Manage Fixtures →
                     </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleLaunchLiveTv(match.id)
+                      }}
+                      style={{
+                        padding: '9px 14px',
+                        fontSize: '11.5px',
+                        cursor: 'pointer',
+                        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(185, 28, 28, 0.35) 100%)',
+                        border: '1.5px solid rgba(239, 68, 68, 0.6)',
+                        color: '#ffffff',
+                        borderRadius: '10px',
+                        fontWeight: '800',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        width: '100%',
+                        boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)',
+                        transition: 'all 0.2s ease',
+                      }}
+                      title={`Start TV Live Stream strictly for "${formatTournamentName(match.matchName)}"`}
+                    >
+                      <span
+                        style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          background: '#ef4444',
+                          boxShadow: '0 0 8px #ef4444',
+                        }}
+                      />
+                      <span>🔴 Live Stream</span>
+                    </button>
+
                     {(() => {
                       const isTourTimingsActive = matchCats.some(
                         (cat) => tournamentDraws[`${match.id}-${cat}`]?.scheduleConfig?.isTimingsActive
@@ -2749,152 +2783,14 @@ export const BadmintonFixturesManager = ({
   }
 
   // =========================================================================
-  // VIEW 2: CATEGORIES OVERVIEW VIEW (When fixturesLevel === 'categories')
+  // VIEW 2: DIRECT DRAW ACCESS (Intermediate categories page removed)
   // =========================================================================
   if (fixturesLevel === 'categories') {
-    return (
-      <div className="badminton-points-fixture-manager">
-        {/* Breadcrumb Navigation */}
-        <div className="fixtures-breadcrumb-nav">
-          <button
-            type="button"
-            className="btn-breadcrumb"
-            onClick={() => {
-              onSelectMatch(null)
-              setFixturesLevel('tournaments')
-            }}
-          >
-            ← All Tournaments
-          </button>
-        </div>
-
-        {/* Tournament Header Panel */}
-        <div className="fixtures-header-panel">
-          <div className="fixtures-header-left">
-            <h2 className="fixtures-title">{formatTournamentName(selectedMatch.matchName)}</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
-              {selectedMatch.courtName && (
-                <span className="fixtures-badge" style={{ margin: 0, padding: '3px 10px' }}>
-                  {formatCourtName(selectedMatch.courtName)}
-                </span>
-              )}
-              <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: '700', letterSpacing: '0.02em' }}>
-                📅 {selectedMatch.startDate}{selectedMatch.endDate && selectedMatch.endDate !== selectedMatch.startDate ? ` to ${selectedMatch.endDate}` : ''}
-              </span>
-            </div>
-            <p className="fixtures-subtitle" style={{ marginTop: '8px' }}>
-              Select any category below to view registered players, assign seeds, and generate knockout draws.
-            </p>
-          </div>
-        </div>
-
-        {/* Categories Grid */}
-        {isPublicView && visibleCategories.length === 0 ? (
-          <div className="empty-draw-card" style={{ border: '1.5px dashed rgba(239, 68, 68, 0.4)', background: 'rgba(15, 23, 42, 0.85)', padding: '50px 20px', textAlign: 'center', borderRadius: '16px', margin: '20px auto', maxWidth: '600px' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔒</div>
-            <h3 style={{ color: '#f8fafc', margin: '0 0 10px 0', fontSize: '20px', fontWeight: '800' }}>Fixtures Not Published Yet</h3>
-            <p style={{ color: '#94a3b8', margin: 0, fontSize: '14px', lineHeight: '1.6' }}>
-              The official fixture draw has not been published yet by the organizers. Please check back once the draw is released.
-            </p>
-          </div>
-        ) : (
-          <div className="fixtures-categories-grid">
-            {visibleCategories.map((cat) => {
-              const count = (authenticators[selectedMatch.id] || []).filter(
-                (p) => (p.category || 'Men Singles') === cat
-              ).length
-              const isDrawActive = !!tournamentDraws[`${selectedMatch.id}-${cat}`]
-              const activeDrawObj = tournamentDraws[`${selectedMatch.id}-${cat}`]
-
-              return (
-                <div
-                  key={cat}
-                  className={`fixtures-category-card ${isDrawActive ? 'active' : ''}`}
-                  onClick={() => {
-                    setSelectedCategory(cat)
-                    setViewMode('official')
-                    setFixturesLevel('draw')
-                  }}
-                >
-                  <div>
-                    <div className="fixtures-category-header">
-                      <h3 className="fixtures-category-title">{cat}</h3>
-                      {isDrawActive ? (
-                        <span className="category-draw-status-badge active">
-                          ✓ {activeDrawObj.drawSize} Draw Active
-                        </span>
-                      ) : (
-                        <span className="category-draw-status-badge pending">
-                          Draw Pending
-                        </span>
-                      )}
-                    </div>
-                    <p style={{ color: '#94a3b8', fontSize: '12px', margin: '4px 0 0 0' }}>
-                      {count > 0 ? `${count} player(s) registered in this category.` : 'No players added yet (Auto-fill supported).'}
-                    </p>
-                  </div>
-
-                  <div className="fixtures-category-meta">
-                    <span className="category-player-count-badge">
-                      👥 {count} Players
-                    </span>
-                    <button
-                      type="button"
-                      className="btn-primary-gradient"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedCategory(cat)
-                        setViewMode('official')
-                        setFixturesLevel('draw')
-                      }}
-                      style={{ marginLeft: 'auto', padding: '7px 14px', fontSize: '11.5px', cursor: 'pointer', textAlign: 'center' }}
-                    >
-                      ⚡ Open Draw →
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Master Tournament Multi-Category Scheduling Modal */}
-        <TournamentMasterScheduleModal
-          isOpen={isMasterScheduleModalOpen}
-          onClose={() => {
-            setIsMasterScheduleModalOpen(false)
-            setSchedulingTournament(null)
-          }}
-          tournament={schedulingTournament || selectedMatch}
-          categories={
-            schedulingTournament
-              ? (schedulingTournament.categories || (schedulingTournament.category ? [schedulingTournament.category] : DEFAULT_CATEGORIES))
-              : (selectedMatch ? (selectedMatch.categories || DEFAULT_CATEGORIES) : DEFAULT_CATEGORIES)
-          }
-          allCategoryDraws={getAllCategoryDrawsForTournament(schedulingTournament || selectedMatch)}
-          onSaveMasterSchedule={handleSaveMasterSchedule}
-        />
-
-        {/* Fullscreen Stadium TV Live Cast Screen */}
-        {isStadiumTvCastOpen && (
-          <StadiumTvLiveCast
-            tournament={selectedMatch || publishedMatches[0]}
-            allTournaments={publishedMatches}
-            onClose={() => setIsStadiumTvCastOpen(false)}
-          />
-        )}
-
-        {/* Sponsor Advertisement Manager Modal */}
-        <StadiumAdManagerModal
-          isOpen={isAdModalOpen}
-          onClose={() => setIsAdModalOpen(false)}
-          ads={sponsorAds}
-          onSaveAds={handleSaveAds}
-          adSettings={adSettings}
-          onSaveSettings={handleSaveAdSettings}
-        />
-      </div>
-    )
+    const firstCat = (selectedMatch?.categories && selectedMatch.categories[0]) || 'Men Singles'
+    if (!selectedCategory) {
+      setSelectedCategory(firstCat)
+    }
+    setFixturesLevel('draw')
   }
 
   // Extract slots / line entries for Round 1
