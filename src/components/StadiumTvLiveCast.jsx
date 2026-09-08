@@ -4,6 +4,7 @@ import { sortBadmintonCategories } from '../utils/badmintonCategories'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
 import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from '../utils/courtConfig'
 import { fastDeepEqual } from '../utils/fastDeepEqual'
+import { CourtConfigModal } from './CourtConfigModal'
 
 export const StadiumTvLiveCast = ({
   tournament,
