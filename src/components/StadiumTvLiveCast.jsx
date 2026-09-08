@@ -382,10 +382,20 @@ export const StadiumTvLiveCast = ({
     e?.stopPropagation()
     const tid = selectedTournamentId || tournament?.id || ''
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
+    
+    // Ensure Live Stream status is active
+    try {
+      localStorage.setItem('badminton-live-stream-active', 'true')
+      window.dispatchEvent(new Event('storage'))
+    } catch (err) {}
+
     const targetWindowName = `BadmintonLiveCast_${tid || 'general'}`
     const win = window.open(url, targetWindowName, 'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no')
     if (win) {
       win.focus()
+    }
+    if (onClose) {
+      onClose()
     }
   }
 

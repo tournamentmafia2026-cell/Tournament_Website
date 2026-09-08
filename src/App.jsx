@@ -108,6 +108,7 @@ export default function App() {
   const [successToast, setSuccessToast] = useState('')
 
   // Stadium TV Cast & Live Stream Settings State
+  const isLiveCastMode = typeof window !== 'undefined' && window.location.search.includes('livecast=true')
   const [isStadiumTvCastOpen, setIsStadiumTvCastOpen] = useState(false)
   const [isLiveStreamSetupModalOpen, setIsLiveStreamSetupModalOpen] = useState(false)
   const [streamCourtConfig, setStreamCourtConfig] = useState(() => getSavedCourtConfig())
@@ -115,6 +116,16 @@ export default function App() {
   const [streamCourtFormat, setStreamCourtFormat] = useState(() => streamCourtConfig.format || 'numbers')
   const [streamCourtPrefix, setStreamCourtPrefix] = useState(() => streamCourtConfig.prefix !== undefined ? streamCourtConfig.prefix : 'Court')
   const [streamCourtCustomNames, setStreamCourtCustomNames] = useState(() => streamCourtConfig.customNames || '')
+
+  useEffect(() => {
+    if (isLiveCastMode) {
+      setIsLiveStreamActive(true)
+      try {
+        localStorage.setItem('badminton-live-stream-active', 'true')
+        syncServerData({ liveStreamActive: true })
+      } catch (e) {}
+    }
+  }, [isLiveCastMode])
 
   useEffect(() => {
     if (isLiveStreamSetupModalOpen) {
@@ -222,32 +233,36 @@ export default function App() {
   const handlePopoutLiveTv = (tournamentId) => {
     const tid = tournamentId || selectedMatch?.id || publishedMatches[0]?.id || ''
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
-    const win = window.open(url, '_blank')
-    if (win) win.focus()
     setIsLiveStreamActive(true)
+    setIsStadiumTvCastOpen(false)
     try {
       localStorage.setItem('badminton-live-stream-active', 'true')
       syncServerData({ liveStreamActive: true })
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
-    setSuccessToast('📺 TV Live Stream opened in a new tab!')
+    const win = window.open(url, '_blank')
+    if (win) win.focus()
+    setSuccessToast('📺 TV Live Stream ON & Popout opened in a new tab!')
   }
 
   const handleLaunchPopoutBroadcast = (selectedCourts) => {
     const courtsNum = Number(selectedCourts) || streamCourtsCount || 4
     setStreamCourtsCount(courtsNum)
     setIsLiveStreamActive(true)
+    setIsStadiumTvCastOpen(false)
     setIsLiveStreamSetupModalOpen(false)
     try {
       localStorage.setItem('badminton-stadium-courts-count', String(courtsNum))
       localStorage.setItem('badminton-live-stream-active', 'true')
       syncServerData({ liveStreamActive: true })
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
 
     const tid = selectedMatch?.id || publishedMatches[0]?.id || ''
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
     const win = window.open(url, '_blank')
     if (win) win.focus()
-    setSuccessToast(`📺 TV Live Broadcast opened in a new tab!`)
+    setSuccessToast(`📺 TV Live Broadcast ON & opened in a new tab!`)
   }
 
   const handleConfirmLiveStreamSetup = (countOverride) => {
@@ -644,6 +659,36 @@ export default function App() {
     setSelectedMatch(match)
     setFixturesCategory(category)
     setActivePage('fixturesManagement')
+  }
+
+  if (isLiveCastMode) {
+    const p = new URLSearchParams(window.location.search)
+    const urlTid = p.get('tid')
+    const targetTournament = publishedMatches.find((m) => String(m.id) === String(urlTid)) || selectedMatch || publishedMatches[0]
+
+    return (
+      <div className="stadium-livecast-root" style={{ width: '100vw', minHeight: '100vh', background: '#060b14', overflowX: 'hidden' }}>
+        <StadiumTvLiveCast
+          isOpen={true}
+          tournament={targetTournament}
+          tournamentId={targetTournament?.id}
+          allTournaments={publishedMatches}
+          onClose={() => {
+            try {
+              window.history.replaceState(null, '', window.location.pathname)
+            } catch {}
+            if (window.opener) {
+              window.close()
+            } else {
+              window.location.href = window.location.pathname
+            }
+          }}
+          onStopBroadcast={handleStopLiveStream}
+          onStopStream={handleStopLiveStream}
+          isPublicView={false}
+        />
+      </div>
+    )
   }
 
   return (
