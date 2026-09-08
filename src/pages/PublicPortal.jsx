@@ -307,7 +307,7 @@ export function PublicPortal({
                   <span className="public-mafia-badge px-2 py-0.5 rounded text-[10px] font-extrabold bg-sky-500/20 text-sky-400 border border-sky-400/30 tracking-wider">OFFICIAL</span>
                 </div>
                 <div className="public-header-subtitle flex items-center gap-2 text-xs sm:text-sm text-slate-400 mt-0.5">
-                  <span className="live-status-pulse w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="live-status-pulse w-2 h-2 rounded-full bg-emerald-400" />
                   <span>Official Tournament Portal & Live Draws</span>
                 </div>
               </div>
@@ -345,7 +345,7 @@ export function PublicPortal({
                   onClick={() => setPublicFilter(tab.id)}
                   className={`public-filter-btn-pro ${isActive ? 'active' : ''} px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap flex items-center gap-2`}
                 >
-                  {tab.live && <span className="live-filter-dot w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
+                  {tab.live && <span className="live-filter-dot w-2 h-2 rounded-full bg-emerald-400" />}
                   <span>{tab.label}</span>
                 </button>
               )
