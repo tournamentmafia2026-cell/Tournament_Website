@@ -209,7 +209,8 @@ export default function App() {
     setIsLiveStreamActive(false)
     try {
       localStorage.setItem('badminton-live-stream-active', 'false')
-      syncServerData({ liveStreamActive: false })
+      localStorage.removeItem('badminton-live-stream-match-id')
+      syncServerData({ liveStreamActive: false, liveStreamMatchId: '' })
       window.dispatchEvent(new Event('storage'))
     } catch (e) {}
     setSuccessToast('⚪ Live Stream Broadcast is now stopped.')
@@ -223,7 +224,9 @@ export default function App() {
     setIsLiveStreamActive(true)
     try {
       localStorage.setItem('badminton-live-stream-active', 'true')
-      syncServerData({ liveStreamActive: true })
+      localStorage.setItem('badminton-live-stream-match-id', String(tid))
+      syncServerData({ liveStreamActive: true, liveStreamMatchId: String(tid) })
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
     setSuccessToast('📺 TV Live Stream opened in a new tab!')
   }
@@ -242,10 +245,12 @@ export default function App() {
     setIsLiveStreamSetupModalOpen(false)
     try {
       localStorage.setItem('badminton-live-stream-active', 'true')
+      localStorage.setItem('badminton-live-stream-match-id', String(tid))
       if (courtCfg?.count) {
         localStorage.setItem('badminton-stadium-courts-count', String(courtCfg.count))
       }
-      syncServerData({ liveStreamActive: true })
+      syncServerData({ liveStreamActive: true, liveStreamMatchId: String(tid) })
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
 
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
@@ -854,6 +859,9 @@ export default function App() {
                       handleRemoveParticipant(matchId, participantId)
                     }}
                     onBackToMatchManagement={() => setActivePage('matchManagement')}
+                    onStartLiveStream={(match) => handleLaunchPopoutBroadcast(match?.id)}
+                    onStopLiveStream={handleStopLiveStream}
+                    isLiveStreamActive={isLiveStreamActive}
                   />
                 </div>
               )}
@@ -895,6 +903,8 @@ export default function App() {
                     })
                   }}
                   onStartLiveStream={(match) => handleLaunchPopoutBroadcast(match?.id)}
+                  onStopLiveStream={handleStopLiveStream}
+                  isLiveStreamActive={isLiveStreamActive}
                   authSession={authSession}
                   successToast={successToast}
                 />
