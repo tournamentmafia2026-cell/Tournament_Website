@@ -351,10 +351,15 @@ export const StadiumTvLiveCast = ({
     try {
       window.history.replaceState(null, '', window.location.pathname)
     } catch {}
-    if (window.opener) {
-      window.close()
+    if (window.opener && window.opener !== window) {
+      try {
+        window.close()
+      } catch (err) {}
+    }
+    if (onClose) {
+      onClose()
     } else {
-      onClose?.()
+      window.location.href = window.location.pathname
     }
   }
 
@@ -364,17 +369,36 @@ export const StadiumTvLiveCast = ({
       localStorage.setItem('badminton-live-stream-active', 'false')
       window.dispatchEvent(new Event('storage'))
     } catch (err) {}
+
+    // Sync to backend server
+    try {
+      fetch('/api/tournaments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ liveStreamActive: false }),
+      }).catch(() => {})
+    } catch (err) {}
+
     if (onStopStream) {
-      onStopStream()
+      try {
+        onStopStream()
+      } catch (err) {}
     }
+
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {})
+    }
+
     try {
       window.history.replaceState(null, '', window.location.pathname)
     } catch {}
-    if (window.opener) {
-      window.close()
-    } else {
-      onClose?.()
+
+    if (window.opener && window.opener !== window) {
+      try {
+        window.close()
+      } catch (err) {}
     }
+    window.location.href = window.location.pathname
   }
 
   // Handle Dedicated Pop-out Window for TV / Projector / OBS Browser Source

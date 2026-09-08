@@ -269,6 +269,18 @@ export function useTournamentData() {
               return merged
             })
           }
+
+          if (data && typeof data.liveStreamActive === 'boolean') {
+            setIsLiveStreamActive((prev) => {
+              if (prev !== data.liveStreamActive) {
+                try {
+                  localStorage.setItem('badminton-live-stream-active', String(data.liveStreamActive))
+                } catch (e) {}
+                return data.liveStreamActive
+              }
+              return prev
+            })
+          }
         }
       } catch (err) {
       } finally {
@@ -307,6 +319,9 @@ export function useTournamentData() {
   useEffect(() => {
     const refreshPubStatus = () => {
       try {
+        const streamActive = localStorage.getItem('badminton-live-stream-active') === 'true'
+        setIsLiveStreamActive((prev) => (prev !== streamActive ? streamActive : prev))
+
         const saved = localStorage.getItem('badminton-published-status')
         if (saved) {
           const parsed = JSON.parse(saved)

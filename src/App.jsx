@@ -739,6 +739,7 @@ export default function App() {
                 publishedMatches={publishedMatches}
                 isLiveStreamActive={isLiveStreamActive}
                 onToggleLiveStream={handleToggleLiveStream}
+                onStopLiveStream={handleStopLiveStream}
               />
 
               {/* Live Scoreboard Tab */}
