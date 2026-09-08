@@ -159,7 +159,7 @@ export function useTournamentData() {
           })).map(sanitizeTournament)
 
           setPublishedMatches((prev) => {
-            if (areTournamentsEqual(prev, mapped)) return prev
+            if (fastDeepEqual(prev, mapped)) return prev
             return mapped
           })
           try {
@@ -177,7 +177,7 @@ export function useTournamentData() {
           })
 
           setAuthenticators((prev) => {
-            if (areAuthEqual(prev, authMap)) return prev
+            if (fastDeepEqual(prev, authMap)) return prev
             try {
               localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authMap))
               localStorage.setItem('badminton-match-authenticators', JSON.stringify(authMap))

@@ -4,7 +4,6 @@ import { sortBadmintonCategories } from '../utils/badmintonCategories'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
 import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from '../utils/courtConfig'
 import { fastDeepEqual } from '../utils/fastDeepEqual'
-import { CourtConfigModal } from './CourtConfigModal'
 
 export const StadiumTvLiveCast = ({
   tournament,
@@ -324,15 +323,13 @@ export const StadiumTvLiveCast = ({
   const [adminOpenedNotice, setAdminOpenedNotice] = useState(false)
   const [isCastTabGuideOpen, setIsCastTabGuideOpen] = useState(false)
 
-  // Persist URL in livecast mode ONLY if already in standalone pop-out window
+  // Persist URL in livecast mode so page refresh never exits the live broadcast
   useEffect(() => {
     try {
-      if (window.location.search.includes('livecast=true')) {
+      if (!window.location.search.includes('livecast=true')) {
         const tid = selectedTournamentId || tournament?.id || ''
-        if (tid && !window.location.search.includes(`tid=${tid}`)) {
-          const newUrl = `${window.location.pathname}?livecast=true&tid=${encodeURIComponent(tid)}`
-          window.history.replaceState(null, '', newUrl)
-        }
+        const newUrl = `${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
+        window.history.replaceState(null, '', newUrl)
       }
     } catch {}
   }, [selectedTournamentId, tournament?.id])
@@ -385,20 +382,10 @@ export const StadiumTvLiveCast = ({
     e?.stopPropagation()
     const tid = selectedTournamentId || tournament?.id || ''
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
-    
-    // Ensure Live Stream status is active
-    try {
-      localStorage.setItem('badminton-live-stream-active', 'true')
-      window.dispatchEvent(new Event('storage'))
-    } catch (err) {}
-
     const targetWindowName = `BadmintonLiveCast_${tid || 'general'}`
     const win = window.open(url, targetWindowName, 'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no')
     if (win) {
       win.focus()
-    }
-    if (onClose) {
-      onClose()
     }
   }
 
@@ -474,7 +461,7 @@ export const StadiumTvLiveCast = ({
   const currentTournament = useMemo(() => {
     const list = liveTournaments.length > 0 ? liveTournaments : allTournaments
     if (selectedTournamentId) {
-      const found = list.find((t) => String(t?.id) === String(selectedTournamentId))
+      const found = list.find((t) => String(t.id) === String(selectedTournamentId))
       if (found) return found
     }
     return tournament || list[0] || null
@@ -483,24 +470,23 @@ export const StadiumTvLiveCast = ({
   // Extract all categories for this tournament
   const tournamentCategories = useMemo(() => {
     if (!currentTournament) return []
-    const raw = Array.isArray(currentTournament?.categories) && currentTournament.categories.length > 0
-      ? currentTournament.categories
-      : ['Men Singles', 'Men Doubles', 'Women Singles', 'Women Doubles', 'Mixed Doubles', 'Boys Under 15', 'Girls Under 15']
+    const raw = currentTournament.categories || [
+      'Men Singles', 'Men Doubles', 'Women Singles', 'Women Doubles', 'Mixed Doubles', 'Boys Under 15', 'Girls Under 15'
+    ]
     return sortBadmintonCategories(raw)
   }, [currentTournament])
 
   // Aggregate all matches across all categories
   const allCategoryMatches = useMemo(() => {
-    if (!currentTournament?.id) return []
+    if (!currentTournament) return []
     const tId = currentTournament.id
     const matchesList = []
 
     tournamentCategories.forEach((cat) => {
       const drawKey = `${tId}-${cat}`
-      const draw = tournamentDraws?.[drawKey]
+      const draw = tournamentDraws[drawKey]
       if (draw && draw.matches && Array.isArray(draw.matches)) {
         draw.matches.forEach((m) => {
-          if (!m) return
           // Exclude BYE vs BYE placeholder matches
           if (m.player1?.isBye && m.player2?.isBye) return
           matchesList.push({
@@ -574,21 +560,12 @@ export const StadiumTvLiveCast = ({
     return { displayLiveMatches: activeLive, displayUpcomingMatches: upcomingQueue }
   }, [activePool])
 
-  // Score change watcher for international TV point flash burst (memoized signature prevents infinite re-renders)
-  const scoresSignature = useMemo(() => {
-    return (displayLiveMatches || []).map((m) => {
+  // Score change watcher for international TV point flash burst
+  useEffect(() => {
+    displayLiveMatches.forEach((m) => {
       const currentSet = m.liveScore?.currentSet || 1
       const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
       const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
-      return `${m.id}:${currentSet}:${p1Pts}:${p2Pts}`
-    }).join('|')
-  }, [displayLiveMatches])
-
-  useEffect(() => {
-    (displayLiveMatches || []).forEach((m) => {
-      const currentSet = m.liveScore?.currentSet || 1
-      const p1Pts = Number(m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0)
-      const p2Pts = Number(m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0)
       const key1 = `${m.id}-p1`
       const key2 = `${m.id}-p2`
       const prev1 = prevScoresMapRef.current[key1]
@@ -609,7 +586,7 @@ export const StadiumTvLiveCast = ({
       prevScoresMapRef.current[key1] = p1Pts
       prevScoresMapRef.current[key2] = p2Pts
     })
-  }, [scoresSignature])
+  }, [displayLiveMatches])
 
   // --- SPONSOR VISUAL DATA & FULL-SCREEN SHOWCASE LOGIC ---
   const [fullScreenAdIndex, setFullScreenAdIndex] = useState(0)
@@ -1220,7 +1197,7 @@ export const StadiumTvLiveCast = ({
           <div className="stadium-ticker-content">
             <div className="stadium-ticker-marquee" style={{ animationDuration: tickerAnimationDuration }}>
               {/* User Configured Top Scrolling Announcement */}
-              {adSettings?.topScrollingText && (
+              {adSettings.topScrollingText && (
                 <span className="ticker-item highlight-text-top">
                   📢 {adSettings.topScrollingText}
                 </span>
@@ -1240,7 +1217,7 @@ export const StadiumTvLiveCast = ({
               )}
 
               {/* Seamless Repeat of Top Scrolling Announcement */}
-              {adSettings?.topScrollingText && (
+              {adSettings.topScrollingText && (
                 <span className="ticker-item highlight-text-top">
                   📢 {adSettings.topScrollingText}
                 </span>
@@ -1259,14 +1236,14 @@ export const StadiumTvLiveCast = ({
               </span>
 
               {/* User Configured Bottom Scrolling Text */}
-              {adSettings?.bottomScrollingText && (
+              {adSettings.bottomScrollingText && (
                 <span className="ticker-item highlight-text-bottom">
                   ⭐ {adSettings.bottomScrollingText}
                 </span>
               )}
 
               {/* Active Sponsor Highlights */}
-              {adSettings?.showInTicker && activeAds.map((ad, idx) => (
+              {adSettings.showInTicker && activeAds.map((ad, idx) => (
                 <span
                   key={`ad-tick-1-${ad.id || idx}`}
                   className="ticker-item sponsor-ticker-item"
@@ -1281,13 +1258,13 @@ export const StadiumTvLiveCast = ({
                 🏷️ OFFICIAL SPONSORS
               </span>
 
-              {adSettings?.bottomScrollingText && (
+              {adSettings.bottomScrollingText && (
                 <span className="ticker-item highlight-text-bottom">
                   ⭐ {adSettings.bottomScrollingText}
                 </span>
               )}
 
-              {adSettings?.showInTicker && activeAds.map((ad, idx) => (
+              {adSettings.showInTicker && activeAds.map((ad, idx) => (
                 <span
                   key={`ad-tick-2-${ad.id || idx}`}
                   className="ticker-item sponsor-ticker-item"
@@ -1429,7 +1406,7 @@ export const StadiumTvLiveCast = ({
               <span style={{ fontSize: '32px' }}>🏸</span>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: '900', color: activeFullScreenAd?.accentColor || '#38bdf8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '900', color: activeFullScreenAd.accentColor || '#38bdf8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                     ⭐ OFFICIAL TOURNAMENT SPONSOR
                   </span>
                   {isIntervalAdVisible && (
@@ -1449,7 +1426,7 @@ export const StadiumTvLiveCast = ({
                   )}
                 </div>
                 <h1 style={{ margin: '4px 0 0', fontSize: '30px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.02em' }}>
-                  {activeFullScreenAd?.sponsorName || 'Official Sponsor'}
+                  {activeFullScreenAd.sponsorName}
                 </h1>
               </div>
             </div>
@@ -1494,50 +1471,50 @@ export const StadiumTvLiveCast = ({
               margin: '18px 0',
               borderRadius: '20px',
               overflow: 'hidden',
-              boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 50px ${activeFullScreenAd?.accentColor || '#38bdf8'}25`,
-              border: `2px solid ${activeFullScreenAd?.accentColor || '#38bdf8'}60`,
+              boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 50px ${activeFullScreenAd.accentColor || '#38bdf8'}25`,
+              border: `2px solid ${activeFullScreenAd.accentColor || '#38bdf8'}60`,
               background: '#030712',
             }}
           >
-            {activeFullScreenAd?.mediaType === 'video' || activeFullScreenAd?.videoUrl ? (
+            {activeFullScreenAd.mediaType === 'video' || activeFullScreenAd.videoUrl ? (
               <video
-                src={activeFullScreenAd?.videoUrl}
+                src={activeFullScreenAd.videoUrl}
                 autoPlay
                 loop
                 playsInline
                 muted={adSettings?.videoMuted !== false}
                 style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '68vh' }}
               />
-            ) : activeFullScreenAd?.logoUrl ? (
+            ) : activeFullScreenAd.logoUrl ? (
               <img
                 src={activeFullScreenAd.logoUrl}
-                alt={activeFullScreenAd?.sponsorName || 'Sponsor'}
+                alt={activeFullScreenAd.sponsorName}
                 style={{ width: '100%', height: '100%', objectFit: 'contain', maxHeight: '68vh' }}
               />
             ) : (
-              <div className="stadium-billboard-card" style={{ '--ad-accent': activeFullScreenAd?.accentColor || '#38bdf8' }}>
+              <div className="stadium-billboard-card" style={{ '--ad-accent': activeFullScreenAd.accentColor || '#38bdf8' }}>
                 <span
                   className="stadium-billboard-badge"
                   style={{
-                    color: activeFullScreenAd?.accentColor || '#38bdf8',
-                    borderColor: `${activeFullScreenAd?.accentColor || '#38bdf8'}50`,
-                    background: `${activeFullScreenAd?.accentColor || '#38bdf8'}15`,
+                    color: activeFullScreenAd.accentColor || '#38bdf8',
+                    borderColor: `${activeFullScreenAd.accentColor || '#38bdf8'}50`,
+                    background: `${activeFullScreenAd.accentColor || '#38bdf8'}15`,
                   }}
                 >
                   ⭐ OFFICIAL SPONSOR SHOWCASE
                 </span>
 
                 <h1 className="stadium-billboard-title">
-                  {activeFullScreenAd?.sponsorName || 'Official Sponsor'}
+                  {activeFullScreenAd.sponsorName}
                 </h1>
 
-                {activeFullScreenAd?.tagline && (
+                {activeFullScreenAd.tagline && (
                   <p className="stadium-billboard-tagline">
                     “{activeFullScreenAd.tagline}”
                   </p>
                 )}
 
-                {activeFullScreenAd?.description && (
+                {activeFullScreenAd.description && (
                   <p className="stadium-billboard-desc">
                     {activeFullScreenAd.description}
                   </p>
@@ -1551,7 +1528,7 @@ export const StadiumTvLiveCast = ({
             style={{
               width: '100%',
               background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
-              border: `1.5px solid ${activeFullScreenAd?.accentColor || '#38bdf8'}40`,
+              border: `1.5px solid ${activeFullScreenAd.accentColor || '#38bdf8'}40`,
               borderRadius: '16px',
               padding: '14px 24px',
               display: 'flex',
@@ -1572,9 +1549,9 @@ export const StadiumTvLiveCast = ({
                   letterSpacing: '-0.01em',
                 }}
               >
-                “{activeFullScreenAd?.tagline || 'Official Tournament Partner'}”
+                “{activeFullScreenAd.tagline}”
               </p>
-              {activeFullScreenAd?.description && (
+              {activeFullScreenAd.description && (
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#cbd5e1', lineHeight: 1.5 }}>
                   {activeFullScreenAd.description}
                 </p>
@@ -1582,7 +1559,7 @@ export const StadiumTvLiveCast = ({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-              {activeFullScreenAd?.phoneOrLink && (
+              {activeFullScreenAd.phoneOrLink && (
                 <span
                   style={{
                     fontSize: '13.5px',
@@ -1598,16 +1575,16 @@ export const StadiumTvLiveCast = ({
                   📍 {activeFullScreenAd.phoneOrLink}
                 </span>
               )}
-              {activeFullScreenAd?.ctaText && (
+              {activeFullScreenAd.ctaText && (
                 <span
                   style={{
                     fontSize: '13.5px',
                     fontWeight: '900',
                     color: '#ffffff',
-                    background: `linear-gradient(135deg, ${activeFullScreenAd?.accentColor || '#0284c7'} 0%, #0369a1 100%)`,
+                    background: `linear-gradient(135deg, ${activeFullScreenAd.accentColor || '#0284c7'} 0%, #0369a1 100%)`,
                     padding: '9px 20px',
                     borderRadius: '10px',
-                    boxShadow: `0 4px 16px ${activeFullScreenAd?.accentColor || '#38bdf8'}40`,
+                    boxShadow: `0 4px 16px ${activeFullScreenAd.accentColor || '#38bdf8'}40`,
                     letterSpacing: '0.04em',
                     textTransform: 'uppercase',
                   }}

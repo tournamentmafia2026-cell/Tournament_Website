@@ -108,7 +108,6 @@ export default function App() {
   const [successToast, setSuccessToast] = useState('')
 
   // Stadium TV Cast & Live Stream Settings State
-  const isLiveCastMode = typeof window !== 'undefined' && window.location.search.includes('livecast=true')
   const [isStadiumTvCastOpen, setIsStadiumTvCastOpen] = useState(false)
   const [isLiveStreamSetupModalOpen, setIsLiveStreamSetupModalOpen] = useState(false)
   const [streamCourtConfig, setStreamCourtConfig] = useState(() => getSavedCourtConfig())
@@ -116,16 +115,6 @@ export default function App() {
   const [streamCourtFormat, setStreamCourtFormat] = useState(() => streamCourtConfig.format || 'numbers')
   const [streamCourtPrefix, setStreamCourtPrefix] = useState(() => streamCourtConfig.prefix !== undefined ? streamCourtConfig.prefix : 'Court')
   const [streamCourtCustomNames, setStreamCourtCustomNames] = useState(() => streamCourtConfig.customNames || '')
-
-  useEffect(() => {
-    if (isLiveCastMode) {
-      setIsLiveStreamActive(true)
-      try {
-        localStorage.setItem('badminton-live-stream-active', 'true')
-        syncServerData({ liveStreamActive: true })
-      } catch (e) {}
-    }
-  }, [isLiveCastMode])
 
   useEffect(() => {
     if (isLiveStreamSetupModalOpen) {
@@ -233,36 +222,32 @@ export default function App() {
   const handlePopoutLiveTv = (tournamentId) => {
     const tid = tournamentId || selectedMatch?.id || publishedMatches[0]?.id || ''
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
+    const win = window.open(url, '_blank')
+    if (win) win.focus()
     setIsLiveStreamActive(true)
-    setIsStadiumTvCastOpen(false)
     try {
       localStorage.setItem('badminton-live-stream-active', 'true')
       syncServerData({ liveStreamActive: true })
-      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
-    const win = window.open(url, '_blank')
-    if (win) win.focus()
-    setSuccessToast('📺 TV Live Stream ON & Popout opened in a new tab!')
+    setSuccessToast('📺 TV Live Stream opened in a new tab!')
   }
 
   const handleLaunchPopoutBroadcast = (selectedCourts) => {
     const courtsNum = Number(selectedCourts) || streamCourtsCount || 4
     setStreamCourtsCount(courtsNum)
     setIsLiveStreamActive(true)
-    setIsStadiumTvCastOpen(false)
     setIsLiveStreamSetupModalOpen(false)
     try {
       localStorage.setItem('badminton-stadium-courts-count', String(courtsNum))
       localStorage.setItem('badminton-live-stream-active', 'true')
       syncServerData({ liveStreamActive: true })
-      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
 
     const tid = selectedMatch?.id || publishedMatches[0]?.id || ''
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
     const win = window.open(url, '_blank')
     if (win) win.focus()
-    setSuccessToast(`📺 TV Live Broadcast ON & opened in a new tab!`)
+    setSuccessToast(`📺 TV Live Broadcast opened in a new tab!`)
   }
 
   const handleConfirmLiveStreamSetup = (countOverride) => {
@@ -661,105 +646,6 @@ export default function App() {
     setActivePage('fixturesManagement')
   }
 
-class LiveCastErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props)
-    this.state = { hasError: false, error: null }
-  }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error }
-  }
-  componentDidCatch(error, info) {
-    console.error('LiveCast Error:', error, info)
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ minHeight: '100vh', background: '#060b14', color: '#f1f5f9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', textAlign: 'center' }}>
-          <div style={{ maxWidth: '480px', background: 'rgba(15, 23, 42, 0.95)', border: '1.5px solid rgba(56, 189, 248, 0.3)', borderRadius: '16px', padding: '28px' }}>
-            <span style={{ fontSize: '36px' }}>🏸</span>
-            <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#38bdf8', margin: '12px 0 8px' }}>
-              Stadium TV Broadcast
-            </h2>
-            <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>
-              Reconnecting to tournament live broadcast stream...
-            </p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                style={{ padding: '8px 18px', borderRadius: '8px', background: '#0284c7', color: '#fff', border: 'none', fontWeight: '700', cursor: 'pointer' }}
-              >
-                🔄 Reload TV Stream
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    window.history.replaceState(null, '', window.location.pathname)
-                  } catch {}
-                  window.location.href = window.location.pathname
-                }}
-                style={{ padding: '8px 18px', borderRadius: '8px', background: 'rgba(255,255,255,0.1)', color: '#cbd5e1', border: '1px solid rgba(255,255,255,0.2)', fontWeight: '600', cursor: 'pointer' }}
-              >
-                ✕ Exit to Portal
-              </button>
-            </div>
-          </div>
-        </div>
-      )
-    }
-    return this.props.children
-  }
-}
-
-  if (isLiveCastMode) {
-    let urlTid = null
-    try {
-      const p = new URLSearchParams(window.location.search)
-      urlTid = p.get('tid')
-    } catch {}
-
-    let targetTournament = (publishedMatches || []).find((m) => String(m?.id) === String(urlTid)) || selectedMatch
-    if (!targetTournament && publishedMatches && publishedMatches.length > 0) {
-      targetTournament = publishedMatches[0]
-    }
-    if (!targetTournament) {
-      try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-        if (Array.isArray(saved) && saved.length > 0) {
-          targetTournament = saved.find((m) => String(m?.id) === String(urlTid)) || saved[0]
-        }
-      } catch {}
-    }
-
-    return (
-      <LiveCastErrorBoundary>
-        <div className="stadium-livecast-root" style={{ width: '100vw', minHeight: '100vh', background: '#060b14', overflowX: 'hidden' }}>
-          <StadiumTvLiveCast
-            isOpen={true}
-            tournament={targetTournament}
-            tournamentId={targetTournament?.id || urlTid}
-            allTournaments={publishedMatches && publishedMatches.length > 0 ? publishedMatches : (targetTournament ? [targetTournament] : [])}
-            onClose={() => {
-              try {
-                window.history.replaceState(null, '', window.location.pathname)
-              } catch {}
-              if (window.opener) {
-                window.close()
-              } else {
-                window.location.href = window.location.pathname
-              }
-            }}
-            onStopBroadcast={handleStopLiveStream}
-            onStopStream={handleStopLiveStream}
-            isPublicView={false}
-          />
-        </div>
-      </LiveCastErrorBoundary>
-    )
-  }
-
   return (
     <div className="app-container">
       {/* 1. PUBLIC TOURNAMENT PORTAL VIEW */}
@@ -1067,11 +953,8 @@ class LiveCastErrorBoundary extends React.Component {
       {isStadiumTvCastOpen && (
         <StadiumTvLiveCast
           isOpen={isStadiumTvCastOpen}
-          tournament={selectedMatch || publishedMatches[0]}
-          allTournaments={publishedMatches}
           onClose={() => setIsStadiumTvCastOpen(false)}
           onStopBroadcast={handleStopLiveStream}
-          onStopStream={handleStopLiveStream}
           tournamentId={selectedMatch?.id}
           onOpenPopout={() => handlePopoutLiveTv(selectedMatch?.id)}
         />
