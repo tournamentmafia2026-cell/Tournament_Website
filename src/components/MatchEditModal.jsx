@@ -49,7 +49,7 @@ export const MatchEditModal = ({
       const rawCats = Array.isArray(match.categories) && match.categories.length > 0 ? match.categories : ['Men Singles', 'Women Singles']
       const cats = sortBadmintonCategories(rawCats)
       const initialCatWinners = { ...(match.categoryWinners || {}) }
-      const allDone = cats.length > 0 && cats.every((c) => initialCatWinners[c] && initialCatWinners[c].trim().length > 0)
+      const allDone = cats.length > 0 && cats.every((c) => typeof initialCatWinners[c] === 'string' && initialCatWinners[c].trim().length > 0)
       const isDone = Boolean(allDone || (match.isCompleted && cats.length <= 1))
       setFormData({
         matchName: match.matchName || '',
@@ -665,7 +665,7 @@ export const MatchEditModal = ({
                           const val = e.target.value
                           setFormData((prev) => {
                             const nextCatWinners = { ...(prev.categoryWinners || {}), [cat]: val }
-                            const allDone = prev.categories.length > 0 && prev.categories.every((c) => nextCatWinners[c] && nextCatWinners[c].trim().length > 0)
+                            const allDone = prev.categories.length > 0 && prev.categories.every((c) => typeof nextCatWinners[c] === 'string' && nextCatWinners[c].trim().length > 0)
                             return {
                               ...prev,
                               categoryWinners: nextCatWinners,
@@ -702,11 +702,12 @@ export const MatchEditModal = ({
                     value={formData.winner || ''}
                     onChange={(e) => {
                       const val = e.target.value
+                      const hasVal = Boolean(typeof val === 'string' && val.trim())
                       setFormData((prev) => ({
                         ...prev,
                         winner: val,
-                        status: val.trim() ? 'completed' : prev.status,
-                        isCompleted: Boolean(val.trim()),
+                        status: hasVal ? 'completed' : prev.status,
+                        isCompleted: hasVal,
                       }))
                     }}
                     placeholder="Enter Winner / Champion Name"

@@ -479,8 +479,8 @@ export const getMatchEndTimestamp = (match) => {
   const dateStr = match.endDate || match.startDate || match.date || ''
   if (!dateStr || typeof dateStr !== 'string') return 0
 
-  const trimmed = dateStr.trim()
-  const timeStr = (match.endTime || match.time || '23:59').trim()
+  const trimmed = String(dateStr).trim()
+  const timeStr = String(match.endTime || match.time || '23:59').trim()
   let [h, m] = [23, 59]
   if (/^\d{1,2}:\d{2}/.test(timeStr)) {
     const parts = timeStr.split(':').map(Number)
