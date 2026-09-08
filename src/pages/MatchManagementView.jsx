@@ -50,6 +50,35 @@ export function MatchManagementView({
   successToast,
 }) {
   const [playerFilterSearch, setPlayerFilterSearch] = useState('')
+  const [activeLiveMatchId, setActiveLiveMatchId] = useState(() => {
+    try {
+      const active = localStorage.getItem('badminton-live-stream-active') === 'true'
+      return active ? (localStorage.getItem('badminton-live-stream-match-id') || '') : ''
+    } catch {
+      return ''
+    }
+  })
+  const [isStreamActive, setIsStreamActive] = useState(() => {
+    try {
+      return localStorage.getItem('badminton-live-stream-active') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  React.useEffect(() => {
+    const syncLive = () => {
+      try {
+        const streamActive = localStorage.getItem('badminton-live-stream-active') === 'true'
+        const matchId = localStorage.getItem('badminton-live-stream-match-id') || ''
+        setIsStreamActive(streamActive)
+        setActiveLiveMatchId(matchId)
+      } catch (e) {}
+    }
+    window.addEventListener('storage', syncLive)
+    return () => window.removeEventListener('storage', syncLive)
+  }, [])
+
   const isChief = isChiefOrganizerSession(authSession)
   const selectedMatchCategories = selectedMatch ? getMatchCategories(selectedMatch) : []
 
@@ -166,74 +195,109 @@ export function MatchManagementView({
                           🏆 Winner: {match.winner}
                         </div>
                       ) : null}
+                      {(() => {
+                        const isThisMatchLive = isStreamActive && String(activeLiveMatchId) === String(match.id)
+
+                        if (isThisMatchLive) {
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                type="button"
+                                title="TV Live Stream is Active. Click to view/reopen"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  onStartLiveStream?.(match)
+                                }}
+                                style={{
+                                  padding: '7px 11px',
+                                  borderRadius: '8px',
+                                  border: '1.5px solid #ef4444',
+                                  background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                                  color: '#ffffff',
+                                  cursor: 'pointer',
+                                  fontSize: '11.5px',
+                                  fontWeight: '800',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  whiteSpace: 'nowrap',
+                                  boxShadow: 'none',
+                                }}
+                              >
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff' }} />
+                                <span>🔴 Live: ON</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Turn OFF TV Live Stream"
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  onStopLiveStream?.()
+                                  try {
+                                    localStorage.setItem('badminton-live-stream-active', 'false')
+                                    localStorage.removeItem('badminton-live-stream-match-id')
+                                    window.dispatchEvent(new Event('storage'))
+                                  } catch (err) {}
+                                  setIsStreamActive(false)
+                                  setActiveLiveMatchId('')
+                                }}
+                                style={{
+                                  padding: '7px 11px',
+                                  borderRadius: '8px',
+                                  border: '1.5px solid rgba(239, 68, 68, 0.4)',
+                                  background: 'rgba(30, 41, 59, 0.9)',
+                                  color: '#fca5a5',
+                                  cursor: 'pointer',
+                                  fontSize: '11.5px',
+                                  fontWeight: '800',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <span>⏹️ Turn OFF</span>
+                              </button>
+                            </div>
+                          )
+                        }
+
+                        // DEFAULT STATE: OFF (Clean Slate/Neutral, zero blinking)
+                        return (
+                          <button
+                            type="button"
+                            title="Live Stream is OFF. Click to start TV Live Stream in new tab"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onStartLiveStream?.(match)
+                              setIsStreamActive(true)
+                              setActiveLiveMatchId(String(match.id))
+                            }}
+                            style={{
+                              padding: '7px 12px',
+                              borderRadius: '8px',
+                              border: '1.5px solid rgba(148, 163, 184, 0.3)',
+                              background: 'rgba(30, 41, 59, 0.75)',
+                              color: '#cbd5e1',
+                              cursor: 'pointer',
+                              fontSize: '11.5px',
+                              fontWeight: '800',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              whiteSpace: 'nowrap',
+                              boxShadow: 'none',
+                            }}
+                          >
+                            <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#94a3b8' }} />
+                            <span>⚪ Live Stream: OFF</span>
+                          </button>
+                        )
+                      })()}
                     </div>
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button
-                        type="button"
-                        title="Start / View TV Live Stream for this tournament"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onStartLiveStream?.(match)
-                        }}
-                        style={{
-                          padding: '7px 11px',
-                          borderRadius: '8px',
-                          border: '1.5px solid rgba(239, 68, 68, 0.7)',
-                          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.45) 100%)',
-                          color: '#ffffff',
-                          cursor: 'pointer',
-                          fontSize: '11.5px',
-                          fontWeight: '800',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                          whiteSpace: 'nowrap',
-                          boxShadow: '0 0 8px rgba(239, 68, 68, 0.25)',
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '50%',
-                            background: '#ef4444',
-                            boxShadow: '0 0 6px #ef4444',
-                          }}
-                        />
-                        <span>🔴 Live ON</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        title="Turn OFF TV Live Stream"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          onStopLiveStream?.()
-                          try {
-                            localStorage.setItem('badminton-live-stream-active', 'false')
-                            localStorage.removeItem('badminton-live-stream-match-id')
-                            window.dispatchEvent(new Event('storage'))
-                          } catch (err) {}
-                        }}
-                        style={{
-                          padding: '7px 11px',
-                          borderRadius: '8px',
-                          border: '1px solid rgba(148, 163, 184, 0.25)',
-                          background: 'rgba(30, 41, 59, 0.85)',
-                          color: '#cbd5e1',
-                          cursor: 'pointer',
-                          fontSize: '11.5px',
-                          fontWeight: '800',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        <span>⏹️ Live OFF</span>
-                      </button>
-
                       <button
                         type="button"
                         title="Edit Match Details & Categories"
@@ -450,60 +514,100 @@ export function MatchManagementView({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                type="button"
-                title="Start / View Stadium TV Live Stream for this tournament"
-                onClick={() => onStartLiveStream?.(selectedMatch)}
-                style={{
-                  padding: '9px 14px',
-                  borderRadius: '10px',
-                  border: '1.5px solid #ef4444',
-                  background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.3) 0%, rgba(185, 28, 28, 0.5) 100%)',
-                  color: '#ffffff',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '800',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 2px 10px rgba(220, 38, 38, 0.3)',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 6px #ef4444' }} />
-                <span>🔴 Live ON</span>
-              </button>
+              {(() => {
+                const isThisMatchLive = isStreamActive && String(activeLiveMatchId) === String(selectedMatch.id)
 
-              <button
-                type="button"
-                title="Turn OFF Stadium TV Live Stream"
-                onClick={() => {
-                  onStopLiveStream?.()
-                  try {
-                    localStorage.setItem('badminton-live-stream-active', 'false')
-                    localStorage.removeItem('badminton-live-stream-match-id')
-                    window.dispatchEvent(new Event('storage'))
-                  } catch (err) {}
-                }}
-                style={{
-                  padding: '9px 14px',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  background: 'rgba(30, 41, 59, 0.85)',
-                  color: '#cbd5e1',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: '800',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <span>⏹️ Live OFF</span>
-              </button>
+                if (isThisMatchLive) {
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        type="button"
+                        title="TV Live Stream is Active. Click to view/reopen"
+                        onClick={() => onStartLiveStream?.(selectedMatch)}
+                        style={{
+                          padding: '9px 14px',
+                          borderRadius: '10px',
+                          border: '1.5px solid #ef4444',
+                          background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
+                          color: '#ffffff',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                          boxShadow: 'none',
+                        }}
+                      >
+                        <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ffffff' }} />
+                        <span>🔴 Live: ON</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        title="Turn OFF Stadium TV Live Stream"
+                        onClick={() => {
+                          onStopLiveStream?.()
+                          try {
+                            localStorage.setItem('badminton-live-stream-active', 'false')
+                            localStorage.removeItem('badminton-live-stream-match-id')
+                            window.dispatchEvent(new Event('storage'))
+                          } catch (err) {}
+                          setIsStreamActive(false)
+                          setActiveLiveMatchId('')
+                        }}
+                        style={{
+                          padding: '9px 14px',
+                          borderRadius: '10px',
+                          border: '1.5px solid rgba(239, 68, 68, 0.4)',
+                          background: 'rgba(30, 41, 59, 0.9)',
+                          color: '#fca5a5',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '800',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        <span>⏹️ Turn OFF</span>
+                      </button>
+                    </div>
+                  )
+                }
+
+                return (
+                  <button
+                    type="button"
+                    title="Live Stream is OFF. Click to start TV Live Stream in new tab"
+                    onClick={() => {
+                      onStartLiveStream?.(selectedMatch)
+                      setIsStreamActive(true)
+                      setActiveLiveMatchId(String(selectedMatch.id))
+                    }}
+                    style={{
+                      padding: '9px 14px',
+                      borderRadius: '10px',
+                      border: '1.5px solid rgba(148, 163, 184, 0.3)',
+                      background: 'rgba(30, 41, 59, 0.75)',
+                      color: '#cbd5e1',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      whiteSpace: 'nowrap',
+                      boxShadow: 'none',
+                    }}
+                  >
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#94a3b8' }} />
+                    <span>⚪ Live Stream: OFF</span>
+                  </button>
+                )
+              })()}
 
               <div
                 style={{
