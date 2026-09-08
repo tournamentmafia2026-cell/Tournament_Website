@@ -131,53 +131,15 @@ export function OrganizerPortalHeader({
           >
             👁️ Public
           </button>
+
+          <button
+            type="button"
+            onClick={onLogout}
+            className="top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 cursor-pointer"
+          >
+            🚪 Logout
+          </button>
         </nav>
-      </div>
-
-      {/* Sub-bar below: Logout & Live Stream Controls */}
-      <div className="flex items-center justify-between sm:justify-end gap-2.5 pt-2.5 border-t border-slate-800/80 flex-wrap">
-        <button
-          type="button"
-          onClick={onLogout}
-          className="top-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 transition cursor-pointer"
-        >
-          🚪 Logout
-        </button>
-
-        <div className="flex items-center gap-2">
-          {isLiveStreamActive ? (
-            <>
-              <button
-                type="button"
-                onClick={onToggleLiveStream}
-                className="top-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer inline-flex items-center gap-2 border bg-gradient-to-r from-red-600/30 to-red-800/40 border-red-500 text-red-300 shadow-[0_0_12px_rgba(239,68,68,0.35)]"
-                title="Live Stream is ON and active. Click to view Live Broadcast."
-              >
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]" />
-                <span>🔴 Live Stream: ON</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={onStopLiveStream}
-                className="top-nav-btn px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white shadow-[0_2px_10px_rgba(239,68,68,0.4)]"
-                title="Turn OFF Live Stream Broadcast"
-              >
-                ⏹️ Stop Stream
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={onToggleLiveStream}
-              className="top-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer inline-flex items-center gap-2 border bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-300"
-              title="Live Stream is OFF. Click to Start Live Stream."
-            >
-              <span className="w-2 h-2 rounded-full bg-slate-500" />
-              <span>⚪ Live Stream: OFF</span>
-            </button>
-          )}
-        </div>
       </div>
     </header>
   )

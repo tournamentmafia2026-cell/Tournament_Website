@@ -3061,35 +3061,8 @@ export const BadmintonFixturesManager = ({
                     </button>
                   </div>
 
-                  {/* Bottom Row: Live Cast, Ads & Dark Mode with Equal Width */}
+                  {/* Bottom Row: Ads & Dark Mode with Equal Width */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', width: '100%' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleLaunchLiveTv(selectedMatch?.id)}
-                      className="btn-secondary-glow"
-                      style={{
-                        minHeight: '44px',
-                        padding: '10px 14px',
-                        fontSize: '13px',
-                        fontWeight: '800',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                        borderRadius: '10px',
-                        width: '100%',
-                        cursor: 'pointer',
-                        background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(3, 105, 161, 0.35) 100%)',
-                        border: '1.5px solid #38bdf8',
-                        color: '#38bdf8',
-                        boxShadow: '0 2px 10px rgba(56, 189, 248, 0.25)',
-                        boxSizing: 'border-box',
-                      }}
-                      title="Launch standalone Stadium TV Live Cast in a separate window for your TV / Projector / OBS"
-                    >
-                      <span>📺 TV Broadcast (Pop-out)</span>
-                    </button>
-
                     <button
                       type="button"
                       onClick={() => setIsAdModalOpen(true)}
