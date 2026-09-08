@@ -6199,7 +6199,12 @@ select {
   grid-template-columns: 280px 1fr;
   position: relative;
   box-sizing: border-box;
-  contain: paint layout;
+  contain: layout style paint;
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
 }
 
 
