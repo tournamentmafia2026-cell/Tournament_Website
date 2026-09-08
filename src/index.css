@@ -3812,7 +3812,6 @@ select {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  animation: fadeIn 0.3s ease;
 }
 
 /* 1. Schedule Hero & Progress Banner */
@@ -4981,7 +4980,6 @@ select {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  animation: fadeIn 0.3s ease;
 }
 
 .players-hero-card {
@@ -6174,7 +6172,6 @@ select {
   border-radius: 50%;
   background: #22c55e;
   box-shadow: 0 0 10px #22c55e;
-  animation: liveDotPulse 1.8s infinite;
 }
 
 /* Professional Tournament Feed (One by One Stacked Feed) */
@@ -6305,7 +6302,6 @@ select {
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 0 8px #ffffff;
-  animation: liveDotPulse 1.5s infinite;
 }
 
 .pro-date-pill {
@@ -6677,7 +6673,6 @@ select {
   flex-direction: column;
   gap: 20px;
   box-sizing: border-box;
-  animation: fadeIn 0.3s ease-out;
 }
 
 /* Hub Topbar */
@@ -9556,7 +9551,7 @@ select {
   padding: 0 4px;
 }
 
-.live-pulse-dot {
+.umpire-live-header-tag {
   font-size: 11px;
   color: #ef4444;
   font-weight: 800;
@@ -10183,7 +10178,6 @@ select {
   border-radius: 50%;
   background: #f59e0b;
   box-shadow: 0 0 8px #f59e0b;
-  animation: stadiumPulse 1s infinite alternate;
   flex-shrink: 0;
 }
 
@@ -10456,7 +10450,6 @@ select {
   background: #ef4444;
   box-shadow: 0 0 6px #ef4444;
   display: inline-block;
-  animation: stadiumPulse 1s infinite alternate;
 }
 
 .clean-upcoming-dot {
@@ -10870,7 +10863,6 @@ select {
   border-radius: 50%;
   background: #ef4444;
   box-shadow: 0 0 6px #ef4444;
-  animation: stadiumPulse 1s infinite alternate;
 }
 
 .stadium-scoreboard-rows {
@@ -10933,12 +10925,6 @@ select {
 
 .stadium-shuttle-icon {
   font-size: 13px;
-  animation: bounceShuttle 1s infinite alternate;
-}
-
-@keyframes bounceShuttle {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(-3px); }
 }
 
 .stadium-player-sub {
@@ -11068,7 +11054,6 @@ select {
   border: 1px solid #fca5a5;
   color: #ffffff;
   box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
-  animation: matchPointPulse 0.9s infinite alternate;
 }
 
 .stadium-bwf-badge.game-point {
@@ -11076,18 +11061,12 @@ select {
   border: 1px solid #fde68a;
   color: #ffffff;
   box-shadow: 0 0 14px rgba(245, 158, 11, 0.5);
-  animation: matchPointPulse 1s infinite alternate;
 }
 
 .stadium-bwf-badge.interval {
   background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   border: 1px solid #7dd3fc;
   color: #ffffff;
-}
-
-@keyframes matchPointPulse {
-  0% { transform: scale(1); box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
-  100% { transform: scale(1.06); box-shadow: 0 0 22px rgba(239, 68, 68, 0.85); }
 }
 
 .stadium-service-court-tag {
@@ -11881,7 +11860,6 @@ select {
   box-shadow: 0 25px 70px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   position: relative;
   overflow: hidden;
-  animation: heroCardFloat 6s ease-in-out infinite;
 }
 
 .stadium-billboard-badge {
@@ -12011,7 +11989,6 @@ select {
   border-radius: 50%;
   background: #4ade80;
   box-shadow: 0 0 6px #4ade80;
-  animation: stadiumPulse 1s infinite alternate;
 }
 
 /* Studio Tabs */

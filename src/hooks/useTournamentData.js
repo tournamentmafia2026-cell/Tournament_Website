@@ -160,11 +160,11 @@ export function useTournamentData() {
 
           setPublishedMatches((prev) => {
             if (fastDeepEqual(prev, mapped)) return prev
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
+            } catch (e) {}
             return mapped
           })
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
-          } catch (e) {}
 
           const authMap = {}
           supaTournaments.forEach((t) => {

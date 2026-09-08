@@ -23,8 +23,8 @@ export default async function handler(req, res) {
 
     const { to, subject, html, text, otp } = payload
 
-    const gmailUser = 'tournamentmafia2026@gmail.com'
-    const gmailPass = 'ujzfbevesmqaohme' // Google App Password
+    const gmailUser = process.env.GMAIL_USER || 'tournamentmafia2026@gmail.com'
+    const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '')
     const recipient = to || gmailUser
 
     const transporter = nodemailer.createTransport({

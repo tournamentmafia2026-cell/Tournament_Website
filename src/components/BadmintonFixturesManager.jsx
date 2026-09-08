@@ -5672,7 +5672,7 @@ export const BadmintonFixturesManager = ({
                                   boxShadow: isLiveUmpireMode ? '0 2px 8px rgba(239, 68, 68, 0.35)' : '0 2px 8px rgba(16, 185, 129, 0.35)',
                                 }}
                               >
-                                <span className="live-pulse-dot" style={{ width: '6px', height: '6px', background: '#ffffff' }} />
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
                                 <span>{isLiveUmpireMode ? '🔴 Start Live (Umpire)' : '🟢 Start Live (Manual)'}</span>
                               </button>
 
@@ -6679,7 +6679,6 @@ export const BadmintonFixturesManager = ({
                 display: 'flex',
                 flexDirection: 'column',
                 overflow: 'hidden',
-                animation: 'scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
               }}
             >
               {/* Modal Header */}
@@ -7080,7 +7079,6 @@ export const BadmintonFixturesManager = ({
                 color: '#f8fafc',
                 padding: '24px 28px',
                 boxSizing: 'border-box',
-                animation: 'fadeIn 0.2s ease',
               }}
               onClick={(e) => e.stopPropagation()}
             >

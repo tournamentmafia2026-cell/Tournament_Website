@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import nodemailer from 'nodemailer'
 
-const DEFAULT_GMAIL_USER = 'tournamentmafia2026@gmail.com'
-const DEFAULT_GMAIL_PASS = 'ujzfbevesmqaohme'
+const DEFAULT_GMAIL_USER = process.env.GMAIL_USER || 'tournamentmafia2026@gmail.com'
+const DEFAULT_GMAIL_PASS = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '')
 
 const DB_PATH = path.resolve(process.cwd(), 'data/badminton_db.json')
 

@@ -139,7 +139,7 @@ export const StadiumTvLiveCast = ({
       }
     }
     window.addEventListener('storage', syncAds)
-    const interval = setInterval(syncAds, 2500)
+    const interval = setInterval(syncAds, 8000)
     return () => {
       window.removeEventListener('storage', syncAds)
       clearInterval(interval)
@@ -261,10 +261,14 @@ export const StadiumTvLiveCast = ({
           const data = await res.json()
           if (!isMounted) return
           if (data && data.tournamentDraws && typeof data.tournamentDraws === 'object') {
-            setTournamentDraws((prev) => (fastDeepEqual(prev, data.tournamentDraws) ? prev : data.tournamentDraws))
-            try {
-              localStorage.setItem('badminton-tournament-draws', JSON.stringify(data.tournamentDraws))
-            } catch {}
+            const nextDraws = data.tournamentDraws
+            setTournamentDraws((prev) => {
+              if (fastDeepEqual(prev, nextDraws)) return prev
+              try {
+                localStorage.setItem('badminton-tournament-draws', JSON.stringify(nextDraws))
+              } catch {}
+              return nextDraws
+            })
           }
           if (data?.liveUmpireMode !== undefined) {
             setIsLiveUmpireMode((prev) => (prev === data.liveUmpireMode ? prev : data.liveUmpireMode))
@@ -285,7 +289,7 @@ export const StadiumTvLiveCast = ({
 
     syncDraws()
     window.addEventListener('storage', syncDraws)
-    const syncInterval = setInterval(syncDraws, 2000)
+    const syncInterval = setInterval(syncDraws, 6000)
     return () => {
       isMounted = false
       window.removeEventListener('storage', syncDraws)
@@ -314,7 +318,7 @@ export const StadiumTvLiveCast = ({
       } catch {}
     }
     window.addEventListener('storage', syncUmpireMode)
-    const interval = setInterval(syncUmpireMode, 2000)
+    const interval = setInterval(syncUmpireMode, 6000)
     return () => {
       window.removeEventListener('storage', syncUmpireMode)
       clearInterval(interval)
@@ -462,7 +466,7 @@ export const StadiumTvLiveCast = ({
 
     syncTournaments()
     window.addEventListener('storage', syncTournaments)
-    const interval = setInterval(syncTournaments, 3000)
+    const interval = setInterval(syncTournaments, 8000)
     return () => {
       isMounted = false
       window.removeEventListener('storage', syncTournaments)
