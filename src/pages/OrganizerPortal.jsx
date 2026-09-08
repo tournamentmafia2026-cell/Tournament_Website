@@ -45,57 +45,74 @@ export function OrganizerPortalHeader({
           </div>
         </div>
 
-        {/* Navigation Tabs - Fully Responsive */}
-        <nav className="top-navbar-tabs flex items-center gap-1.5 sm:gap-2 flex-wrap overflow-x-auto py-1">
-          <button
-            type="button"
-            onClick={() => setActivePage('matchManagement')}
-            className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
-              activePage === 'matchManagement'
-                ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
-                : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
-            }`}
-          >
-            📋 Tournaments
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActivePage('fixturesManagement')}
-            className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
-              activePage === 'fixturesManagement'
-                ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
-                : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
-            }`}
-          >
-            🏸 Fixtures & Draws
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActivePage('liveScoreboard')}
-            className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
-              activePage === 'liveScoreboard'
-                ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
-                : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
-            }`}
-          >
-            📊 Live Scoring
-          </button>
+        {/* Navigation Tabs - Original Names & Actions */}
+        <nav className="top-navbar-links flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-wrap">
+          {!isChief && authSession?.assignedMatchName && (
+            <span className="bg-amber-500/20 border border-amber-400/50 text-amber-300 px-3 py-1.5 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 whitespace-nowrap">
+              <span>🔒</span>
+              <span>{authSession.assignedMatchName}</span>
+            </span>
+          )}
 
           {isChief && (
             <button
               type="button"
-              onClick={() => setActivePage('login')}
               className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
                 activePage === 'login'
                   ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
                   : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
               }`}
+              onClick={() => setActivePage('login')}
             >
-              🔐 Umpires & Roles
+              🔐 Logins
             </button>
           )}
+
+          {isChief && (
+            <button
+              type="button"
+              className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
+                activePage === 'newMatchUpdate'
+                  ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
+                  : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
+              }`}
+              onClick={() => setActivePage('newMatchUpdate')}
+            >
+              ➕ New Match
+            </button>
+          )}
+
+          <button
+            type="button"
+            className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
+              activePage === 'matchManagement'
+                ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
+                : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
+            }`}
+            onClick={() => setActivePage('matchManagement')}
+          >
+            🏆 Management
+          </button>
+
+          <button
+            type="button"
+            className={`top-nav-btn px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${
+              activePage === 'fixturesManagement'
+                ? 'bg-amber-500/20 border border-amber-400/50 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
+                : 'bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60'
+            }`}
+            onClick={() => {
+              if (authSession?.assignedMatchId) {
+                const target = publishedMatches.find((m) => String(m.id) === String(authSession.assignedMatchId))
+                onSelectMatch(target || null)
+              } else {
+                onSelectMatch(null)
+              }
+              setActivePage('fixturesManagement')
+            }}
+          >
+            ⚡ Fixtures
+          </button>
 
           <button
             type="button"
@@ -124,10 +141,10 @@ export function OrganizerPortalHeader({
                 type="button"
                 onClick={onToggleLiveStream}
                 className="top-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer inline-flex items-center gap-2 border bg-gradient-to-r from-red-600/30 to-red-800/40 border-red-500 text-red-300 shadow-[0_0_12px_rgba(239,68,68,0.35)]"
-                title="View Live Broadcast Screen"
+                title="Live Stream is ON and active. Click to view Live Broadcast."
               >
                 <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shadow-[0_0_8px_#ef4444]" />
-                <span>🔴 Live Cast: Active</span>
+                <span>🔴 Live Stream: ON</span>
               </button>
 
               <button
@@ -143,11 +160,11 @@ export function OrganizerPortalHeader({
             <button
               type="button"
               onClick={onToggleLiveStream}
-              className="top-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer inline-flex items-center gap-2 border bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-700/80"
-              title="Start Live Stream Broadcast"
+              className="top-nav-btn px-3.5 py-1.5 rounded-lg text-xs font-extrabold transition cursor-pointer inline-flex items-center gap-2 border bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-300"
+              title="Live Stream is OFF. Click to Start Live Stream."
             >
               <span className="w-2 h-2 rounded-full bg-slate-500" />
-              <span>⚪ Start Live Stream</span>
+              <span>⚪ Live Stream: OFF</span>
             </button>
           )}
         </div>
