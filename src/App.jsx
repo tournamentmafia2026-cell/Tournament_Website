@@ -667,8 +667,21 @@ export default function App() {
 
   if (isDedicatedLiveCast) {
     const urlParams = new URLSearchParams(window.location.search)
-    const urlTid = urlParams.get('tid')
-    const targetMatch = publishedMatches.find((m) => String(m.id) === String(urlTid)) || selectedMatch || publishedMatches[0]
+    let targetMatch = publishedMatches.find((m) => String(m.id) === String(urlTid))
+    if (!targetMatch && urlTid) {
+      try {
+        const rawSaved = localStorage.getItem(STORAGE_KEY)
+        if (rawSaved) {
+          const parsed = JSON.parse(rawSaved)
+          if (Array.isArray(parsed)) {
+            targetMatch = parsed.find((m) => String(m.id) === String(urlTid))
+          }
+        }
+      } catch (e) {}
+    }
+    if (!targetMatch) {
+      targetMatch = selectedMatch || publishedMatches[0] || null
+    }
     return (
       <StadiumTvLiveCast
         isOpen={true}

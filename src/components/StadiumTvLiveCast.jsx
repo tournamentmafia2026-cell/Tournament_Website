@@ -27,12 +27,12 @@ export const StadiumTvLiveCast = ({
       const p = new URLSearchParams(window.location.search)
       const urlTid = p.get('tid')
       if (urlTid) {
-        setSelectedTournamentId(urlTid)
+        setSelectedTournamentId((prev) => (prev === urlTid ? prev : urlTid))
         return
       }
     } catch {}
     if (tournament?.id) {
-      setSelectedTournamentId(tournament.id)
+      setSelectedTournamentId((prev) => (prev === tournament.id ? prev : tournament.id))
     }
   }, [tournament?.id])
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -47,7 +47,10 @@ export const StadiumTvLiveCast = ({
   useEffect(() => {
     const handleStorageChange = () => {
       if (!isCourtConfigModalOpen) {
-        setCourtConfig(getSavedCourtConfig())
+        setCourtConfig((prev) => {
+          const next = getSavedCourtConfig()
+          return fastDeepEqual(prev, next) ? prev : next
+        })
       }
     }
     window.addEventListener('storage', handleStorageChange)
@@ -446,7 +449,7 @@ export const StadiumTvLiveCast = ({
           const data = await res.json()
           if (!isMounted) return
           if (data && Array.isArray(data.matches) && data.matches.length > 0) {
-            setLiveTournaments(data.matches)
+            setLiveTournaments((prev) => (fastDeepEqual(prev, data.matches) ? prev : data.matches))
             try {
               localStorage.setItem('badminton-published-matches', JSON.stringify(data.matches))
             } catch {}
@@ -486,8 +489,8 @@ export const StadiumTvLiveCast = ({
     setTimeout(() => setAdminOpenedNotice(false), 5000)
   }
 
-  // Active Tournament Object
-  const currentTournament = useMemo(() => {
+  // Active Tournament Object (Stabilized with deep equality to prevent blinking)
+  const rawCurrentTournament = useMemo(() => {
     const list = liveTournaments.length > 0 ? liveTournaments : allTournaments
     if (selectedTournamentId) {
       const found = list.find((t) => String(t.id) === String(selectedTournamentId))
@@ -495,6 +498,15 @@ export const StadiumTvLiveCast = ({
     }
     return tournament || list[0] || null
   }, [selectedTournamentId, liveTournaments, allTournaments, tournament])
+
+  const prevTournamentRef = React.useRef(null)
+  const currentTournament = useMemo(() => {
+    if (fastDeepEqual(prevTournamentRef.current, rawCurrentTournament)) {
+      return prevTournamentRef.current
+    }
+    prevTournamentRef.current = rawCurrentTournament
+    return rawCurrentTournament
+  }, [rawCurrentTournament])
 
   // Extract all categories for this tournament
   const tournamentCategories = useMemo(() => {
@@ -505,8 +517,8 @@ export const StadiumTvLiveCast = ({
     return sortBadmintonCategories(raw)
   }, [currentTournament])
 
-  // Aggregate all matches across all categories
-  const allCategoryMatches = useMemo(() => {
+  // Aggregate all matches across all categories (Stabilized with deep equality)
+  const rawAllCategoryMatches = useMemo(() => {
     if (!currentTournament) return []
     const tId = currentTournament.id
     const matchesList = []
@@ -530,16 +542,23 @@ export const StadiumTvLiveCast = ({
     return matchesList
   }, [currentTournament, tournamentCategories, tournamentDraws])
 
+  const prevAllCategoryMatchesRef = React.useRef([])
+  const allCategoryMatches = useMemo(() => {
+    if (fastDeepEqual(prevAllCategoryMatchesRef.current, rawAllCategoryMatches)) {
+      return prevAllCategoryMatchesRef.current
+    }
+    prevAllCategoryMatchesRef.current = rawAllCategoryMatches
+    return rawAllCategoryMatches
+  }, [rawAllCategoryMatches])
+
   // Filter matches based on selected category
   const activePool = useMemo(() => {
     if (selectedCategory === 'all') return allCategoryMatches
     return allCategoryMatches.filter((m) => m.categoryName === selectedCategory)
   }, [allCategoryMatches, selectedCategory])
 
-  // Partition matches:
-  // ONLY matches that Admin launched to 'live' in Schedule List appear in Live Cast!
-  // 1. UPCOMING: Matches launched to live by Admin, waiting for Umpire to start
-  // 2. LIVE: Matches where Umpire has actively started match / scoring
+  // Partition matches (Stabilized with deep equality to prevent blinking)
+  const prevPartitionRef = React.useRef({ displayLiveMatches: [], displayUpcomingMatches: [] })
   const { displayLiveMatches, displayUpcomingMatches } = useMemo(() => {
     const uncompleted = activePool.filter((m) => {
       const isCompleted = m.status === 'completed' || !!m.winner || m.isCompleted
@@ -586,7 +605,12 @@ export const StadiumTvLiveCast = ({
       }
     })
 
-    return { displayLiveMatches: activeLive, displayUpcomingMatches: upcomingQueue }
+    const result = { displayLiveMatches: activeLive, displayUpcomingMatches: upcomingQueue }
+    if (fastDeepEqual(prevPartitionRef.current, result)) {
+      return prevPartitionRef.current
+    }
+    prevPartitionRef.current = result
+    return result
   }, [activePool])
 
   // Score change watcher for international TV point flash burst
