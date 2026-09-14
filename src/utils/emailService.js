@@ -100,6 +100,7 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
 
   // Prefer the hosting provider API route, then fall back to Netlify locally.
   const endpoints = ['/api/send-email', '/.netlify/functions/send-email']
+  const deliveryErrors = []
   
   for (const endpoint of endpoints) {
     try {
@@ -126,13 +127,17 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
             message: `✓ Real email delivered directly to ${targetEmail}!`,
           }
         }
+        deliveryErrors.push(json.error || `${endpoint} returned an unsuccessful response`)
+      } else {
+        deliveryErrors.push(`${endpoint} returned HTTP ${res.status}`)
       }
     } catch (err) {
+      deliveryErrors.push(err?.message || `${endpoint} request failed`)
       console.warn(`Endpoint ${endpoint} call error:`, err)
     }
   }
 
-  throw new Error(`OTP email could not be delivered to ${targetEmail}. Check the server Gmail environment variables and try again.`)
+  throw new Error(`OTP email could not be delivered to ${targetEmail}. ${deliveryErrors[0] || 'Check the server Gmail environment variables and try again.'}`)
 }
 
 export default sendAuthEmail
