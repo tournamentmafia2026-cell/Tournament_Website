@@ -143,9 +143,15 @@ export function useTournamentData() {
 
       let hasSupaData = false
       try {
-        const supaTournaments = await SupabaseService.getTournaments()
+        let supaTournaments = await SupabaseService.getTournaments()
         if (!isMounted) return
         if (supaTournaments && Array.isArray(supaTournaments)) {
+          if (supaTournaments.length === 0) {
+            const migration = await SupabaseService.migrateLocalStorageData()
+            if (migration.migrated) {
+              supaTournaments = await SupabaseService.getTournaments()
+            }
+          }
           hasSupaData = true
           const mapped = supaTournaments.map((t) => ({
             id: t.id,

@@ -56,6 +56,59 @@ export const SupabaseService = {
     }
   },
 
+  async migrateLocalStorageData() {
+    if (!supabase || typeof localStorage === 'undefined') return { migrated: false, count: 0 };
+
+    try {
+      const rawMatches = localStorage.getItem('badminton-published-matches');
+      const rawAuth = localStorage.getItem('badminton-authenticators');
+      const rawDraws = localStorage.getItem('badminton-tournament-draws');
+      const rawCreds = localStorage.getItem('badminton-temporary-credentials');
+      const rawReported = localStorage.getItem('badminton-reported-players');
+
+      const matches = rawMatches ? JSON.parse(rawMatches) : [];
+      const authenticators = rawAuth ? JSON.parse(rawAuth) : {};
+      const draws = rawDraws ? JSON.parse(rawDraws) : {};
+      const credentials = rawCreds ? JSON.parse(rawCreds) : [];
+      const reportedPlayers = rawReported ? JSON.parse(rawReported) : {};
+
+      if (!Array.isArray(matches) || matches.length === 0) {
+        return { migrated: false, count: 0 };
+      }
+
+      for (const tournament of matches) {
+        const tournamentId = String(tournament.id);
+        const players = authenticators[tournament.id] || authenticators[tournamentId] || tournament.participants || [];
+        await this.upsertTournament({ ...tournament, participants: players, authenticators: players });
+      }
+
+      if (draws && typeof draws === 'object') {
+        for (const [drawId, drawData] of Object.entries(draws)) {
+          const separatorIndex = drawId.indexOf('-');
+          if (separatorIndex < 0) continue;
+          const tournamentId = drawId.slice(0, separatorIndex);
+          const category = drawId.slice(separatorIndex + 1) || 'Men Singles';
+          await this.upsertTournamentDraw(drawId, tournamentId, category, drawData, true);
+        }
+      }
+
+      if (Array.isArray(credentials)) {
+        for (const credential of credentials) {
+          await this.upsertCredential(credential);
+        }
+      }
+
+      if (reportedPlayers && typeof reportedPlayers === 'object' && Object.keys(reportedPlayers).length > 0) {
+        await this.upsertReportedPlayers(reportedPlayers);
+      }
+
+      return { migrated: true, count: matches.length };
+    } catch (err) {
+      console.warn('Supabase local data migration failed:', err.message);
+      return { migrated: false, count: 0 };
+    }
+  },
+
   async upsertTournament(tournament) {
     if (!supabase || !tournament) return null;
     try {
