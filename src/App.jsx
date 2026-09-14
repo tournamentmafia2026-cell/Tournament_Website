@@ -722,11 +722,7 @@ export default function App() {
   }
 
   // DEDICATED STANDALONE LIVE STREAM TV BROADCAST PAGE (Zero-Flicker Isolated Route)
-  const isDedicatedLiveCast = typeof window !== 'undefined' && (
-    window.location.search.includes('livecast=true') ||
-    window.location.search.includes('stadium=true') ||
-    window.location.search.includes('tv=true')
-  )
+  const isDedicatedLiveCast = false
 
   if (isDedicatedLiveCast) {
     const urlParams = new URLSearchParams(window.location.search)

@@ -114,6 +114,14 @@ button:active {
   transform: translateY(0) scale(0.97);
 }
 
+/* Live Stream has been retired from the product surface. Keep stale saved
+   stream state from restoring old controls after an existing deployment. */
+button[title*='Live Stream'],
+button[title*='Stadium TV'],
+button[title*='TV Live'] {
+  display: none !important;
+}
+
 .action-button,
 .btn-primary-gradient,
 .btn-secondary-glow {
