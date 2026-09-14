@@ -99,8 +99,8 @@ export const BadmintonFixturesManager = ({
       try {
         const streamActive = localStorage.getItem('badminton-live-stream-active') === 'true'
         const matchId = localStorage.getItem('badminton-live-stream-match-id') || ''
-        setIsStreamActive(streamActive)
-        setActiveLiveMatchId(matchId)
+        setIsStreamActive((previous) => previous === streamActive ? previous : streamActive)
+        setActiveLiveMatchId((previous) => previous === matchId ? previous : matchId)
       } catch (e) {}
     }
     window.addEventListener('storage', syncLiveState)
@@ -957,9 +957,7 @@ export const BadmintonFixturesManager = ({
   const categoryPlayers = uploadedCategoryPlayers
 
   // Current draw (strictly from saved tournamentDraws state to eliminate render-time object churn and blinking)
-  const currentDraw = useMemo(() => {
-    return tournamentDraws[drawKey] || null
-  }, [tournamentDraws[drawKey]])
+  const currentDraw = tournamentDraws[drawKey] || null
 
   // All Round 1 slots for the Tap-to-Exchange Player Picker
   const allRound1Slots = (currentDraw?.matches || [])
@@ -1215,7 +1213,7 @@ export const BadmintonFixturesManager = ({
   useEffect(() => {
     if (currentDraw) {
       if (currentDraw.drawSize) {
-        setInlineTotalMembers(currentDraw.drawSize)
+        setInlineTotalMembers((previous) => previous === currentDraw.drawSize ? previous : currentDraw.drawSize)
       }
 
       // Collect existing seeds from current draw
@@ -1248,21 +1246,21 @@ export const BadmintonFixturesManager = ({
         ? currentDraw.seedsCount
         : (maxSeedFound > 0 ? (maxSeedFound > 4 ? 8 : maxSeedFound > 2 ? 4 : maxSeedFound > 1 ? 2 : maxSeedFound) : 0)
 
-      setInlineSeedsCount(effectiveSeedsCount)
-      setInlineSeedAssignments(assignments)
+      setInlineSeedsCount((previous) => previous === effectiveSeedsCount ? previous : effectiveSeedsCount)
+      setInlineSeedAssignments((previous) => fastDeepEqual(previous, assignments) ? previous : assignments)
     } else {
       const pCount = categoryPlayers.length
       const defSize = pCount <= 4 ? 4 : pCount <= 8 ? 8 : pCount <= 16 ? 16 : pCount <= 32 ? 32 : 64
-      setInlineTotalMembers(defSize)
+      setInlineTotalMembers((previous) => previous === defSize ? previous : defSize)
       const defSeeds = defSize <= 4 ? 2 : defSize <= 16 ? 4 : 8
-      setInlineSeedsCount(defSeeds)
+      setInlineSeedsCount((previous) => previous === defSeeds ? previous : defSeeds)
       const defAssignments = {}
       for (let i = 1; i <= defSeeds; i++) {
         if (categoryPlayers[i - 1]) {
           defAssignments[i] = categoryPlayers[i - 1].id
         }
       }
-      setInlineSeedAssignments(defAssignments)
+      setInlineSeedAssignments((previous) => fastDeepEqual(previous, defAssignments) ? previous : defAssignments)
     }
   }, [drawKey, showModifierPanel])
 

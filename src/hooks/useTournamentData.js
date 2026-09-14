@@ -18,6 +18,14 @@ import {
 export const STORAGE_KEY = 'badminton-published-matches'
 export const AUTH_STORAGE_KEY = 'badminton-authenticators'
 
+const preserveTournamentReferences = (previous, incoming) => {
+  const previousById = new Map((previous || []).map((item) => [String(item.id), item]))
+  return incoming.map((item) => {
+    const previousItem = previousById.get(String(item.id))
+    return previousItem && fastDeepEqual(previousItem, item) ? previousItem : item
+  })
+}
+
 export const areTournamentsEqual = (a, b) => {
   if (a === b) return true
   if (!Array.isArray(a) || !Array.isArray(b)) return false
@@ -159,11 +167,12 @@ export function useTournamentData() {
           })).map(sanitizeTournament)
 
           setPublishedMatches((prev) => {
-            if (fastDeepEqual(prev, mapped)) return prev
+            const stableMapped = preserveTournamentReferences(prev, mapped)
+            if (prev.length === stableMapped.length && prev.every((item, index) => item === stableMapped[index])) return prev
             try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(stableMapped))
             } catch (e) {}
-            return mapped
+            return stableMapped
           })
 
           const authMap = {}
@@ -238,8 +247,8 @@ export function useTournamentData() {
                     map.set(String(m.id), m)
                   }
                 })
-                const merged = Array.from(map.values())
-                if (fastDeepEqual(prev, merged)) return prev
+                const merged = preserveTournamentReferences(prev, Array.from(map.values()))
+                if (prev.length === merged.length && prev.every((item, index) => item === merged[index])) return prev
                 try {
                   localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
                 } catch (e) {}
