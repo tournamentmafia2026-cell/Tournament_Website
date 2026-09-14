@@ -180,6 +180,54 @@ export default defineConfig({
 
           next()
         })
+
+        server.middlewares.use('/api/credentials', (req, res, next) => {
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 204
+            res.end()
+            return
+          }
+
+          if (req.method === 'GET') {
+            const data = getDbData()
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({
+              temporaryCredentials: data.temporaryCredentials || [],
+              organizerCredentials: data.organizerCredentials || {},
+            }))
+            return
+          }
+
+          if (req.method === 'POST') {
+            let body = ''
+            req.on('data', (chunk) => {
+              body += chunk
+            })
+            req.on('end', () => {
+              try {
+                const payload = JSON.parse(body || '{}')
+                const saved = saveDbData(payload)
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({
+                  success: true,
+                  temporaryCredentials: saved?.temporaryCredentials || [],
+                  organizerCredentials: saved?.organizerCredentials || {},
+                }))
+              } catch (err) {
+                res.statusCode = 500
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ success: false, error: err.message }))
+              }
+            })
+            return
+          }
+
+          next()
+        })
       },
     },
     {
