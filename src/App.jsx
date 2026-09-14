@@ -332,7 +332,7 @@ export default function App() {
     }
     saveCourtConfig(nextCfg)
     setStreamCourtConfig(nextCfg)
-    handleLaunchPopoutBroadcast(nextCfg.count)
+    handleLaunchPopoutBroadcast(selectedMatch?.id, nextCfg)
   }
 
   // Tournament Create & Update Handler
