@@ -5,7 +5,6 @@ export const DEFAULT_EMAIL_CONFIG = {
   templateId: '',
   publicKey: '',
   gmailUser: 'tournamentmafia2026@gmail.com',
-  gmailAppPassword: 'ujzfbevesmqaohme',
   registeredEmail: 'tournamentmafia2026@gmail.com',
 }
 
@@ -16,7 +15,9 @@ export const getEmailConfig = () => {
   try {
     const raw = localStorage.getItem(EMAIL_CONFIG_KEY)
     if (raw) {
-      return { ...DEFAULT_EMAIL_CONFIG, ...JSON.parse(raw) }
+      const saved = JSON.parse(raw)
+      const { gmailAppPassword: _removedPassword, ...safeSavedConfig } = saved
+      return { ...DEFAULT_EMAIL_CONFIG, ...safeSavedConfig }
     }
   } catch (e) {
     console.error('Failed to load email config', e)
@@ -29,7 +30,8 @@ export const getEmailConfig = () => {
  */
 export const saveEmailConfig = (config) => {
   try {
-    const updated = { ...getEmailConfig(), ...config }
+    const { gmailAppPassword: _removedPassword, ...safeConfig } = config || {}
+    const updated = { ...getEmailConfig(), ...safeConfig }
     localStorage.setItem(EMAIL_CONFIG_KEY, JSON.stringify(updated))
     return updated
   } catch (e) {

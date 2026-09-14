@@ -1,5 +1,20 @@
 # React + Vite
 
+## OTP email deployment
+
+OTP delivery uses the server-side `/api/send-email` route with Gmail SMTP. Add
+these environment variables in Vercel or Netlify before deploying:
+
+```text
+GMAIL_USER=tournamentmafia2026@gmail.com
+GMAIL_APP_PASSWORD=your-16-character-google-app-password
+```
+
+`GMAIL_APP_PASSWORD` must be a Google App Password created while 2-Step
+Verification is enabled. It must not be committed to source code or exposed as
+a `VITE_` variable. After changing environment variables, trigger a new
+deployment.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:
