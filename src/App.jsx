@@ -44,6 +44,21 @@ import {
   sortBadmintonCategories,
 } from './utils/badmintonCategories'
 
+const PAGE_ROUTES = {
+  login: '/logins',
+  newMatchUpdate: '/new-match',
+  matchManagement: '/management',
+  fixturesManagement: '/fixtures',
+  liveScoreboard: '/live-scoreboard',
+}
+
+const PAGE_BY_ROUTE = Object.fromEntries(Object.entries(PAGE_ROUTES).map(([page, route]) => [route, page]))
+
+const getPageFromLocation = () => {
+  if (typeof window === 'undefined') return 'fixturesManagement'
+  return PAGE_BY_ROUTE[window.location.pathname] || 'fixturesManagement'
+}
+
 export default function App() {
   // Authentication & Session Hook
   const {
@@ -74,11 +89,39 @@ export default function App() {
   } = useTournamentData()
 
   // Page Navigation State
-  const [activePage, setActivePage] = useState('fixturesManagement')
+  const [activePage, setActivePageState] = useState(getPageFromLocation)
   const [fixturesCategory, setFixturesCategory] = useState(null)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [activeCategory, setActiveCategory] = useState('ALL')
   const [publicFilter, setPublicFilter] = useState('all')
+
+  const setActivePage = (page) => {
+    setActivePageState(page)
+    const route = PAGE_ROUTES[page]
+    if (route && typeof window !== 'undefined' && window.location.pathname !== route) {
+      window.history.pushState({ page }, '', route)
+    }
+  }
+
+  const navigateToPublic = () => {
+    setAuthOpen(false)
+    setActivePageState('fixturesManagement')
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.pushState({}, '', '/')
+    }
+  }
+
+  useEffect(() => {
+    const handleHistoryChange = () => setActivePageState(getPageFromLocation())
+    window.addEventListener('popstate', handleHistoryChange)
+    return () => window.removeEventListener('popstate', handleHistoryChange)
+  }, [])
+
+  useEffect(() => {
+    if (authSession && PAGE_BY_ROUTE[window.location.pathname] && !authOpen) {
+      setAuthOpen(true)
+    }
+  }, [authSession, authOpen, setAuthOpen])
 
   // Form State for Creating / Editing Tournaments
   const [formData, setFormData] = useState(getInitialFormData)
@@ -753,7 +796,7 @@ export default function App() {
               onLogout={() => {
                 logout()
               }}
-              onNavigateToPublic={() => setAuthOpen(false)}
+              onNavigateToPublic={navigateToPublic}
             />
           ) : (
             <>
@@ -763,7 +806,7 @@ export default function App() {
                 activePage={activePage}
                 setActivePage={setActivePage}
                 onLogout={logout}
-                onBackToPublic={() => setAuthOpen(false)}
+                onBackToPublic={navigateToPublic}
                 onSelectMatch={setSelectedMatch}
                 publishedMatches={publishedMatches}
                 isLiveStreamActive={isLiveStreamActive}
@@ -777,7 +820,7 @@ export default function App() {
                   session={authSession}
                   publishedMatches={effectivePublishedMatches}
                   onLogout={() => setActivePage('matchManagement')}
-                  onNavigateToPublic={() => setAuthOpen(false)}
+                  onNavigateToPublic={navigateToPublic}
                 />
               )}
 
@@ -801,7 +844,7 @@ export default function App() {
                   }}
                   onNavigateToNewMatch={() => setActivePage('newMatchUpdate')}
                   onNavigateToMatchManagement={() => setActivePage('matchManagement')}
-                  onBackToPublic={() => setAuthOpen(false)}
+                  onBackToPublic={navigateToPublic}
                 />
               )}
 
