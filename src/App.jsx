@@ -303,6 +303,26 @@ export default function App() {
     setSuccessToast(`📺 TV Live Broadcast opened for "${tName}"!`)
   }
 
+  const handleFixturesLiveStreamStart = (match) => {
+    const tid = match?.id || selectedMatch?.id || publishedMatches[0]?.id || ''
+    const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
+    const win = window.open(url, `BadmintonLiveCast_${tid || 'general'}`, 'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no')
+    if (win) win.focus()
+    try {
+      localStorage.setItem('badminton-live-stream-active', 'true')
+      localStorage.setItem('badminton-live-stream-match-id', String(tid))
+      if (match?.id) syncServerData({ liveStreamActive: true, liveStreamMatchId: String(tid) })
+    } catch (e) {}
+  }
+
+  const handleFixturesLiveStreamStop = () => {
+    try {
+      localStorage.setItem('badminton-live-stream-active', 'false')
+      localStorage.removeItem('badminton-live-stream-match-id')
+      syncServerData({ liveStreamActive: false, liveStreamMatchId: '' })
+    } catch (e) {}
+  }
+
   const handleConfirmLiveStreamSetup = (countOverride) => {
     const nextCfg = {
       count: typeof countOverride === 'number' ? countOverride : streamCourtsCount,
@@ -918,9 +938,8 @@ export default function App() {
                       handleRemoveParticipant(matchId, participantId)
                     }}
                     onBackToMatchManagement={() => setActivePage('matchManagement')}
-                    onStartLiveStream={(match) => handleLaunchPopoutBroadcast(match?.id)}
-                    onStopLiveStream={handleStopLiveStream}
-                    isLiveStreamActive={isLiveStreamActive}
+                    onStartLiveStream={handleFixturesLiveStreamStart}
+                    onStopLiveStream={handleFixturesLiveStreamStop}
                   />
                 </div>
               )}
@@ -961,9 +980,8 @@ export default function App() {
                       onConfirm: () => handleDeleteMatch(match.id),
                     })
                   }}
-                  onStartLiveStream={(match) => handleLaunchPopoutBroadcast(match?.id)}
-                  onStopLiveStream={handleStopLiveStream}
-                  isLiveStreamActive={isLiveStreamActive}
+                  onStartLiveStream={handleFixturesLiveStreamStart}
+                  onStopLiveStream={handleFixturesLiveStreamStop}
                   authSession={authSession}
                   successToast={successToast}
                 />
