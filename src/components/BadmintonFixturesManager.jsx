@@ -71,11 +71,11 @@ export const BadmintonFixturesManager = ({
 
   useEffect(() => {
     if (initialSelectedMatch && initialCategory) {
-      setSelectedMatchId(initialSelectedMatch.id)
-      setSelectedCategory(initialCategory)
-      setFixturesLevel('draw')
+      setSelectedMatchId((previous) => previous === initialSelectedMatch.id ? previous : initialSelectedMatch.id)
+      setSelectedCategory((previous) => previous === initialCategory ? previous : initialCategory)
+      setFixturesLevel((previous) => previous === 'draw' ? previous : 'draw')
     } else {
-      setFixturesLevel('tournaments')
+      setFixturesLevel((previous) => previous === 'tournaments' ? previous : 'tournaments')
     }
   }, [initialSelectedMatch?.id, initialCategory, isPublicView])
 
@@ -5230,6 +5230,7 @@ export const BadmintonFixturesManager = ({
                     {!isPublicView && (
                       <button
                         type="button"
+                        className="mode-toggle"
                         onClick={handleToggleLiveUmpireMode}
                         title={
                           !hasUmpireLogins
@@ -5651,97 +5652,47 @@ export const BadmintonFixturesManager = ({
 
                         {/* Actions Footer */}
                         <div className="schedule-card-actions">
-                          {!isPublicView && (m.status === 'scheduled' || !m.status) && (
+                          {!isPublicView && (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => handlePromptStartLive(m)}
-                                style={{
-                                  background: isLiveUmpireMode
-                                    ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                                    : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                  color: '#ffffff',
-                                  border: 'none',
-                                  borderRadius: '8px',
-                                  padding: '6px 12px',
-                                  fontSize: '11px',
-                                  fontWeight: '800',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '5px',
-                                  boxShadow: isLiveUmpireMode ? '0 2px 8px rgba(239, 68, 68, 0.35)' : '0 2px 8px rgba(16, 185, 129, 0.35)',
-                                }}
-                              >
-                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
-                                <span>{isLiveUmpireMode ? '🔴 Start Live (Umpire)' : '🟢 Start Live (Manual)'}</span>
-                              </button>
-
-                              {!isLiveUmpireMode && (
+                              {(m.status === 'scheduled' || !m.status) && (
                                 <button
                                   type="button"
-                                  className="btn-schedule-score"
+                                  onClick={() => handlePromptStartLive(m)}
                                   style={{
-                                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                    background: isLiveUmpireMode
+                                      ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                                      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                    color: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    padding: '6px 12px',
+                                    fontSize: '11px',
+                                    fontWeight: '800',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    boxShadow: isLiveUmpireMode ? '0 2px 8px rgba(239, 68, 68, 0.35)' : '0 2px 8px rgba(16, 185, 129, 0.35)',
                                   }}
-                                  onClick={() => setQuickScoreScheduleMatch(m)}
                                 >
-                                  ⚡ Score
+                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
+                                  <span>{isLiveUmpireMode ? '🔴 Start Live (Umpire)' : '🟢 Send to Live'}</span>
                                 </button>
                               )}
-                            </>
-                          )}
 
-                          {!isPublicView && m.status === 'live' && (
-                            <>
                               <button
                                 type="button"
                                 className="btn-schedule-score"
                                 style={{
-                                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                                  color: '#ffffff',
-                                  fontWeight: '800',
+                                  background: m.status === 'completed'
+                                    ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
+                                    : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
                                 }}
                                 onClick={() => setQuickScoreScheduleMatch(m)}
-                                title="Enter live set scores / points directly"
                               >
-                                ⚡ Live Points
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateMatch(m.id, { status: 'scheduled', isLive: false })}
-                                style={{
-                                  background: 'rgba(239, 68, 68, 0.15)',
-                                  border: '1.5px solid rgba(239, 68, 68, 0.5)',
-                                  color: '#fca5a5',
-                                  borderRadius: '8px',
-                                  padding: '6px 12px',
-                                  fontSize: '11px',
-                                  fontWeight: '800',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '5px',
-                                }}
-                                title="Stop Live and move back to Scheduled"
-                              >
-                                <span>⏹️ Stop Live</span>
+                                {m.status === 'completed' ? '✏️ Modify Result' : '⚡ Score'}
                               </button>
                             </>
-                          )}
-
-                          {!isPublicView && m.status === 'completed' && (
-                            <button
-                              type="button"
-                              className="btn-schedule-score"
-                              style={{
-                                background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                              }}
-                              onClick={() => setQuickScoreScheduleMatch(m)}
-                            >
-                              ✏️ Modify Result
-                            </button>
                           )}
 
                           <button
@@ -5922,7 +5873,7 @@ export const BadmintonFixturesManager = ({
                                   <strong style={{ color: '#4ade80' }}>🏆 {m.winner.name}</strong>
                                 ) : (
                                   <span style={{ color: '#94a3b8' }}>Pending</span>
-                                )}
+)}
                               </td>
                               <td>
                                 <div className="schedule-status-dynamic-wrap">
@@ -5956,64 +5907,49 @@ export const BadmintonFixturesManager = ({
                               </td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px' }}>
-                                  {!isPublicView && (m.status === 'scheduled' || !m.status) && (
-                                    <button
-                                      type="button"
-                                      onClick={() => handlePromptStartLive(m)}
-                                      style={{
-                                        background: isLiveUmpireMode
-                                          ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
-                                          : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        padding: '5px 8px',
-                                        fontSize: '11px',
-                                        fontWeight: '800',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      {isLiveUmpireMode ? '🔴 Live' : '🟢 Live'}
-                                    </button>
-                                  )}
-                                  {!isPublicView && m.status === 'live' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setQuickScoreScheduleMatch(m)}
-                                      style={{
-                                        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        padding: '5px 8px',
-                                        fontSize: '11px',
-                                        fontWeight: '700',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      ⚡ Points
-                                    </button>
-                                  )}
-                                  {!isPublicView && m.status === 'completed' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setQuickScoreScheduleMatch(m)}
-                                      style={{
-                                        background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                                        color: '#fff',
-                                        border: 'none',
-                                        borderRadius: '4px',
-                                        padding: '5px 8px',
-                                        fontSize: '11px',
-                                        fontWeight: '700',
-                                        cursor: 'pointer',
-                                        whiteSpace: 'nowrap',
-                                      }}
-                                    >
-                                      ✏️ Modify
-                                    </button>
+                                  {!isPublicView && (
+                                    <>
+                                      {(m.status === 'scheduled' || !m.status) && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handlePromptStartLive(m)}
+                                          style={{
+                                            background: isLiveUmpireMode
+                                              ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)'
+                                              : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                                            color: '#fff',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            padding: '5px 8px',
+                                            fontSize: '11px',
+                                            fontWeight: '800',
+                                            cursor: 'pointer',
+                                            whiteSpace: 'nowrap',
+                                          }}
+                                        >
+                                          {isLiveUmpireMode ? '🔴 Live' : '🟢 Live'}
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setQuickScoreScheduleMatch(m)}
+                                        style={{
+                                          background: m.status === 'completed'
+                                            ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
+                                            : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                          color: '#fff',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          padding: '5px 8px',
+                                          fontSize: '11px',
+                                          fontWeight: '700',
+                                          cursor: 'pointer',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        {m.status === 'completed' ? '✏️ Modify' : '⚡ Score'}
+                                      </button>
+                                    </>
                                   )}
                                   <button
                                     type="button"

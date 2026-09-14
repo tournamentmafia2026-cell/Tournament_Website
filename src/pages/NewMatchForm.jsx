@@ -17,7 +17,7 @@ export const getInitialFormData = () => {
   return {
     matchName: '',
     matchAddress: '',
-    courtName: 'Court 1',
+    courtName: '',
     categories: ['Men Singles', 'Women Singles'],
     startDate: today,
     endDate: addDaysToDateString(today, defaultDays - 1),
@@ -102,7 +102,7 @@ export function NewMatchForm({
   return (
     <form className="auth-card auth-management" onSubmit={onSubmit}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-        <h2 style={{ margin: 0 }}>{formData.id ? '✏️ Edit & Update Match' : '➕ New Match Update'}</h2>
+        <h2 style={{ margin: 0 }}>{formData.id ? '✏️ Edit & Update Match' : '➕ Create New Match'}</h2>
         {formData.id && (
           <button
             type="button"
@@ -136,7 +136,7 @@ export function NewMatchForm({
 
         <label>
           Match Court Name
-          <input name="courtName" value={formData.courtName} onChange={handleChange} />
+          <input name="courtName" value={formData.courtName} onChange={handleChange} placeholder="Enter court name" />
         </label>
 
         <div className="category-selector" style={{ gridColumn: '1 / -1', background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '16px', padding: '18px', boxSizing: 'border-box' }}>

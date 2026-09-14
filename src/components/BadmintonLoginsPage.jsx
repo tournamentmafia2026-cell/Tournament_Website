@@ -166,15 +166,17 @@ export function BadmintonLoginsPage({
     if (!authName) {
       setAuthName(`Match Official #${randomNum}`)
     }
+    setToastMessage(`⚡ Random credentials prepared for ${targetMatch ? formatTournamentName(targetMatch.matchName) : 'the selected match'}. Review and click Create Temporary Login.`)
   }
 
   // Quick Preset: Auto-Generate Court Specific Umpire
   const handleGenerateCourtUmpire = (courtNumber = 1) => {
+    const targetMatch = publishedMatches.find((m) => String(m.id) === String(selectedMatchId))
     setAccessScope('umpire')
     setAuthName(`Court ${courtNumber} Live Umpire`)
     setCustomUsername(`umpire_c${courtNumber}_${Math.floor(10 + Math.random() * 90)}`)
     setCustomPassword(`pass${courtNumber}${Math.floor(100 + Math.random() * 900)}`)
-    setToastMessage(`⚡ Court ${courtNumber} Umpire credentials ready!`)
+    setToastMessage(`⚡ Court ${courtNumber} Umpire credentials prepared for ${targetMatch ? formatTournamentName(targetMatch.matchName) : 'the selected match'}. Review and click Create Temporary Login.`)
   }
 
   // Create Temporary Credential
@@ -531,9 +533,9 @@ Login Portal: ${window.location.origin}/`
                   alignItems: 'center',
                   gap: '4px',
                 }}
-                title="Create Court 1 Umpire Live Scorer login"
+                title="Prepare Court 1 umpire credentials for the selected match; click Create Temporary Login to save"
               >
-                <span>🏸</span> C1 Umpire
+                <span>🏸</span> Prepare C1
               </button>
               <button
                 type="button"
@@ -551,9 +553,9 @@ Login Portal: ${window.location.origin}/`
                   alignItems: 'center',
                   gap: '4px',
                 }}
-                title="Create Court 2 Umpire Live Scorer login"
+                title="Prepare Court 2 umpire credentials for the selected match; click Create Temporary Login to save"
               >
-                <span>🏸</span> C2 Umpire
+                <span>🏸</span> Prepare C2
               </button>
               <button
                 type="button"
@@ -572,7 +574,7 @@ Login Portal: ${window.location.origin}/`
                   gap: '4px',
                 }}
               >
-                <span>⚡</span> Random ID
+                <span>⚡</span> Prepare Random ID
               </button>
             </div>
           </div>

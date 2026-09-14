@@ -667,6 +667,7 @@ export default function App() {
 
   if (isDedicatedLiveCast) {
     const urlParams = new URLSearchParams(window.location.search)
+    const urlTid = urlParams.get('tid') || urlParams.get('id')
     let targetMatch = publishedMatches.find((m) => String(m.id) === String(urlTid))
     if (!targetMatch && urlTid) {
       try {

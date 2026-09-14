@@ -163,8 +163,8 @@ export function MatchManagementView({
                       <div style={{ color: '#e2e8f0', fontWeight: '700', fontSize: '13px' }}>{formatCourtName(match.courtName)}</div>
                     </div>
 
-                    <div onClick={() => handleSelectMatch(match)} style={{ cursor: 'pointer' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <div onClick={() => handleSelectMatch(match)} style={{ cursor: 'pointer', minWidth: 0 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '6px', marginBottom: '8px' }}>
                         <span style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '700' }}>Dates</span>
                         <span style={{
                           padding: '2px 8px',
@@ -177,7 +177,7 @@ export function MatchManagementView({
                         }}>{status === 'completed' ? '🏆 Completed' : statusLabel}</span>
                       </div>
 
-                      <div style={{ color: '#e2e8f0', fontWeight: '700', fontSize: '10.5px', whiteSpace: 'nowrap', letterSpacing: '0.02em' }}>
+                      <div style={{ color: '#e2e8f0', fontWeight: '700', fontSize: '10.5px', whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.35, letterSpacing: '0.02em' }}>
                         {formatDisplayDate(match.startDate)} - {formatDisplayDate(match.endDate)}
                       </div>
 
@@ -200,7 +200,7 @@ export function MatchManagementView({
 
                         if (isThisMatchLive) {
                           return (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
                               <button
                                 type="button"
                                 title="TV Live Stream is Active. Click to view/reopen"
@@ -297,7 +297,7 @@ export function MatchManagementView({
                       })()}
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-start' }}>
                       <button
                         type="button"
                         title="Edit Match Details & Categories"

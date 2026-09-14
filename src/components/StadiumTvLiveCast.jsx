@@ -550,7 +550,6 @@ export const StadiumTvLiveCast = ({
     prevAllCategoryMatchesRef.current = rawAllCategoryMatches
     return rawAllCategoryMatches
   }, [rawAllCategoryMatches])
-
   // Filter matches based on selected category
   const activePool = useMemo(() => {
     if (selectedCategory === 'all') return allCategoryMatches
@@ -576,7 +575,18 @@ export const StadiumTvLiveCast = ({
     const upcomingQueue = []
 
     launchedMatches.forEach((m) => {
-      // Check if match is actively in-play (points scored or umpire started)
+      // When Live Umpire mode is OFF (manual scoring mode), all live matches show as Upcoming
+      // They only move to activeLive when umpire mode is ON and actively tracking points
+      if (!isLiveUmpireMode) {
+        upcomingQueue.push({
+          ...m,
+          assignedCourtName: m.court || null,
+          isLiveDisplay: false,
+        })
+        return
+      }
+
+      // Umpire mode ON: Check if match is actively in-play (points scored or umpire started)
       const currentSet = m.liveScore?.currentSet || 1
       const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
       const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
@@ -611,7 +621,7 @@ export const StadiumTvLiveCast = ({
     }
     prevPartitionRef.current = result
     return result
-  }, [activePool])
+  }, [activePool, isLiveUmpireMode])
 
   // Score change watcher for international TV point flash burst
   useEffect(() => {

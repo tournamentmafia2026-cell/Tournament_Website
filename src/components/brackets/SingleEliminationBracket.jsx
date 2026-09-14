@@ -52,7 +52,7 @@ export const SingleEliminationBracket = ({ tournament }) => {
               {(matchesByRound[round] || []).map((match, idx) => (
                 <div
                   key={match.id}
-                  className="bg-gradient-to-b from-blue-600 to-blue-700 rounded-lg p-4 w-56 shadow-lg hover:shadow-xl transition-shadow"
+                  className="bracket-match-card bg-gradient-to-b from-blue-600 to-blue-700 rounded-lg p-4 w-56 shadow-lg hover:shadow-xl transition-shadow"
                 >
                   {/* Player 1 */}
                   <div className="bg-white text-blue-900 p-3 rounded mb-1 font-semibold hover:bg-blue-50">
