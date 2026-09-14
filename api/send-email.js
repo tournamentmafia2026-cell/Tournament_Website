@@ -25,6 +25,9 @@ export default async function handler(req, res) {
 
     const gmailUser = process.env.GMAIL_USER || 'tournamentmafia2026@gmail.com'
     const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '')
+    if (!gmailPass) {
+      return res.status(500).json({ success: false, error: 'GMAIL_APP_PASSWORD is not configured on the server.' })
+    }
     const recipient = to || gmailUser
 
     const transporter = nodemailer.createTransport({

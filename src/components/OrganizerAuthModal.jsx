@@ -362,8 +362,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       setStatusNotification('✓ A 6-digit confidential OTP has been sent to your registered email. Please check your inbox!')
     } catch (err) {
       setIsLoading(false)
-      setAdminOtpStep(2)
-      setStatusNotification('✓ Verification OTP dispatched to registered email. Enter it below.')
+      setErrorMessage(err?.message || 'OTP email could not be sent. Please try again or check the server email configuration.')
     }
   }
 

@@ -34,8 +34,15 @@ export const handler = async (event) => {
 
     const { to, subject, html, text, otp } = payload
 
-    const gmailUser = 'tournamentmafia2026@gmail.com'
-    const gmailPass = 'ujzfbevesmqaohme' // 16-character Google App Password (no spaces)
+    const gmailUser = process.env.GMAIL_USER || 'tournamentmafia2026@gmail.com'
+    const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '')
+    if (!gmailPass) {
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ success: false, error: 'GMAIL_APP_PASSWORD is not configured on the server.' }),
+      }
+    }
     const recipient = to || gmailUser
 
     const transporter = nodemailer.createTransport({
