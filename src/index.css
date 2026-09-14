@@ -158,11 +158,6 @@ button:active {
   animation: bracket-card-in 0.45s ease both;
 }
 
-.live-pulse-dot,
-.pro-pulse-dot {
-  animation: live-pulse 1.5s ease-in-out infinite;
-}
-
 .mode-toggle {
   position: relative;
   isolation: isolate;
@@ -196,11 +191,6 @@ button:active {
   border-top: 2px solid rgba(96, 165, 250, 0.6);
   transform-origin: left center;
   animation: connector-draw 0.55s ease both;
-}
-
-@keyframes live-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55); opacity: 1; }
-  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); opacity: 0.78; }
 }
 
 @keyframes skeleton-shimmer {
