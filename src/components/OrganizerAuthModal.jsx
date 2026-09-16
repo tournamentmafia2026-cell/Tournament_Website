@@ -493,14 +493,14 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(15, 23, 42, 0.85)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: 'rgba(3, 7, 18, 0.88)',
+        backdropFilter: 'blur(16px)',
         zIndex: 99999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         padding: '16px',
-        animation: 'fadeIn 0.2s ease',
+        animation: 'fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
@@ -509,18 +509,18 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
       <div
         style={{
           width: '100%',
-          maxWidth: '430px',
-          background: 'linear-gradient(165deg, #1e293b 0%, #0f172a 100%)',
-          border: '1.5px solid rgba(59, 130, 246, 0.4)',
+          maxWidth: '440px',
+          background: 'linear-gradient(165deg, rgba(15, 23, 42, 0.98) 0%, rgba(8, 14, 26, 0.99) 100%)',
+          border: '1px solid rgba(56, 189, 248, 0.3)',
           borderRadius: '24px',
-          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.85), 0 0 30px rgba(59, 130, 246, 0.25)',
-          padding: '28px 24px',
+          boxShadow: '0 30px 70px -10px rgba(0, 0, 0, 0.95), 0 0 45px rgba(56, 189, 248, 0.18)',
+          padding: '32px 28px',
           boxSizing: 'border-box',
           position: 'relative',
           color: '#f8fafc',
-          maxHeight: '92vh',
+          maxHeight: '94vh',
           overflowY: 'auto',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
+          fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
         }}
       >
         {/* Close Button */}
@@ -529,51 +529,81 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
           onClick={onClose}
           style={{
             position: 'absolute',
-            top: '16px',
-            right: '16px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            border: 'none',
+            top: '18px',
+            right: '18px',
+            background: 'rgba(255, 255, 255, 0.06)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             color: '#94a3b8',
-            width: '32px',
-            height: '32px',
+            width: '34px',
+            height: '34px',
             borderRadius: '50%',
             cursor: 'pointer',
-            fontSize: '14px',
+            fontSize: '13px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'
+            e.currentTarget.style.color = '#fca5a5'
+            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'
+            e.currentTarget.style.color = '#94a3b8'
+            e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'
           }}
         >
           ✕
         </button>
 
-        {/* Modal Header */}
-        <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+        {/* Modal Brand Header */}
+        <div style={{ textAlign: 'center', marginBottom: '22px' }}>
           <div
             style={{
-              width: '54px',
-              height: '54px',
-              borderRadius: '16px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              width: '60px',
+              height: '60px',
+              borderRadius: '18px',
+              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              border: '2px solid rgba(56, 189, 248, 0.5)',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: '26px',
-              marginBottom: '10px',
-              boxShadow: '0 8px 20px rgba(37, 99, 235, 0.35)',
+              fontSize: '28px',
+              marginBottom: '12px',
+              boxShadow: '0 10px 25px rgba(2, 132, 199, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.4)',
             }}
           >
             {view === 'login' ? '🏸' : '📱'}
           </div>
 
-          <h2 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: '800', color: '#f8fafc' }}>
-            {view === 'login' ? 'Tournament Portal Sign-In' : 'Admin Phone Verification & Setup'}
+          <div
+            style={{
+              display: 'inline-block',
+              padding: '3px 10px',
+              borderRadius: '999px',
+              background: 'rgba(56, 189, 248, 0.12)',
+              border: '1px solid rgba(56, 189, 248, 0.3)',
+              color: '#38bdf8',
+              fontSize: '10.5px',
+              fontWeight: '800',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              marginBottom: '8px',
+            }}
+          >
+            OFFICIAL PORTAL ACCESS
+          </div>
+
+          <h2 style={{ margin: '0 0 6px 0', fontSize: '22px', fontWeight: '900', color: '#f8fafc', letterSpacing: '-0.02em' }}>
+            {view === 'login' ? 'Tournament Sign-In' : 'Admin Mobile Verification'}
           </h2>
 
-          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
+          <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8', lineHeight: '1.45' }}>
             {view === 'login'
-              ? 'Admin Login (Phone/Password) & Umpire Login'
-              : 'Enter your Mobile Number & Email to receive your 6-digit OTP'}
+              ? 'Chief Organizer & Assigned Court Umpire Dashboard'
+              : 'Enter your Mobile Number to receive confidential OTP'}
           </p>
         </div>
 
@@ -581,35 +611,45 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         {errorMessage && (
           <div
             style={{
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.4)',
+              background: 'rgba(239, 68, 68, 0.12)',
+              border: '1.5px solid rgba(239, 68, 68, 0.4)',
               color: '#fca5a5',
-              padding: '10px 14px',
-              borderRadius: '12px',
+              padding: '12px 16px',
+              borderRadius: '14px',
               fontSize: '12.5px',
-              marginBottom: '14px',
+              marginBottom: '16px',
               fontWeight: '600',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              boxShadow: '0 4px 14px rgba(239, 68, 68, 0.15)',
             }}
           >
-            ⚠️ {errorMessage}
+            <span style={{ fontSize: '16px' }}>⚠️</span>
+            <span>{errorMessage}</span>
           </div>
         )}
 
         {statusNotification && (
           <div
             style={{
-              background: 'rgba(34, 197, 94, 0.15)',
-              border: '1px solid rgba(74, 222, 128, 0.4)',
+              background: 'rgba(34, 197, 94, 0.12)',
+              border: '1.5px solid rgba(74, 222, 128, 0.4)',
               color: '#86efac',
-              padding: '11px 14px',
-              borderRadius: '12px',
+              padding: '12px 16px',
+              borderRadius: '14px',
               fontSize: '12.5px',
-              marginBottom: '14px',
+              marginBottom: '16px',
               fontWeight: '600',
-              lineHeight: '1.4',
+              lineHeight: '1.45',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              boxShadow: '0 4px 14px rgba(34, 197, 94, 0.15)',
             }}
           >
-            {statusNotification}
+            <span style={{ fontSize: '16px' }}>✓</span>
+            <span>{statusNotification}</span>
           </div>
         )}
 
@@ -617,24 +657,86 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         {/* VIEW 1: UNIFIED SINGLE LOGIN PAGE (ADMIN & UMPIRE) */}
         {/* ==================================================================== */}
         {view === 'login' && (
-          <form onSubmit={handleUnifiedLogin} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <form onSubmit={handleUnifiedLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Role Helper Indicator Strip */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px',
+                padding: '4px',
+                background: 'rgba(15, 23, 42, 0.8)',
+                borderRadius: '14px',
+                border: '1px solid rgba(148, 163, 184, 0.15)',
+              }}
+            >
+              <div
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  fontSize: '11.5px',
+                  fontWeight: '800',
+                  color: '#93c5fd',
+                  background: 'rgba(59, 130, 246, 0.12)',
+                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>👑</span>
+                <span>Chief Admin</span>
+              </div>
+
+              <div
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  fontSize: '11.5px',
+                  fontWeight: '800',
+                  color: '#86efac',
+                  background: 'rgba(34, 197, 94, 0.12)',
+                  border: '1px solid rgba(34, 197, 94, 0.25)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
+              >
+                <span>🏸</span>
+                <span>Court Umpire</span>
+              </div>
+            </div>
+
             {/* Login ID Input */}
             <div>
               <label
                 style={{
                   display: 'block',
-                  fontSize: '11.5px',
-                  fontWeight: '700',
-                  color: '#cbd5e1',
-                  marginBottom: '6px',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  color: '#94a3b8',
+                  marginBottom: '8px',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.06em',
                 }}
               >
-                Mobile Number (Admin) or Username (Umpire)
+                Mobile Number or Username
               </label>
               <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: '14px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    fontSize: '16px',
+                    color: '#64748b',
+                  }}
+                >
                   👤
                 </span>
                 <input
@@ -649,17 +751,27 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   onChange={(e) => setLoginId(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '12px 14px 12px 38px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                    borderRadius: '12px',
+                    padding: '13px 14px 13px 42px',
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.22)',
+                    borderRadius: '14px',
                     color: '#f8fafc',
-                    fontSize: '13.5px',
+                    fontSize: '14px',
+                    fontWeight: '600',
                     boxSizing: 'border-box',
                     outline: 'none',
+                    transition: 'all 0.2s ease',
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                  onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#38bdf8'
+                    e.target.style.boxShadow = '0 0 0 4px rgba(56, 189, 248, 0.15)'
+                    e.target.style.background = 'rgba(15, 23, 42, 0.95)'
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'rgba(56, 189, 248, 0.22)'
+                    e.target.style.boxShadow = 'none'
+                    e.target.style.background = 'rgba(15, 23, 42, 0.75)'
+                  }}
                 />
               </div>
             </div>
@@ -669,40 +781,59 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               <label
                 style={{
                   display: 'block',
-                  fontSize: '11.5px',
-                  fontWeight: '700',
-                  color: '#cbd5e1',
-                  marginBottom: '6px',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  color: '#94a3b8',
+                  marginBottom: '8px',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
+                  letterSpacing: '0.06em',
                 }}
               >
                 Password
               </label>
               <div style={{ position: 'relative' }}>
-                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: '14px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    fontSize: '16px',
+                    color: '#64748b',
+                  }}
+                >
                   🔒
                 </span>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
-                  placeholder="••••••••"
+                  placeholder="••••••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   style={{
                     width: '100%',
-                    padding: '12px 38px 12px 38px',
-                    background: 'rgba(15, 23, 42, 0.7)',
-                    border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                    borderRadius: '12px',
+                    padding: '13px 42px 13px 42px',
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.22)',
+                    borderRadius: '14px',
                     color: '#f8fafc',
-                    fontSize: '13.5px',
+                    fontSize: '14px',
+                    fontWeight: '600',
                     boxSizing: 'border-box',
                     outline: 'none',
+                    transition: 'all 0.2s ease',
                   }}
-                  onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                  onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#38bdf8'
+                    e.target.style.boxShadow = '0 0 0 4px rgba(56, 189, 248, 0.15)'
+                    e.target.style.background = 'rgba(15, 23, 42, 0.95)'
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = 'rgba(56, 189, 248, 0.22)'
+                    e.target.style.boxShadow = 'none'
+                    e.target.style.background = 'rgba(15, 23, 42, 0.75)'
+                  }}
                 />
                 <button
                   type="button"
@@ -716,7 +847,11 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     border: 'none',
                     color: '#94a3b8',
                     cursor: 'pointer',
-                    fontSize: '15px',
+                    fontSize: '16px',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
                   {showPassword ? '👁️' : '🔒'}
@@ -729,33 +864,46 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
               type="submit"
               disabled={isLoading}
               style={{
-                padding: '13px',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                border: 'none',
+                padding: '14px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
                 color: '#ffffff',
-                fontWeight: '800',
-                fontSize: '14px',
+                fontWeight: '900',
+                fontSize: '14.5px',
+                letterSpacing: '0.02em',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
-                marginTop: '4px',
+                boxShadow: '0 6px 20px rgba(2, 132, 199, 0.4)',
+                marginTop: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading) e.currentTarget.style.boxShadow = '0 8px 25px rgba(2, 132, 199, 0.6)'
+              }}
+              onMouseLeave={(e) => {
+                if (!isLoading) e.currentTarget.style.boxShadow = '0 6px 20px rgba(2, 132, 199, 0.4)'
               }}
             >
-              {isLoading ? 'Verifying...' : 'Sign In'}
+              <span>{isLoading ? 'Verifying Credentials...' : 'Sign In to Dashboard'}</span>
+              <span>→</span>
             </button>
 
             {/* Quick Admin Set/Reset Password Link */}
             <div
               style={{
-                background: 'rgba(59, 130, 246, 0.08)',
-                border: '1px solid rgba(59, 130, 246, 0.25)',
-                borderRadius: '12px',
-                padding: '12px 14px',
+                background: 'rgba(30, 41, 59, 0.6)',
+                border: '1px solid rgba(148, 163, 184, 0.2)',
+                borderRadius: '14px',
+                padding: '14px 16px',
                 textAlign: 'center',
-                marginTop: '6px',
+                marginTop: '4px',
               }}
             >
-              <div style={{ fontSize: '11.5px', color: '#94a3b8', marginBottom: '6px' }}>
+              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>
                 New Mobile Number or forgot password?
               </div>
               <button
@@ -769,15 +917,38 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#60a5fa',
+                  color: '#38bdf8',
                   fontSize: '12.5px',
-                  fontWeight: '700',
+                  fontWeight: '800',
                   cursor: 'pointer',
-                  textDecoration: 'underline',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
                 }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = '#7dd3fc')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = '#38bdf8')}
               >
-                👑 Verify Mobile & Set Admin Password via Gmail OTP →
+                <span>🛡️</span>
+                <span>Verify Mobile & Set Admin Password via OTP →</span>
               </button>
+            </div>
+
+            {/* Security Badge Footer */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                marginTop: '6px',
+                fontSize: '11px',
+                color: '#64748b',
+                fontWeight: '600',
+              }}
+            >
+              <span>🔒</span>
+              <span>256-Bit Encrypted Secure Cloud Authentication</span>
             </div>
           </form>
         )}
@@ -788,24 +959,33 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         {view === 'admin-verify-phone' && (
           <div>
             {adminOtpStep === 1 ? (
-              <form onSubmit={handleSendAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <form onSubmit={handleSendAdminOtp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {/* Mobile Number Input */}
                 <div>
                   <label
                     style={{
                       display: 'block',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      color: '#cbd5e1',
-                      marginBottom: '6px',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      color: '#94a3b8',
+                      marginBottom: '8px',
                       textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
+                      letterSpacing: '0.06em',
                     }}
                   >
                     Enter Mobile Number
                   </label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '15px', color: '#94a3b8' }}>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: '14px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '16px',
+                        color: '#64748b',
+                      }}
+                    >
                       📱
                     </span>
                     <input
@@ -816,51 +996,59 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       onChange={(e) => setAdminPhone(e.target.value)}
                       style={{
                         width: '100%',
-                        padding: '12px 14px 12px 38px',
-                        background: 'rgba(15, 23, 42, 0.7)',
-                        border: '1.5px solid rgba(148, 163, 184, 0.25)',
-                        borderRadius: '12px',
+                        padding: '13px 14px 13px 42px',
+                        background: 'rgba(15, 23, 42, 0.75)',
+                        border: '1.5px solid rgba(56, 189, 248, 0.22)',
+                        borderRadius: '14px',
                         color: '#f8fafc',
-                        fontSize: '13.5px',
+                        fontSize: '14px',
+                        fontWeight: '600',
                         boxSizing: 'border-box',
                         outline: 'none',
+                        transition: 'all 0.2s ease',
                       }}
-                      onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                      onBlur={(e) => (e.target.style.borderColor = 'rgba(148, 163, 184, 0.25)')}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#38bdf8'
+                        e.target.style.boxShadow = '0 0 0 4px rgba(56, 189, 248, 0.15)'
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = 'rgba(56, 189, 248, 0.22)'
+                        e.target.style.boxShadow = 'none'
+                      }}
                     />
                   </div>
                 </div>
 
                 <div
                   style={{
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    border: '1px solid rgba(59, 130, 246, 0.2)',
-                    borderRadius: '10px',
-                    padding: '10px 12px',
-                    fontSize: '11.5px',
-                    color: '#93c5fd',
-                    lineHeight: '1.4',
+                    background: 'rgba(56, 189, 248, 0.08)',
+                    border: '1px solid rgba(56, 189, 248, 0.25)',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    fontSize: '12px',
+                    color: '#bae6fd',
+                    lineHeight: '1.45',
                   }}
                 >
-                  🔒 <strong>Verification:</strong> A confidential 6-digit verification OTP will be sent directly to your registered Email.
+                  🔒 <strong>Verification Protocol:</strong> A confidential 6-digit random verification OTP will be sent directly to your official email (tournamentmafia2026@gmail.com).
                 </div>
 
                 <button
                   type="submit"
                   disabled={isLoading}
                   style={{
-                    padding: '13px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
-                    border: 'none',
+                    padding: '14px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
                     color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '14px',
+                    fontWeight: '900',
+                    fontSize: '14.5px',
                     cursor: isLoading ? 'not-allowed' : 'pointer',
-                    boxShadow: '0 4px 15px rgba(59, 130, 246, 0.4)',
+                    boxShadow: '0 6px 20px rgba(2, 132, 199, 0.4)',
                   }}
                 >
-                  {isLoading ? 'Sending Verification OTP...' : 'Send Verification OTP & Continue'}
+                  {isLoading ? 'Sending Verification OTP...' : 'Send Verification OTP →'}
                 </button>
 
                 <div style={{ textAlign: 'center', marginTop: '4px' }}>
@@ -871,28 +1059,35 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       setErrorMessage('')
                       setStatusNotification('')
                     }}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '12.5px', cursor: 'pointer' }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      fontWeight: '700',
+                    }}
                   >
                     ← Back to Sign In
                   </button>
                 </div>
               </form>
             ) : (
-              <form onSubmit={handleVerifyOtpAndSetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <form onSubmit={handleVerifyOtpAndSetPassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div
                   style={{
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    border: '1.5px solid rgba(59, 130, 246, 0.3)',
-                    borderRadius: '14px',
-                    padding: '14px',
+                    background: 'rgba(56, 189, 248, 0.08)',
+                    border: '1.5px solid rgba(56, 189, 248, 0.3)',
+                    borderRadius: '16px',
+                    padding: '16px',
                     textAlign: 'center',
                   }}
                 >
-                  <div style={{ fontSize: '26px', marginBottom: '2px' }}>📬</div>
-                  <div style={{ fontSize: '13.5px', color: '#60a5fa', fontWeight: '800' }}>
+                  <div style={{ fontSize: '28px', marginBottom: '4px' }}>📬</div>
+                  <div style={{ fontSize: '14px', color: '#38bdf8', fontWeight: '900' }}>
                     Check Your Registered Email
                   </div>
-                  <div style={{ fontSize: '11.5px', color: '#94a3b8', marginTop: '4px' }}>
+                  <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
                     Enter the 6-digit random OTP code sent to your registered official email.
                   </div>
                 </div>
@@ -902,12 +1097,12 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   <label
                     style={{
                       display: 'block',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      color: '#60a5fa',
-                      marginBottom: '6px',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      color: '#38bdf8',
+                      marginBottom: '8px',
                       textAlign: 'center',
-                      letterSpacing: '0.05em',
+                      letterSpacing: '0.08em',
                     }}
                   >
                     ENTER 6-DIGIT OTP
@@ -922,17 +1117,18 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     onChange={(e) => setEnteredOtp(e.target.value.replace(/[^0-9]/g, ''))}
                     style={{
                       width: '100%',
-                      padding: '12px',
-                      background: 'rgba(15, 23, 42, 0.85)',
-                      border: '2px solid #3b82f6',
-                      borderRadius: '12px',
-                      color: '#60a5fa',
-                      fontSize: '22px',
+                      padding: '14px',
+                      background: 'rgba(15, 23, 42, 0.9)',
+                      border: '2px solid #38bdf8',
+                      borderRadius: '14px',
+                      color: '#38bdf8',
+                      fontSize: '24px',
                       fontWeight: '900',
-                      letterSpacing: '0.3em',
+                      letterSpacing: '0.35em',
                       textAlign: 'center',
                       boxSizing: 'border-box',
                       outline: 'none',
+                      boxShadow: '0 0 20px rgba(56, 189, 248, 0.25)',
                     }}
                   />
                 </div>
@@ -942,25 +1138,26 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   <label
                     style={{
                       display: 'block',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      color: '#cbd5e1',
-                      marginBottom: '5px',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      color: '#94a3b8',
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
                     }}
                   >
-                    SET PASSWORD FOR MOBILE ({adminPhone})
+                    SET NEW PASSWORD FOR ({adminPhone})
                   </label>
                   <input
                     type={showNewPassword ? 'text' : 'password'}
                     required
-                    placeholder="Enter password for this mobile number"
+                    placeholder="Enter new password"
                     value={newAdminPassword}
                     onChange={(e) => setNewAdminPassword(e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '11px 14px',
-                      background: 'rgba(15, 23, 42, 0.7)',
-                      border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                      padding: '12px 14px',
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      border: '1.5px solid rgba(56, 189, 248, 0.22)',
                       borderRadius: '12px',
                       color: '#f8fafc',
                       fontSize: '13.5px',
@@ -974,10 +1171,11 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   <label
                     style={{
                       display: 'block',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      color: '#cbd5e1',
-                      marginBottom: '5px',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      color: '#94a3b8',
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
                     }}
                   >
                     CONFIRM PASSWORD
@@ -985,14 +1183,14 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                   <input
                     type={showNewPassword ? 'text' : 'password'}
                     required
-                    placeholder="Re-enter password"
+                    placeholder="Re-enter new password"
                     value={confirmAdminPassword}
                     onChange={(e) => setConfirmAdminPassword(e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '11px 14px',
-                      background: 'rgba(15, 23, 42, 0.7)',
-                      border: '1.5px solid rgba(148, 163, 184, 0.25)',
+                      padding: '12px 14px',
+                      background: 'rgba(15, 23, 42, 0.75)',
+                      border: '1.5px solid rgba(56, 189, 248, 0.22)',
                       borderRadius: '12px',
                       color: '#f8fafc',
                       fontSize: '13.5px',
@@ -1008,35 +1206,36 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     id="showNewPassCheck"
                     checked={showNewPassword}
                     onChange={(e) => setShowNewPassword(e.target.checked)}
-                    style={{ accentColor: '#3b82f6', cursor: 'pointer' }}
+                    style={{ accentColor: '#0284c7', cursor: 'pointer', width: '15px', height: '15px' }}
                   />
-                  <label htmlFor="showNewPassCheck" style={{ fontSize: '12px', color: '#94a3b8', cursor: 'pointer' }}>
+                  <label htmlFor="showNewPassCheck" style={{ fontSize: '12.5px', color: '#94a3b8', cursor: 'pointer' }}>
                     Show password
                   </label>
                 </div>
 
                 <button
                   type="submit"
+                  disabled={isLoading}
                   style={{
-                    padding: '13px',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    padding: '14px',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
                     border: 'none',
                     color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '14px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.4)',
+                    fontWeight: '900',
+                    fontSize: '14.5px',
+                    cursor: isLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 6px 20px rgba(22, 163, 74, 0.4)',
                   }}
                 >
-                  ✓ Verify OTP & Save Password
+                  ✓ Verify OTP & Activate Admin Access
                 </button>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginTop: '4px' }}>
                   <button
                     type="button"
                     onClick={() => setAdminOtpStep(1)}
-                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0 }}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, fontWeight: '700' }}
                   >
                     ← Change Phone/Email
                   </button>
@@ -1045,7 +1244,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     type="button"
                     disabled={isLoading}
                     onClick={handleSendAdminOtp}
-                    style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: isLoading ? 'not-allowed' : 'pointer', padding: 0, fontWeight: '700' }}
+                    style={{ background: 'none', border: 'none', color: '#38bdf8', cursor: isLoading ? 'not-allowed' : 'pointer', padding: 0, fontWeight: '800' }}
                   >
                     Resend OTP 🔄
                   </button>
@@ -1058,3 +1257,4 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
     </div>
   )
 }
+
