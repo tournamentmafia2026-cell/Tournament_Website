@@ -5511,6 +5511,25 @@ export const BadmintonFixturesManager = ({
 
                     <button
                       type="button"
+                      className={`schedule-status-chip ready ${scheduleFilter === 'ready' ? 'active' : ''}`}
+                      onClick={() => setScheduleFilter('ready')}
+                      style={{
+                        background: scheduleFilter === 'ready' ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.35), rgba(16, 185, 129, 0.25))' : 'rgba(56, 189, 248, 0.08)',
+                        borderColor: scheduleFilter === 'ready' ? '#38bdf8' : 'rgba(56, 189, 248, 0.3)',
+                        color: '#38bdf8',
+                        fontWeight: '800'
+                      }}
+                      title="Filter matches where both opponents are reported at desk"
+                    >
+                      <span style={{ fontSize: '13px' }}>⚡</span>
+                      <span>Ready to Play</span>
+                      <span className="schedule-chip-count" style={{ background: '#38bdf8', color: '#0f172a', fontWeight: '900' }}>
+                        {readyScheduleCount}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
                       className={`schedule-status-chip live ${scheduleFilter === 'live' ? 'active' : ''}`}
                       onClick={() => setScheduleFilter('live')}
                     >
@@ -5646,6 +5665,26 @@ export const BadmintonFixturesManager = ({
                             <span className={`schedule-round-badge ${isFinal ? 'final' : isSemi ? 'semi' : ''}`}>
                               {isFinal ? '🏆 ' : isSemi ? '🔥 ' : ''}{m.roundName}
                             </span>
+                            {isBothRep && (
+                              <span
+                                style={{
+                                  padding: '3px 9px',
+                                  borderRadius: '6px',
+                                  background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.3), rgba(16, 185, 129, 0.25))',
+                                  border: '1px solid #38bdf8',
+                                  color: '#38bdf8',
+                                  fontSize: '11px',
+                                  fontWeight: '900',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  letterSpacing: '0.03em',
+                                  boxShadow: '0 0 12px rgba(56, 189, 248, 0.3)'
+                                }}
+                              >
+                                ⚡ READY TO PLAY
+                              </span>
+                            )}
                             {m.time && (
                               <span
                                 style={{
@@ -6147,17 +6186,51 @@ export const BadmintonFixturesManager = ({
                   </div>
                 </div>
 
-                {/* Reporting desk stats badge */}
-                <div className="players-reporting-summary">
-                  <span className="reporting-badge-icon">📋</span>
-                  <div className="reporting-badge-info">
-                    <span className="reporting-badge-count">
-                      {reportedCount} / {categoryPlayers.length} Reported ({reportedPercent}%)
-                    </span>
-                    <span className="reporting-badge-label">
-                      {pendingCount > 0 ? `${pendingCount} Players Pending Arrival` : '✓ All Players Reported at Desk'}
-                    </span>
+                {/* Reporting desk stats badge & Ready Matches Direct Jump */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                  <div className="players-reporting-summary">
+                    <span className="reporting-badge-icon">📋</span>
+                    <div className="reporting-badge-info">
+                      <span className="reporting-badge-count">
+                        {reportedCount} / {categoryPlayers.length} Reported ({reportedPercent}%)
+                      </span>
+                      <span className="reporting-badge-label">
+                        {pendingCount > 0 ? `${pendingCount} Players Pending Arrival` : '✓ All Players Reported at Desk'}
+                      </span>
+                    </div>
                   </div>
+
+                  {readyScheduleCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewMode('schedule')
+                        setScheduleFilter('ready')
+                      }}
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.28), rgba(16, 185, 129, 0.24))',
+                        border: '1.5px solid #38bdf8',
+                        color: '#38bdf8',
+                        borderRadius: '12px',
+                        padding: '10px 16px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontWeight: '800',
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        boxShadow: '0 0 16px rgba(56, 189, 248, 0.3)',
+                        transition: 'all 0.2s ease',
+                      }}
+                      title="View all matches where both players have reported"
+                    >
+                      <span style={{ fontSize: '15px' }}>⚡</span>
+                      <span><strong>{readyScheduleCount}</strong> Match(es) Ready to Play</span>
+                      <span style={{ fontSize: '11px', background: '#38bdf8', color: '#0f172a', padding: '2px 8px', borderRadius: '6px', fontWeight: '900' }}>
+                        View Schedule →
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
 
