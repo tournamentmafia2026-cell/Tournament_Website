@@ -1,11 +1,12 @@
-import fs from 'fs'
+
+import { promises as fsPromises } from 'fs'
 import path from 'path'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import nodemailer from 'nodemailer'
 
 const DEFAULT_GMAIL_USER = process.env.GMAIL_USER || 'tournamentmafia2026@gmail.com'
-const DEFAULT_GMAIL_PASS = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '')
+const DEFAULT_GMAIL_PASS = (process.env.GMAIL_APP_PASSWORD || 'ujzfbevesmqaohme').replace(/\s+/g, '')
 
 const DB_PATH = path.resolve(process.cwd(), 'data/badminton_db.json')
 
@@ -14,11 +15,16 @@ function sanitizeMatchesData(matches) {
   return matches.filter((m) => m && m.id !== 1 && m.id !== 2 && !String(m.matchName || '').includes('Chennai Badminton Championship') && !String(m.matchName || '').includes('State Open Badminton'))
 }
 
-function getDbData() {
+async function getDbData() {
   try {
-    if (fs.existsSync(DB_PATH)) {
-      const raw = fs.readFileSync(DB_PATH, 'utf-8')
-      const parsed = JSON.parse(raw || '{}')
+    // Check if DB file exists
+    const exists = await fsPromises.access(DB_PATH).then(() => true).catch(() => false)
+    if (exists) {
+      const raw = await fsPromises.readFile(DB_PATH, 'utf-8')
+      let parsed = {}
+if (raw && raw.trim()) {
+  parsed = JSON.parse(raw)
+}
       if (parsed.matches) {
         parsed.matches = sanitizeMatchesData(parsed.matches)
       }
@@ -27,6 +33,7 @@ function getDbData() {
   } catch (e) {
     console.error('Error reading DB:', e)
   }
+  // Return default empty DB structure
   return {
     matches: [],
     publishedStatus: {},
@@ -45,17 +52,16 @@ function getDbData() {
   }
 }
 
-function saveDbData(data) {
+async function saveDbData(data) {
   try {
     const dir = path.dirname(DB_PATH)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true })
-    }
-    const current = getDbData()
+    await fsPromises.mkdir(dir, { recursive: true })
+    const current = await getDbData()
     const merged = { ...current }
 
-    // Apply all incoming payload fields accurately to persist additions, edits, and deletions
-    Object.keys(data).forEach((key) => {
+    // Apply all incoming payload fields safely, filtering prototype‑polluting keys
+const safeKeys = Object.keys(data).filter(k => k !== '__proto__' && k !== 'constructor')
+safeKeys.forEach((key) => {
       if (key === 'matches') {
         if (Array.isArray(data.matches)) {
           merged.matches = sanitizeMatchesData(data.matches)
@@ -139,7 +145,7 @@ function saveDbData(data) {
       delete merged.publishedStatus['2-Men Singles']
       delete merged.publishedStatus['2-Under 19 Boys Singles']
     }
-    fs.writeFileSync(DB_PATH, JSON.stringify(merged, null, 2), 'utf-8')
+    await fsPromises.writeFile(DB_PATH, JSON.stringify(merged, null, 2), 'utf-8')
     return merged
   } catch (e) {
     console.error('Error saving DB:', e)
@@ -155,7 +161,7 @@ export default defineConfig({
       name: 'badminton-db-middleware',
       configureServer(server) {
         // Sync Tournaments & Draws across all connected devices (Mobile, Tablet, PC)
-        server.middlewares.use('/api/tournaments', (req, res, next) => {
+        server.middlewares.use('/api/tournaments', async (req, res, next) => {
           res.setHeader('Access-Control-Allow-Origin', '*')
           res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, HEAD')
           res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
@@ -166,32 +172,56 @@ export default defineConfig({
             return
           }
 
-          if (req.method === 'HEAD' || req.method === 'GET') {
-            const data = getDbData()
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify(data || {}))
-            return
-          }
+          // Inside GET/HEAD handler
+if (req.method === 'HEAD' || req.method === 'GET') {
+  try {
+    const data = await getDbData()
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify(data || {}))
+  } catch (err) {
+    res.statusCode = 500
+    res.end(JSON.stringify({ success: false, error: err.message }))
+  }
+  return
+}
 
-          if (req.method === 'POST') {
-            let body = ''
-            req.on('data', (chunk) => {
-              body += chunk
-            })
-            req.on('end', () => {
-              try {
-                const parsed = JSON.parse(body || '{}')
-                const saved = saveDbData(parsed)
-                res.setHeader('Content-Type', 'application/json')
-                res.end(JSON.stringify({ success: true, data: saved }))
-              } catch (err) {
-                res.statusCode = 500
-                res.setHeader('Content-Type', 'application/json')
-                res.end(JSON.stringify({ success: false, error: err.message }))
-              }
-            })
-            return
-          }
+          // Inside POST handler for tournaments endpoint
+// Inside POST handler for tournaments endpoint
+if (req.method === 'POST') {
+  let body = ''
+  const MAX_SIZE = 1e6 // 1 MB
+  req.on('data', (chunk) => {
+    body += chunk
+    if (body.length > MAX_SIZE) {
+      res.statusCode = 413
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ success: false, error: 'Payload too large' }))
+      req.destroy()
+    }
+  })
+  req.on('end', async () => {
+    try {
+      const parsed = JSON.parse(body || '{}')
+      const saved = await saveDbData(parsed)
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ success: true, data: saved }))
+    } catch (e) {
+      // Differentiate JSON parse errors from save errors
+      if (e instanceof SyntaxError) {
+        res.statusCode = 400
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ success: false, error: 'Invalid JSON' }))
+      } else {
+        res.statusCode = 500
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ success: false, error: e.message }))
+      }
+    }
+  })
+  return
+}
+
+
 
           next()
         })
@@ -207,39 +237,44 @@ export default defineConfig({
             return
           }
 
-          if (req.method === 'GET') {
-            const data = getDbData()
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({
-              temporaryCredentials: data.temporaryCredentials || [],
-              organizerCredentials: data.organizerCredentials || {},
-            }))
-            return
-          }
+          // Inside GET handler for credentials endpoint
+if (req.method === 'GET') {
+  getDbData().then((data) => {
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify({
+      temporaryCredentials: data.temporaryCredentials || [],
+      organizerCredentials: data.organizerCredentials || {},
+    }))
+  }).catch((err) => {
+    res.statusCode = 500
+    res.end(JSON.stringify({ success: false, error: err.message }))
+  })
+  return
+}
 
-          if (req.method === 'POST') {
-            let body = ''
-            req.on('data', (chunk) => {
-              body += chunk
-            })
-            req.on('end', () => {
-              try {
-                const payload = JSON.parse(body || '{}')
-                const saved = saveDbData(payload)
-                res.setHeader('Content-Type', 'application/json')
-                res.end(JSON.stringify({
-                  success: true,
-                  temporaryCredentials: saved?.temporaryCredentials || [],
-                  organizerCredentials: saved?.organizerCredentials || {},
-                }))
-              } catch (err) {
-                res.statusCode = 500
-                res.setHeader('Content-Type', 'application/json')
-                res.end(JSON.stringify({ success: false, error: err.message }))
-              }
-            })
-            return
-          }
+          // Inside POST handler for credentials endpoint
+if (req.method === 'POST') {
+  let body = ''
+  req.on('data', (chunk) => (body += chunk))
+  req.on('end', () => {
+    try {
+      const payload = JSON.parse(body || '{}')
+      saveDbData(payload).then((saved) => {
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({
+          success: true,
+          temporaryCredentials: saved?.temporaryCredentials || [],
+          organizerCredentials: saved?.organizerCredentials || {},
+        }))
+      })
+    } catch (err) {
+      res.statusCode = 500
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ success: false, error: err.message }))
+    }
+  })
+  return
+}
 
           next()
         })
@@ -249,6 +284,16 @@ export default defineConfig({
       name: 'gmail-smtp-middleware',
       configureServer(server) {
         server.middlewares.use('/api/send-email', (req, res, next) => {
+          res.setHeader('Access-Control-Allow-Origin', '*')
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+
+          if (req.method === 'OPTIONS') {
+            res.statusCode = 200
+            res.end()
+            return
+          }
+
           if (req.method !== 'POST') return next()
 
           let body = ''

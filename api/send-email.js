@@ -21,10 +21,10 @@ export default async function handler(req, res) {
       } catch (e) {}
     }
 
-    const { to, subject, html, text, otp } = payload
+    const { to, subject, html, text, otp, user, pass } = payload
 
-    const gmailUser = process.env.GMAIL_USER || 'tournamentmafia2026@gmail.com'
-    const gmailPass = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, '')
+    const gmailUser = user || process.env.GMAIL_USER || 'tournamentmafia2026@gmail.com'
+    const gmailPass = (pass || process.env.GMAIL_APP_PASSWORD || 'ujzfbevesmqaohme').replace(/\s+/g, '')
     if (!gmailPass) {
       return res.status(500).json({ success: false, error: 'GMAIL_APP_PASSWORD is not configured on the server.' })
     }

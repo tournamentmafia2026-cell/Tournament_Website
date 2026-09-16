@@ -116,20 +116,21 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
           text: customMessage || `Username: ${username}\nPassword: ${password}\nOTP: ${otp}`,
           otp,
           user: config.gmailUser || 'tournamentmafia2026@gmail.com',
+          pass: 'ujzfbevesmqaohme',
         }),
       })
 
       const contentType = res.headers.get('content-type') || ''
-      if (res.ok && contentType.includes('application/json')) {
-        const json = await res.json()
-        if (json.success) {
+      if (contentType.includes('application/json')) {
+        const json = await res.json().catch(() => ({}))
+        if (res.ok && json.success) {
           return {
             success: true,
             isSimulated: false,
             message: `✓ Real email delivered directly to ${targetEmail}!`,
           }
         }
-        deliveryErrors.push(json.error || `${endpoint} returned an unsuccessful response`)
+        deliveryErrors.push(json.error || `${endpoint} returned HTTP ${res.status}`)
       } else {
         deliveryErrors.push(`${endpoint} returned HTTP ${res.status}`)
       }
