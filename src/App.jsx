@@ -780,6 +780,9 @@ export default function App() {
                 selectedMatch={publicViewingFixturesMatch}
                 initialCategory={publicViewingCategory}
                 isPublicView={true}
+                isLiveStreamActive={isLiveStreamActive}
+                onStartLiveStream={handleFixturesLiveStreamStart}
+                onStopLiveStream={handleFixturesLiveStreamStop}
                 onBackToPublicFeed={() => {
                   setPublicViewingFixturesMatch(null)
                   setPublicViewingCategory(null)
@@ -947,6 +950,7 @@ export default function App() {
                     onBackToMatchManagement={() => setActivePage('matchManagement')}
                     onStartLiveStream={handleFixturesLiveStreamStart}
                     onStopLiveStream={handleFixturesLiveStreamStop}
+                    isLiveStreamActive={isLiveStreamActive}
                   />
                 </div>
               )}
