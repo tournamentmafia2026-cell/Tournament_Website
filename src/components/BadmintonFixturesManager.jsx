@@ -652,12 +652,12 @@ export const BadmintonFixturesManager = ({
     lastLocalReportedUpdateRef.current = Date.now()
 
     const tournId = selectedMatch?.id || 1
-    const category = targetCat || selectedCategory
+    const category = targetCat || (typeof player === 'object' && player.category ? player.category : null) || selectedCategory
     const key = `${tournId}-${category}`
     const tokens = getPlayerTokens(player)
 
     setReportedPlayers((prev) => {
-      const isCurrentlyReported = isPlayerReported(player)
+      const isCurrentlyReported = isPlayerReported(player, category)
       const nextFullMap = { ...prev }
       const currentCatMap = { ...(prev[key] || {}) }
 
@@ -673,9 +673,11 @@ export const BadmintonFixturesManager = ({
         // UNTICK: User manually clicked to untick this player
         tokens.forEach((tok) => {
           delete currentCatMap[tok]
+          delete nextFullMap[`${tournId}-${category}-${tok}`]
           delete nextFullMap[`${tournId}-${tok}`]
           delete nextFullMap[tok]
           delete permTournCat[tok]
+          delete permCache[`${tournId}-${category}-${tok}`]
           delete permCache[`${tournId}-${tok}`]
           delete permCache[tok]
         })
@@ -683,9 +685,9 @@ export const BadmintonFixturesManager = ({
         // TICK: User ticked this player as reported
         tokens.forEach((tok) => {
           currentCatMap[tok] = true
-          nextFullMap[`${tournId}-${tok}`] = true
+          nextFullMap[`${tournId}-${category}-${tok}`] = true
           permTournCat[tok] = true
-          permCache[`${tournId}-${tok}`] = true
+          permCache[`${tournId}-${category}-${tok}`] = true
         })
       }
 
@@ -805,12 +807,13 @@ export const BadmintonFixturesManager = ({
     })
   }
 
-  const isPlayerReported = (playerOrId) => {
+  const isPlayerReported = (playerOrId, targetCategory = null) => {
     if (!playerOrId) return false
     if (typeof playerOrId === 'object' && playerOrId.isBye) return false
 
     const tournId = selectedMatch?.id || 1
-    const key = `${tournId}-${selectedCategory}`
+    const category = targetCategory || (typeof playerOrId === 'object' && playerOrId.category ? playerOrId.category : null) || selectedCategory
+    const key = `${tournId}-${category}`
     const tokens = getPlayerTokens(playerOrId)
     if (tokens.length === 0) return false
 
@@ -825,8 +828,7 @@ export const BadmintonFixturesManager = ({
 
     // 2. Check tournament/category composite token in reportedPlayers
     for (const tok of tokens) {
-      if (reportedPlayers[`${tournId}-${selectedCategory}-${tok}`] === true) return true
-      if (reportedPlayers[`${tournId}-${tok}`] === true) return true
+      if (reportedPlayers[`${tournId}-${category}-${tok}`] === true) return true
     }
 
     // Default: FALSE (Nobody is reported by default unless manually clicked / ticked)
@@ -836,7 +838,8 @@ export const BadmintonFixturesManager = ({
   const isMatchBothReported = (m) => {
     if (!m || !m.player1 || !m.player2) return false
     if (m.player1.isBye || m.player2.isBye) return false
-    return isPlayerReported(m.player1) && isPlayerReported(m.player2)
+    const cat = m.categoryName || m.category || selectedCategory
+    return isPlayerReported(m.player1, cat) && isPlayerReported(m.player2, cat)
   }
 
   const handleMarkAllReported = (status = true) => {
@@ -1524,16 +1527,17 @@ export const BadmintonFixturesManager = ({
         const next = { ...m, ...updates }
 
         // Explicitly preserve reporting status on player1 and player2
+        const mCat = m.categoryName || m.category || actualDrawKey || selectedCategory
         if (m.player1 && !m.player1.isBye) {
-          const isP1Rep = isPlayerReported(m.player1)
+          const isP1Rep = isPlayerReported(m.player1, mCat)
           next.player1 = { ...m.player1, ...(updates.player1 || {}), isReported: isP1Rep, reported: isP1Rep }
         }
         if (m.player2 && !m.player2.isBye) {
-          const isP2Rep = isPlayerReported(m.player2)
+          const isP2Rep = isPlayerReported(m.player2, mCat)
           next.player2 = { ...m.player2, ...(updates.player2 || {}), isReported: isP2Rep, reported: isP2Rep }
         }
         if (next.winner && !next.winner.isBye) {
-          const isWinRep = isPlayerReported(next.winner)
+          const isWinRep = isPlayerReported(next.winner, mCat)
           next.winner = { ...next.winner, isReported: isWinRep, reported: isWinRep }
         }
 
@@ -2478,14 +2482,14 @@ export const BadmintonFixturesManager = ({
   })
 
   // Player reporting computations
-  const reportedCount = categoryPlayers.filter((p) => isPlayerReported(p)).length
+  const reportedCount = categoryPlayers.filter((p) => isPlayerReported(p, selectedCategory)).length
   const pendingCount = categoryPlayers.length - reportedCount
   const reportedPercent = categoryPlayers.length > 0 ? Math.round((reportedCount / categoryPlayers.length) * 100) : 0
 
   // Filtered & Sorted category players list (Seeds first, then alphabetical)
   const filteredCategoryPlayers = categoryPlayers
     .filter((p) => {
-      const isRep = isPlayerReported(p)
+      const isRep = isPlayerReported(p, selectedCategory)
       if (playerReportingFilter === 'reported' && !isRep) return false
       if (playerReportingFilter === 'pending' && isRep) return false
       if (playerSearchQuery.trim()) {
@@ -5667,8 +5671,9 @@ export const BadmintonFixturesManager = ({
                     const matchUniqueKey = m.id || `m_${m.round}_${m.matchNumber}`
                     const p1 = m.player1
                     const p2 = m.player2
-                    const isP1Rep = isPlayerReported(p1)
-                    const isP2Rep = isPlayerReported(p2)
+                    const matchCat = m.categoryName || m.category || selectedCategory
+                    const isP1Rep = isPlayerReported(p1, matchCat)
+                    const isP2Rep = isPlayerReported(p2, matchCat)
                     const isBothRep = isMatchBothReported(m) && (m.status === 'scheduled' || !m.status) && !m.isLive
                     const isP1Winner = m.winner && p1 && m.winner.id === p1.id
                     const isP2Winner = m.winner && p2 && m.winner.id === p2.id
@@ -5967,8 +5972,9 @@ export const BadmintonFixturesManager = ({
                           const matchUniqueKey = m.id || `m_${m.round}_${m.matchNumber}`
                           const p1 = m.player1
                           const p2 = m.player2
-                          const isP1Rep = isPlayerReported(p1)
-                          const isP2Rep = isPlayerReported(p2)
+                          const matchCat = m.categoryName || m.category || selectedCategory
+                          const isP1Rep = isPlayerReported(p1, matchCat)
+                          const isP2Rep = isPlayerReported(p2, matchCat)
                           const isBothRep = isMatchBothReported(m) && (m.status === 'scheduled' || !m.status) && !m.isLive
                           const isP1Win = m.winner && p1 && m.winner.id === p1.id
                           const isP2Win = m.winner && p2 && m.winner.id === p2.id
@@ -6404,7 +6410,7 @@ export const BadmintonFixturesManager = ({
                     </thead>
                     <tbody>
                       {filteredCategoryPlayers.map((player, idx) => {
-                        const isReported = isPlayerReported(player)
+                        const isReported = isPlayerReported(player, selectedCategory)
 
                         return (
                           <tr
@@ -8124,8 +8130,9 @@ export const BadmintonFixturesManager = ({
         const targetMatch = (currentDraw?.matches || []).find((m) => m.id === quickScoreScheduleMatch.id) || quickScoreScheduleMatch
         const p1 = targetMatch.player1
         const p2 = targetMatch.player2
-        const isP1Rep = isPlayerReported(p1)
-        const isP2Rep = isPlayerReported(p2)
+        const matchCat = targetMatch.categoryName || targetMatch.category || selectedCategory
+        const isP1Rep = isPlayerReported(p1, matchCat)
+        const isP2Rep = isPlayerReported(p2, matchCat)
         const isP1Winner = targetMatch.winner?.id === p1?.id || targetMatch.winner === 'player1'
         const isP2Winner = targetMatch.winner?.id === p2?.id || targetMatch.winner === 'player2'
         const maxPts = Number(targetMatch.matchPoints || matchTotalPoints) || 30
