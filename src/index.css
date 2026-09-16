@@ -10373,32 +10373,33 @@ select {
 .stadium-broadcast-table thead th {
   background: rgba(15, 23, 42, 0.95);
   color: #94a3b8;
-  font-size: clamp(8.5px, 0.9cqi, 11px);
+  font-size: clamp(8px, 0.85cqi, 10.5px);
   font-weight: 900;
-  letter-spacing: 0.05em;
-  padding: clamp(3px, 0.4cqb, 6px) clamp(4px, 0.7cqi, 10px);
+  letter-spacing: 0.04em;
+  padding: clamp(4px, 0.5cqb, 8px) clamp(4px, 0.6cqi, 8px);
   border-bottom: 1.5px solid rgba(56, 189, 248, 0.3);
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
 }
 
-/* Standard Responsive Table Column Widths (Fixed 100% Distribution) */
+/* Standard Responsive Table Column Widths (Optimized for full category and player visibility) */
 .th-court, .table-court-cell {
-  width: 14%;
+  width: 12%;
 }
 .th-cat, .table-category-cell {
-  width: 16%;
+  width: 22%;
+  min-width: 0;
 }
 .th-p1, .table-player-cell.p1-cell {
-  width: 25%;
+  width: 22%;
 }
 .th-score, .table-score-cell {
-  width: 14%;
+  width: 16%;
 }
 .th-p2, .table-player-cell.p2-cell {
-  width: 25%;
+  width: 22%;
 }
 .th-status, .table-status-cell {
   width: 6%;
@@ -10500,13 +10501,16 @@ select {
 
 /* Category & Round Cell */
 .table-cat-title {
-  font-size: clamp(10px, 1.05cqi, 13px);
-  font-weight: 900;
-  color: #38bdf8;
-  white-space: normal;
-  word-break: break-word;
-  line-height: 1.25;
-  letter-spacing: 0.02em;
+  font-size: clamp(10px, 1.05cqi, 13px) !important;
+  font-weight: 900 !important;
+  color: #38bdf8 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  display: block !important;
+  line-height: 1.25 !important;
+  letter-spacing: 0.02em !important;
 }
 
 .table-cat-sub {

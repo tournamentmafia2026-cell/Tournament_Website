@@ -960,7 +960,7 @@ export const StadiumTvLiveCast = ({
       onTouchEnd={(e) => e.stopPropagation()}
     >
       {/* 1. TOP STADIUM TV BROADCAST HEADER */}
-      <header className="stadium-tv-header">
+      <header className="stadium-tv-header" style={{ display: shouldRenderFullScreenAd ? 'none' : undefined }}>
         <div className="stadium-tv-brand">
           <div>
             <h1 className="stadium-tv-title">
@@ -1227,10 +1227,20 @@ export const StadiumTvLiveCast = ({
 
                             {/* 2. Category & Round */}
                             <td className="table-category-cell">
-                              <div className="table-cat-title">
+                              <div
+                                className="table-cat-title"
+                                style={{
+                                  whiteSpace: 'normal',
+                                  wordBreak: 'break-word',
+                                  overflow: 'visible',
+                                  textOverflow: 'unset',
+                                  lineHeight: 1.25,
+                                  fontWeight: 900,
+                                }}
+                              >
                                 {formatCategoryName(m.categoryName || m.category || 'Open Category')}
                               </div>
-                              <div className="table-cat-sub">
+                              <div className="table-cat-sub" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
                                 {m.roundName || (m.round ? `Round ${m.round}` : 'Live Match')}
                               </div>
                             </td>
