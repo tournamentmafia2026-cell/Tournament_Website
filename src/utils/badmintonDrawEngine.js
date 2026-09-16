@@ -678,14 +678,14 @@ export const generateBadmintonDraw = (players = [], options = {}) => {
     match.line1 = m * 2 + 1
     match.line2 = m * 2 + 2
 
-    // Auto-advance BYEs immediately
+    // Auto-advance BYEs immediately (BYE winner starts un-reported unless manually checked in)
     if (p1 && p1.isBye && p2 && !p2.isBye) {
-      match.winner = { ...p2, hasByeWalkover: true }
+      match.winner = { ...p2, hasByeWalkover: true, isReported: false, reported: false }
       match.status = 'completed'
       match.totalScoreA = 'BYE'
       match.totalScoreB = 'W.O.'
     } else if (p2 && p2.isBye && p1 && !p1.isBye) {
-      match.winner = { ...p1, hasByeWalkover: true }
+      match.winner = { ...p1, hasByeWalkover: true, isReported: false, reported: false }
       match.status = 'completed'
       match.totalScoreA = 'W.O.'
       match.totalScoreB = 'BYE'

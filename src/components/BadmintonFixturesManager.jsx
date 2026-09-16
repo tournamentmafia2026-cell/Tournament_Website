@@ -809,74 +809,46 @@ export const BadmintonFixturesManager = ({
     if (!playerOrId) return false
     if (typeof playerOrId === 'object' && playerOrId.isBye) return false
 
-    // 1. Direct object property check
-    if (typeof playerOrId === 'object') {
-      if (playerOrId.isReported === true || playerOrId.reported === true || playerOrId.is_reported === true) {
-        return true
-      }
-    }
-
     const tournId = selectedMatch?.id || 1
     const key = `${tournId}-${selectedCategory}`
     const tokens = getPlayerTokens(playerOrId)
     if (tokens.length === 0) return false
 
-    // 2. Check primary in-memory reportedPlayers state under current category
-    const catMap = reportedPlayers[key] || {}
-    for (const tok of tokens) {
-      if (catMap[tok]) return true
-    }
-
-    // 3. Check across ALL keys and categories in reportedPlayers
-    for (const k of Object.keys(reportedPlayers)) {
-      const sub = reportedPlayers[k]
-      if (sub && typeof sub === 'object') {
-        for (const tok of tokens) {
-          if (sub[tok]) return true
-        }
-      } else if (sub === true) {
-        for (const tok of tokens) {
-          if (k === tok || k === `${tournId}-${tok}` || k.endsWith(`-${tok}`)) return true
-        }
+    // 1. Check primary in-memory reportedPlayers state under current tournament & category
+    const catMap = reportedPlayers[key]
+    if (catMap && typeof catMap === 'object') {
+      for (const tok of tokens) {
+        if (catMap[tok] === true) return true
+        if (catMap[tok] === false) return false
       }
     }
 
-    // 4. Check permanent localStorage cache as ultimate fallback so no background sync can ever untick
+    // 2. Check tournament/category composite token in reportedPlayers
+    for (const tok of tokens) {
+      if (reportedPlayers[`${tournId}-${selectedCategory}-${tok}`] === true) return true
+      if (reportedPlayers[`${tournId}-${tok}`] === true) return true
+    }
+
+    // 3. Check permanent localStorage cache for this specific tournament category
     try {
       const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
       if (savedPerm) {
         const permCache = JSON.parse(savedPerm)
-        for (const k of Object.keys(permCache)) {
-          const sub = permCache[k]
-          if (sub && typeof sub === 'object') {
-            for (const tok of tokens) {
-              if (sub[tok]) return true
-            }
-          } else if (sub === true) {
-            for (const tok of tokens) {
-              if (k === tok || k === `${tournId}-${tok}` || k.endsWith(`-${tok}`)) return true
-            }
+        const permCat = permCache[key]
+        if (permCat && typeof permCat === 'object') {
+          for (const tok of tokens) {
+            if (permCat[tok] === true) return true
           }
         }
       }
     } catch (e) {}
 
-    // 5. Check authenticators in localStorage as additional safety
-    try {
-      const savedAuthStr = localStorage.getItem('badminton-authenticators') || localStorage.getItem('badminton-match-authenticators')
-      if (savedAuthStr) {
-        const allAuth = JSON.parse(savedAuthStr)
-        const pList = allAuth[tournId] || allAuth[String(tournId)] || Object.values(allAuth).flat()
-        if (Array.isArray(pList)) {
-          for (const p of pList) {
-            if (p && (p.isReported === true || p.reported === true)) {
-              const pTokens = getPlayerTokens(p)
-              if (tokens.some((t) => pTokens.includes(t))) return true
-            }
-          }
-        }
+    // 4. Direct object check ONLY if explicitly true and not a BYE
+    if (typeof playerOrId === 'object' && !playerOrId.isBye) {
+      if (playerOrId.isReported === true || playerOrId.reported === true) {
+        return true
       }
-    } catch (e) {}
+    }
 
     return false
   }
