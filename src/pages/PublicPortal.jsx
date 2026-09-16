@@ -100,19 +100,6 @@ export function PublicPortal({
               <span>All Tournaments</span>
             </button>
             <div className="pub-hub-nav-badges flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const tvUrl = `${window.location.origin}${window.location.pathname}?livecast=true&tid=${encodeURIComponent(selectedMatch.id)}`
-                  const win = window.open(tvUrl, `BadmintonLiveCast_${selectedMatch.id}`, 'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no')
-                  if (win) win.focus()
-                }}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-400/40 text-xs font-bold transition active:scale-95"
-                title="Open Dedicated TV Live Screen in New Tab (Drag to HDMI / Second Screen)"
-              >
-                <span>📺</span>
-                <span>TV Live Screen</span>
-              </button>
               <span className={`pub-status-badge status-${getMatchStatus(selectedMatch)} inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold`}>
                 {getMatchStatus(selectedMatch) === 'completed' ? '🏆 Completed' : getMatchStatus(selectedMatch) === 'ongoing' ? '🔴 Live Ongoing' : '📅 Upcoming'}
               </span>
@@ -496,23 +483,6 @@ export function PublicPortal({
                             >
                               <span>🎯</span>
                               <span>Fixtures</span>
-                            </button>
-                          )}
-
-                          {hasPublishedDraw && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                const tvUrl = `${window.location.origin}${window.location.pathname}?livecast=true&tid=${encodeURIComponent(match.id)}`
-                                const win = window.open(tvUrl, `BadmintonLiveCast_${match.id}`, 'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no')
-                                if (win) win.focus()
-                              }}
-                              className="pro-btn-action btn-tv flex items-center justify-center gap-1.5 py-2.5 sm:py-3 px-3 rounded-xl text-sm font-bold bg-sky-500/20 hover:bg-sky-500/30 text-sky-400 border border-sky-400/30 transition active:scale-95"
-                              title="Open Stadium TV Live Screen in New Tab"
-                            >
-                              <span>📺</span>
-                              <span>TV Cast</span>
                             </button>
                           )}
 

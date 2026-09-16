@@ -2936,6 +2936,7 @@ export const BadmintonFixturesManager = ({
         />
 
         {/* Fixed Floating Bottom-Right TV Live Cast Button on Level 1 Fixtures View */}
+        {!isPublicView && (
         <div
           style={{
             position: 'fixed',
@@ -3061,6 +3062,7 @@ export const BadmintonFixturesManager = ({
             </button>
           )}
         </div>
+        )}
       </div>
     )
   }
@@ -8962,6 +8964,7 @@ export const BadmintonFixturesManager = ({
       />
 
       {/* Fixed Floating Bottom-Right TV Live Cast Button for Fixtures View */}
+      {!isPublicView && (
       <div
         style={{
           position: 'fixed',
@@ -9085,6 +9088,7 @@ export const BadmintonFixturesManager = ({
           </button>
         )}
       </div>
+      )}
     </div>
   )
 }
