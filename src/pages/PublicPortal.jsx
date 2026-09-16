@@ -11,6 +11,7 @@ import {
   getMatchCategories,
   sortBadmintonCategories,
 } from '../utils/badmintonCategories'
+import { PublicSponsorShowcase } from '../components/PublicSponsorShowcase'
 
 const formatDisplayDate = (dateString) => {
   if (!dateString) return 'Date'
@@ -97,6 +98,12 @@ export function PublicPortal({
 
   return (
     <div className="public-tournament-hub w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 md:py-8 space-y-6">
+      {/* Dynamic Official Tournament Sponsors & Scrolling Tickers */}
+      <PublicSponsorShowcase
+        tournamentName={selectedMatch ? formatTournamentName(selectedMatch.matchName) : ''}
+        position="top"
+      />
+
       {selectedMatch ? (
         <div className="pub-hub-match-detail-view space-y-6">
           {/* Top Bar with Back Button */}
