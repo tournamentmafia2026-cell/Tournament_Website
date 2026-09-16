@@ -340,7 +340,7 @@ export const StadiumTvLiveCast = ({
 
     return () => {
       isMounted = false
-      if (typeof unsubscribe === 'function') unsubscribe()
+      if (unsubscribe?.unsubscribe) unsubscribe.unsubscribe()
       window.removeEventListener('storage', syncDraws)
       clearInterval(syncInterval)
     }
@@ -539,7 +539,7 @@ export const StadiumTvLiveCast = ({
     const interval = setInterval(syncTournaments, 4000)
     return () => {
       isMounted = false
-      if (typeof unsubscribeTour === 'function') unsubscribeTour()
+      if (unsubscribeTour?.unsubscribe) unsubscribeTour.unsubscribe()
       window.removeEventListener('storage', syncTournaments)
       clearInterval(interval)
     }

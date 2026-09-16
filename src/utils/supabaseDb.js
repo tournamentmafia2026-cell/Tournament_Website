@@ -233,32 +233,60 @@ export const SupabaseService = {
     if (!supabase) {
       return { unsubscribe: () => {} };
     }
-    return supabase
-      .channel('tournaments_realtime_channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tournaments' },
-        (payload) => {
-          onUpdate(payload);
+    try {
+      const channelId = `tournaments_sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tournaments' },
+          (payload) => {
+            if (typeof onUpdate === 'function') onUpdate(payload);
+          }
+        )
+        .subscribe();
+
+      return {
+        unsubscribe: () => {
+          try {
+            supabase.removeChannel(channel);
+          } catch {}
         }
-      )
-      .subscribe();
+      };
+    } catch (err) {
+      console.warn('Realtime subscription error (tournaments):', err);
+      return { unsubscribe: () => {} };
+    }
   },
 
   subscribeToTournamentDraws(onUpdate) {
     if (!supabase) {
       return { unsubscribe: () => {} };
     }
-    return supabase
-      .channel('draws_realtime_channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tournament_draws' },
-        (payload) => {
-          onUpdate(payload);
+    try {
+      const channelId = `draws_sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'tournament_draws' },
+          (payload) => {
+            if (typeof onUpdate === 'function') onUpdate(payload);
+          }
+        )
+        .subscribe();
+
+      return {
+        unsubscribe: () => {
+          try {
+            supabase.removeChannel(channel);
+          } catch {}
         }
-      )
-      .subscribe();
+      };
+    } catch (err) {
+      console.warn('Realtime subscription error (draws):', err);
+      return { unsubscribe: () => {} };
+    }
   },
 
   // --- Draws & Fixtures ---
@@ -373,16 +401,30 @@ export const SupabaseService = {
     if (!supabase) {
       return { unsubscribe: () => {} };
     }
-    return supabase
-      .channel('live_matches_channel')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'live_matches' },
-        (payload) => {
-          onUpdate(payload);
+    try {
+      const channelId = `live_sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const channel = supabase
+        .channel(channelId)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'live_matches' },
+          (payload) => {
+            if (typeof onUpdate === 'function') onUpdate(payload);
+          }
+        )
+        .subscribe();
+
+      return {
+        unsubscribe: () => {
+          try {
+            supabase.removeChannel(channel);
+          } catch {}
         }
-      )
-      .subscribe();
+      };
+    } catch (err) {
+      console.warn('Realtime subscription error (live_matches):', err);
+      return { unsubscribe: () => {} };
+    }
   },
 
   // --- Credentials ---
