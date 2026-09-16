@@ -570,22 +570,28 @@ export const StadiumTvLiveCast = ({
   // Partition matches (Stabilized with deep equality to prevent blinking)
   const prevPartitionRef = React.useRef({ displayLiveMatches: [], displayUpcomingMatches: [] })
   const { displayLiveMatches, displayUpcomingMatches } = useMemo(() => {
-    // STRICT FILTER: Match MUST currently have status === 'live'
     const activeLive = []
+    const activeUpcoming = []
 
     activePool.forEach((m) => {
-      // If completed or winner decided, not live
+      // If completed or winner decided, not live/upcoming
       if (m.status === 'completed' || !!m.winner || m.isCompleted) return
-      // If BYE match, not live
+      // If BYE match, skip
       if (m.player1?.isBye || m.player2?.isBye) return
-      // STRICT CHECK: Status MUST explicitly be 'live' (never 'scheduled', 'upcoming', etc.)
-      if (m.status !== 'live') return
 
-      activeLive.push({
-        ...m,
-        assignedCourtName: m.court || null,
-        isLiveDisplay: true,
-      })
+      if (m.status === 'live' || m.isLive) {
+        activeLive.push({
+          ...m,
+          assignedCourtName: m.court || null,
+          isLiveDisplay: true,
+        })
+      } else {
+        activeUpcoming.push({
+          ...m,
+          assignedCourtName: m.court || null,
+          isUpcomingDisplay: true,
+        })
+      }
     })
 
     // Sort live matches by Court Name / Match Number
@@ -596,7 +602,15 @@ export const StadiumTvLiveCast = ({
       return (a.matchNumber || 0) - (b.matchNumber || 0)
     })
 
-    const result = { displayLiveMatches: activeLive, displayUpcomingMatches: [] }
+    // Sort upcoming matches by Round / Match Number / Court
+    activeUpcoming.sort((a, b) => {
+      if ((a.round || 1) !== (b.round || 1)) {
+        return (a.round || 1) - (b.round || 1)
+      }
+      return (a.matchNumber || 0) - (b.matchNumber || 0)
+    })
+
+    const result = { displayLiveMatches: activeLive, displayUpcomingMatches: activeUpcoming }
     if (fastDeepEqual(prevPartitionRef.current, result)) {
       return prevPartitionRef.current
     }
@@ -1024,10 +1038,10 @@ export const StadiumTvLiveCast = ({
           <div className="stadium-empty-live-box">
             <div className="stadium-empty-icon">🏸</div>
             <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#f8fafc', marginBottom: '8px' }}>
-              No Matches Currently Live
+              No Matches Currently In Progress
             </h3>
-            <p style={{ color: '#94a3b8', fontSize: '13.5px', maxWidth: '540px', margin: '0 auto 16px', lineHeight: '1.5' }}>
-              Live status-ல் உள்ள போட்டிகள் மட்டுமே இங்கே TV Cast-ல் காண்பிக்கப்படும். Schedule / Fixtures பக்கத்தில் போட்டிகளை "Live" ஆக மாற்றும்போது உடனே நேரலையில் Scoreboard தோன்றும்.
+            <p style={{ color: '#94a3b8', fontSize: '13.5px', maxWidth: '420px', margin: '0 auto 16px', lineHeight: '1.5' }}>
+              Waiting for tournament matches to be scheduled or assigned to court.
             </p>
             {visualAds.length > 0 && (
               <button
@@ -1049,7 +1063,7 @@ export const StadiumTvLiveCast = ({
                 }}
               >
                 <span>⭐</span>
-                <span>Show Sponsors Now (Auto in 10s)</span>
+                <span>Show Sponsors</span>
               </button>
             )}
           </div>
