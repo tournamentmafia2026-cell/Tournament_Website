@@ -217,18 +217,6 @@ export const BadmintonFixturesManager = ({
     return generateCourtsList(courtConfig)
   }, [courtConfig])
 
-  const activeLiveMatches = useMemo(() => {
-    const list = []
-    Object.values(tournamentDraws || {}).forEach((draw) => {
-      (draw?.matches || []).forEach((m) => {
-        if ((m.status === 'live' || m.isLive === true) && m.status !== 'completed' && m.court) {
-          list.push(m)
-        }
-      })
-    })
-    return list
-  }, [tournamentDraws])
-
   const activeAdsCount = (sponsorAds || []).filter((a) => a.active !== false).length
 
   const handleLaunchLiveTv = (tournamentId) => {
@@ -422,6 +410,19 @@ export const BadmintonFixturesManager = ({
 
   // Production-Grade order-agnostic deep equality helper to guarantee 0 state update churn
   const isDeepEqual = fastDeepEqual
+
+  // Active Live Matches Across All Draws (Safely declared AFTER tournamentDraws)
+  const activeLiveMatches = useMemo(() => {
+    const list = []
+    Object.values(tournamentDraws || {}).forEach((draw) => {
+      (draw?.matches || []).forEach((m) => {
+        if ((m.status === 'live' || m.isLive === true) && m.status !== 'completed' && m.court) {
+          list.push(m)
+        }
+      })
+    })
+    return list
+  }, [tournamentDraws])
 
   // Realtime Live Draw, Reported Players, and Score Sync from Shared Database & Supabase
   useEffect(() => {
