@@ -171,8 +171,8 @@ export const StadiumTvLiveCast = ({
 
   const [currentAdIndex, setCurrentAdIndex] = useState(0)
 
-  const tickerAnimationDuration = useMemo(() => {
-    const sp = adSettings?.tickerSpeed
+  const topTickerAnimationDuration = useMemo(() => {
+    const sp = adSettings?.topTickerSpeed || adSettings?.tickerSpeed
     if (typeof sp === 'number') return `${sp}s`
     if (sp && !isNaN(Number(sp))) return `${Number(sp)}s`
     if (sp === 'ultra-fast') return '8s'
@@ -180,8 +180,20 @@ export const StadiumTvLiveCast = ({
     if (sp === 'normal') return '22s'
     if (sp === 'slow') return '32s'
     if (sp === 'ultra-slow') return '45s'
-    return '32s'
-  }, [adSettings?.tickerSpeed])
+    return '22s'
+  }, [adSettings?.topTickerSpeed, adSettings?.tickerSpeed])
+
+  const bottomTickerAnimationDuration = useMemo(() => {
+    const sp = adSettings?.bottomTickerSpeed || adSettings?.tickerSpeed
+    if (typeof sp === 'number') return `${sp}s`
+    if (sp && !isNaN(Number(sp))) return `${Number(sp)}s`
+    if (sp === 'ultra-fast') return '8s'
+    if (sp === 'fast') return '14s'
+    if (sp === 'normal') return '22s'
+    if (sp === 'slow') return '32s'
+    if (sp === 'ultra-slow') return '45s'
+    return '22s'
+  }, [adSettings?.bottomTickerSpeed, adSettings?.tickerSpeed])
 
   useEffect(() => {
     if (activeAds.length <= 1) return
@@ -1256,23 +1268,13 @@ export const StadiumTvLiveCast = ({
                               {p1?.place && <div className="table-player-place right-align">{p1.place}</div>}
                             </td>
 
-                            {/* 4. Live Sets & Points Score */}
+                            {/* 4. Live Points Score (Clean Scoreboard) */}
                             <td className="table-score-cell">
                               <div className="table-set-pill-wrap">
                                 <div className="table-live-points-main">
                                   <span className={`live-point-num ${isP1Flashing ? 'bwf-point-flash' : ''}`}>{p1Pts}</span>
                                   <span className="live-pts-dash">-</span>
                                   <span className={`live-point-num ${isP2Flashing ? 'bwf-point-flash' : ''}`}>{p2Pts}</span>
-                                </div>
-                                <div className="table-sets-sub-line">
-                                  <span className="table-set-label">Set {currentSet}</span>
-                                  {(m.scoreSet1A !== undefined || m.scoreSet2A !== undefined) && (
-                                    <span className="table-sets-box">
-                                      {m.scoreSet1A || 0}-{m.scoreSet1B || 0}
-                                      {m.scoreSet2A !== undefined ? `, ${m.scoreSet2A || 0}-${m.scoreSet2B || 0}` : ''}
-                                      {m.scoreSet3A !== undefined ? `, ${m.scoreSet3A || 0}-${m.scoreSet3B || 0}` : ''}
-                                    </span>
-                                  )}
                                 </div>
                               </div>
                             </td>
@@ -1311,7 +1313,7 @@ export const StadiumTvLiveCast = ({
         {/* ROW 1: TOP SCROLLING ANNOUNCEMENT & LIVE MATCHES */}
         <div className="stadium-ticker-row row-top">
           <div className="stadium-ticker-content">
-            <div className="stadium-ticker-marquee" style={{ animationDuration: tickerAnimationDuration }}>
+            <div className="stadium-ticker-marquee" style={{ animationDuration: topTickerAnimationDuration }}>
               {/* User Configured Top Scrolling Announcement */}
               {adSettings.topScrollingText && (
                 <span className="ticker-item highlight-text-top">
@@ -1346,7 +1348,7 @@ export const StadiumTvLiveCast = ({
         {(Boolean(adSettings.bottomScrollingText?.trim()) || (adSettings.showInTicker !== false && activeAds.length > 0)) && (
           <div className="stadium-ticker-row row-bottom">
             <div className="stadium-ticker-content">
-              <div className="stadium-ticker-marquee" style={{ animationDuration: tickerAnimationDuration }}>
+              <div className="stadium-ticker-marquee" style={{ animationDuration: bottomTickerAnimationDuration }}>
                 {/* Official Sponsor Title Tag */}
                 {activeAds.length > 0 && (
                   <span className="ticker-item highlight-text-bottom" style={{ fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>

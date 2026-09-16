@@ -11529,16 +11529,12 @@ select {
 .stadium-ticker-marquee {
   display: inline-flex;
   white-space: nowrap;
-  animation: stadiumMarquee 32s linear infinite;
+  animation: stadiumMarquee 22s linear infinite;
   will-change: transform;
 }
 
-.stadium-ticker-marquee:hover {
-  animation-play-state: paused;
-}
-
 @keyframes stadiumMarquee {
-  0% { transform: translateX(100%); }
+  0% { transform: translateX(100vw); }
   100% { transform: translateX(-100%); }
 }
 
