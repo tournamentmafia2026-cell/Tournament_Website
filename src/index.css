@@ -10503,9 +10503,9 @@ select {
   font-size: clamp(10px, 1.05cqi, 13px);
   font-weight: 900;
   color: #38bdf8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.25;
   letter-spacing: 0.02em;
 }
 

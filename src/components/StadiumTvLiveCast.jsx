@@ -1536,33 +1536,6 @@ export const StadiumTvLiveCast = ({
                 </h1>
               </div>
             </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button
-                type="button"
-                onClick={() => {
-                  if (isIntervalAdVisible) {
-                    setIsIntervalAdVisible(false)
-                  } else {
-                    setIsStandbyDismissed(true)
-                  }
-                }}
-                style={{
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  border: '1.5px solid #ef4444',
-                  color: '#fca5a5',
-                  padding: '8px 18px',
-                  borderRadius: '10px',
-                  fontWeight: '800',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                }}
-                title={hasAnyMatches ? 'Return to live matches' : 'View empty scoreboard screen'}
-              >
-                {hasAnyMatches ? '✕ Skip to Matches' : '✕ View Scoreboard'}
-              </button>
-            </div>
           </div>
 
           {/* Center High-Impact Visual Area */}
