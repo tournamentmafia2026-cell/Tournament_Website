@@ -721,8 +721,15 @@ export default function App() {
     setActivePage('fixturesManagement')
   }
 
-  // DEDICATED STANDALONE LIVE STREAM TV BROADCAST PAGE (Zero-Flicker Isolated Route)
-  const isDedicatedLiveCast = false
+  // DEDICATED STANDALONE LIVE STREAM TV BROADCAST PAGE (Zero-Flicker Isolated Route for HDMI & Smart TV)
+  const isDedicatedLiveCast = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('livecast') === 'true' ||
+    new URLSearchParams(window.location.search).get('tv') === '1' ||
+    new URLSearchParams(window.location.search).get('tvCast') === 'true' ||
+    window.location.pathname === '/tv-cast' ||
+    window.location.pathname === '/live-cast' ||
+    window.location.pathname === '/tv'
+  )
 
   if (isDedicatedLiveCast) {
     const urlParams = new URLSearchParams(window.location.search)

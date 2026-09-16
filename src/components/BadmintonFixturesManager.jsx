@@ -3175,8 +3175,40 @@ export const BadmintonFixturesManager = ({
                     </button>
                   </div>
 
-                  {/* Bottom Row: Ads & Dark Mode with Equal Width */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', width: '100%' }}>
+                  {/* Bottom Row: Ads, TV Live Cast & Dark Mode with Equal Width */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px', width: '100%' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const tid = selectedMatch?.id || ''
+                        const tvUrl = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
+                        const win = window.open(tvUrl, `BadmintonLiveCast_${tid || 'general'}`, 'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no')
+                        if (win) win.focus()
+                      }}
+                      className="btn-primary-gradient"
+                      style={{
+                        minHeight: '44px',
+                        padding: '10px 14px',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        borderRadius: '10px',
+                        width: '100%',
+                        cursor: 'pointer',
+                        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                        color: '#ffffff',
+                        boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)',
+                        border: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                      title="Open Dedicated TV Live Screen in New Tab (Drag to HDMI / Second Screen)"
+                    >
+                      <span>📺 TV Live Cast (HDMI)</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => setIsAdModalOpen(true)}

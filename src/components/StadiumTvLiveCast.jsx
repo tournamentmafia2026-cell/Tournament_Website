@@ -292,7 +292,7 @@ export const StadiumTvLiveCast = ({
 
     syncDraws()
     window.addEventListener('storage', syncDraws)
-    const syncInterval = setInterval(syncDraws, 6000)
+    const syncInterval = setInterval(syncDraws, 2000)
     return () => {
       isMounted = false
       window.removeEventListener('storage', syncDraws)
@@ -321,7 +321,7 @@ export const StadiumTvLiveCast = ({
       } catch {}
     }
     window.addEventListener('storage', syncUmpireMode)
-    const interval = setInterval(syncUmpireMode, 6000)
+    const interval = setInterval(syncUmpireMode, 4000)
     return () => {
       window.removeEventListener('storage', syncUmpireMode)
       clearInterval(interval)
@@ -448,12 +448,8 @@ export const StadiumTvLiveCast = ({
         if (res.ok) {
           const data = await res.json()
           if (!isMounted) return
-          if (data && Array.isArray(data.matches) && data.matches.length > 0) {
+          if (data && data.matches && Array.isArray(data.matches)) {
             setLiveTournaments((prev) => (fastDeepEqual(prev, data.matches) ? prev : data.matches))
-            try {
-              localStorage.setItem('badminton-published-matches', JSON.stringify(data.matches))
-            } catch {}
-            return
           }
         }
       } catch {}
@@ -469,7 +465,7 @@ export const StadiumTvLiveCast = ({
 
     syncTournaments()
     window.addEventListener('storage', syncTournaments)
-    const interval = setInterval(syncTournaments, 8000)
+    const interval = setInterval(syncTournaments, 4000)
     return () => {
       isMounted = false
       window.removeEventListener('storage', syncTournaments)
@@ -566,53 +562,66 @@ export const StadiumTvLiveCast = ({
       return true
     })
 
-    // Filter strictly to matches changed to 'live' in Schedule list
-    const launchedMatches = uncompleted.filter(
-      (m) => m.status === 'live' || (m.isLive === true && m.status !== 'completed')
-    )
-
     const activeLive = []
     const upcomingQueue = []
 
-    launchedMatches.forEach((m) => {
-      // When Live Umpire mode is OFF (manual scoring mode), all live matches show as Upcoming
-      // They only move to activeLive when umpire mode is ON and actively tracking points
-      if (!isLiveUmpireMode) {
-        upcomingQueue.push({
-          ...m,
-          assignedCourtName: m.court || null,
-          isLiveDisplay: false,
-        })
-        return
-      }
+    uncompleted.forEach((m) => {
+      const isLiveMatch = m.status === 'live' || (m.isLive === true && m.status !== 'completed')
 
-      // Umpire mode ON: Check if match is actively in-play (points scored or umpire started)
-      const currentSet = m.liveScore?.currentSet || 1
-      const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
-      const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
-      const hasPoints = (
-        (p1Pts !== undefined && p1Pts !== '' && Number(p1Pts) > 0) ||
-        (p2Pts !== undefined && p2Pts !== '' && Number(p2Pts) > 0) ||
-        (m.scoreSet1A !== undefined && m.scoreSet1A !== '' && Number(m.scoreSet1A) > 0) ||
-        (m.scoreSet1B !== undefined && m.scoreSet1B !== '' && Number(m.scoreSet1B) > 0) ||
-        (m.scoreSet2A !== undefined && m.scoreSet2A !== '' && Number(m.scoreSet2A) > 0) ||
-        (m.scoreSet2B !== undefined && m.scoreSet2B !== '' && Number(m.scoreSet2B) > 0)
-      )
-      const isUmpireStarted = m.liveScore?.isStarted === true || Boolean(m.liveScore?.startedAt) || hasPoints
+      if (isLiveMatch) {
+        if (!isLiveUmpireMode) {
+          upcomingQueue.push({
+            ...m,
+            assignedCourtName: m.court || null,
+            isLiveDisplay: false,
+          })
+          return
+        }
 
-      if (isUmpireStarted) {
-        activeLive.push({
-          ...m,
-          assignedCourtName: m.court || null,
-          isLiveDisplay: true,
-        })
+        const currentSet = m.liveScore?.currentSet || 1
+        const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
+        const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
+        const hasPoints = (
+          (p1Pts !== undefined && p1Pts !== '' && Number(p1Pts) > 0) ||
+          (p2Pts !== undefined && p2Pts !== '' && Number(p2Pts) > 0) ||
+          (m.scoreSet1A !== undefined && m.scoreSet1A !== '' && Number(m.scoreSet1A) > 0) ||
+          (m.scoreSet1B !== undefined && m.scoreSet1B !== '' && Number(m.scoreSet1B) > 0) ||
+          (m.scoreSet2A !== undefined && m.scoreSet2A !== '' && Number(m.scoreSet2A) > 0) ||
+          (m.scoreSet2B !== undefined && m.scoreSet2B !== '' && Number(m.scoreSet2B) > 0)
+        )
+        const isUmpireStarted = m.liveScore?.isStarted === true || Boolean(m.liveScore?.startedAt) || hasPoints
+
+        if (isUmpireStarted) {
+          activeLive.push({
+            ...m,
+            assignedCourtName: m.court || null,
+            isLiveDisplay: true,
+          })
+        } else {
+          upcomingQueue.push({
+            ...m,
+            assignedCourtName: m.court || null,
+            isLiveDisplay: false,
+          })
+        }
       } else {
+        // Scheduled or queued match for Upcoming Matches
         upcomingQueue.push({
           ...m,
           assignedCourtName: m.court || null,
           isLiveDisplay: false,
         })
       }
+    })
+
+    // Sort upcoming matches: Live-ready first, then by round and match number
+    upcomingQueue.sort((a, b) => {
+      const aIsLiveFlag = a.status === 'live' || a.isLive === true
+      const bIsLiveFlag = b.status === 'live' || b.isLive === true
+      if (aIsLiveFlag && !bIsLiveFlag) return -1
+      if (!aIsLiveFlag && bIsLiveFlag) return 1
+      if (a.round !== b.round) return (a.round || 1) - (b.round || 1)
+      return (a.matchNumber || 0) - (b.matchNumber || 0)
     })
 
     const result = { displayLiveMatches: activeLive, displayUpcomingMatches: upcomingQueue }
