@@ -829,27 +829,7 @@ export const BadmintonFixturesManager = ({
       if (reportedPlayers[`${tournId}-${tok}`] === true) return true
     }
 
-    // 3. Check permanent localStorage cache for this specific tournament category
-    try {
-      const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
-      if (savedPerm) {
-        const permCache = JSON.parse(savedPerm)
-        const permCat = permCache[key]
-        if (permCat && typeof permCat === 'object') {
-          for (const tok of tokens) {
-            if (permCat[tok] === true) return true
-          }
-        }
-      }
-    } catch (e) {}
-
-    // 4. Direct object check ONLY if explicitly true and not a BYE
-    if (typeof playerOrId === 'object' && !playerOrId.isBye) {
-      if (playerOrId.isReported === true || playerOrId.reported === true) {
-        return true
-      }
-    }
-
+    // Default: FALSE (Nobody is reported by default unless manually clicked / ticked)
     return false
   }
 
