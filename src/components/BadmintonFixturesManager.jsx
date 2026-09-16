@@ -647,12 +647,13 @@ export const BadmintonFixturesManager = ({
     return Array.from(tokens)
   }
 
-  const togglePlayerReporting = (player) => {
+  const togglePlayerReporting = (player, targetCat = null) => {
     if (!player) return
     lastLocalReportedUpdateRef.current = Date.now()
 
     const tournId = selectedMatch?.id || 1
-    const key = `${tournId}-${selectedCategory}`
+    const category = targetCat || selectedCategory
+    const key = `${tournId}-${category}`
     const tokens = getPlayerTokens(player)
 
     setReportedPlayers((prev) => {
@@ -722,51 +723,60 @@ export const BadmintonFixturesManager = ({
         }
       } catch (e) {}
 
-      // Also update player objects in currentDraw.matches so isReported stays attached directly to match nodes
-      if (currentDraw?.matches) {
-        let drawMatchesChanged = false
-        const nextMatches = currentDraw.matches.map((m) => {
-          let updatedM = { ...m }
-          let mChanged = false
-          if (m.player1 && !m.player1.isBye) {
-            const p1Tokens = getPlayerTokens(m.player1)
-            if (tokens.some((t) => p1Tokens.includes(t))) {
-              updatedM.player1 = { ...m.player1, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
-              mChanged = true
+      // Update player objects in ALL tournamentDraws so isReported stays attached directly to match nodes across all category draws
+      setTournamentDraws((prevDraws) => {
+        let anyDrawChanged = false
+        const nextDraws = { ...prevDraws }
+
+        Object.keys(nextDraws).forEach((dKey) => {
+          const drawObj = nextDraws[dKey]
+          if (drawObj?.matches) {
+            let drawMatchesChanged = false
+            const nextMatches = drawObj.matches.map((m) => {
+              let updatedM = { ...m }
+              let mChanged = false
+              if (m.player1 && !m.player1.isBye) {
+                const p1Tokens = getPlayerTokens(m.player1)
+                if (tokens.some((t) => p1Tokens.includes(t))) {
+                  updatedM.player1 = { ...m.player1, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
+                  mChanged = true
+                }
+              }
+              if (m.player2 && !m.player2.isBye) {
+                const p2Tokens = getPlayerTokens(m.player2)
+                if (tokens.some((t) => p2Tokens.includes(t))) {
+                  updatedM.player2 = { ...m.player2, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
+                  mChanged = true
+                }
+              }
+              if (m.winner && !m.winner.isBye) {
+                const winTokens = getPlayerTokens(m.winner)
+                if (tokens.some((t) => winTokens.includes(t))) {
+                  updatedM.winner = { ...m.winner, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
+                  mChanged = true
+                }
+              }
+              if (mChanged) {
+                drawMatchesChanged = true
+                return updatedM
+              }
+              return m
+            })
+
+            if (drawMatchesChanged) {
+              anyDrawChanged = true
+              nextDraws[dKey] = { ...drawObj, matches: nextMatches }
             }
           }
-          if (m.player2 && !m.player2.isBye) {
-            const p2Tokens = getPlayerTokens(m.player2)
-            if (tokens.some((t) => p2Tokens.includes(t))) {
-              updatedM.player2 = { ...m.player2, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
-              mChanged = true
-            }
-          }
-          if (m.winner && !m.winner.isBye) {
-            const winTokens = getPlayerTokens(m.winner)
-            if (tokens.some((t) => winTokens.includes(t))) {
-              updatedM.winner = { ...m.winner, isReported: !isCurrentlyReported, reported: !isCurrentlyReported }
-              mChanged = true
-            }
-          }
-          if (mChanged) {
-            drawMatchesChanged = true
-            return updatedM
-          }
-          return m
         })
 
-        if (drawMatchesChanged) {
-          setTournamentDraws((prevDraws) => {
-            const updatedDrawObj = { ...currentDraw, matches: nextMatches }
-            const nextDraws = { ...prevDraws, [drawKey]: updatedDrawObj }
-            try {
-              localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(nextDraws))
-            } catch (e) {}
-            return nextDraws
-          })
+        if (anyDrawChanged) {
+          try {
+            localStorage.setItem(DRAWS_STORAGE_KEY, JSON.stringify(nextDraws))
+          } catch (e) {}
         }
-      }
+        return nextDraws
+      })
 
       // Fire background POST to shared DB
       fetch('/api/tournaments', {
@@ -1530,10 +1540,34 @@ export const BadmintonFixturesManager = ({
     setInlineTotalMembers(validSize)
   }
 
-  const handleUpdateMatch = (matchId, updates) => {
-    if (!drawKey || !currentDraw) return
+  const handleUpdateMatch = (matchId, updates, targetCat = null) => {
+    // Determine target category and draw object dynamically
+    let actualCategory = targetCat || updates.categoryName
+    let actualDrawKey = drawKey
+    let actualDraw = currentDraw
 
-    const updatedMatches = currentDraw.matches.map((m) => {
+    const tournId = selectedMatch?.id || 1
+
+    if (!actualCategory && matchId) {
+      // Find which category draw contains this matchId in tournamentDraws
+      for (const [key, d] of Object.entries(tournamentDraws)) {
+        if (d?.matches?.some((m) => m.id === matchId)) {
+          actualDrawKey = key
+          actualDraw = d
+          const parts = key.split('-')
+          parts.shift()
+          actualCategory = parts.join('-')
+          break
+        }
+      }
+    } else if (actualCategory && selectedMatch?.id) {
+      actualDrawKey = `${selectedMatch.id}-${actualCategory}`
+      actualDraw = tournamentDraws[actualDrawKey] || (actualCategory === selectedCategory ? currentDraw : null)
+    }
+
+    if (!actualDrawKey || !actualDraw || !actualDraw.matches) return
+
+    const updatedMatches = actualDraw.matches.map((m) => {
       if (m.id === matchId) {
         const next = { ...m, ...updates }
 
@@ -1602,21 +1636,21 @@ export const BadmintonFixturesManager = ({
 
     propagateWinners(updatedMatches)
 
-    // Check if the final championship match of the current category has a winner
-    const finalMatch = updatedMatches.find((m) => m.round === currentDraw.totalRounds)
+    // Check if the final championship match of this category has a winner
+    const finalMatch = actualDraw.totalRounds ? updatedMatches.find((m) => m.round === actualDraw.totalRounds) : null
     const isFinalWinner = Boolean(finalMatch?.winner && !finalMatch.winner.isBye)
 
     let nextDraws = null
     setTournamentDraws((prev) => {
       const updatedDrawObj = {
-        ...currentDraw,
+        ...actualDraw,
         matches: updatedMatches,
       }
       nextDraws = {
         ...prev,
-        [drawKey]: updatedDrawObj,
+        [actualDrawKey]: updatedDrawObj,
       }
-      broadcastAndPersistDraws(nextDraws, drawKey, updatedDrawObj)
+      broadcastAndPersistDraws(nextDraws, actualDrawKey, updatedDrawObj)
       return nextDraws
     })
 
@@ -1626,6 +1660,8 @@ export const BadmintonFixturesManager = ({
         ? selectedMatch.categories
         : (selectedMatch.category ? [selectedMatch.category] : ['Men Singles'])
 
+      const catToUpdate = actualCategory || selectedCategory
+
       try {
         const savedPubRaw = localStorage.getItem('badminton-published-matches')
         if (savedPubRaw) {
@@ -1634,14 +1670,14 @@ export const BadmintonFixturesManager = ({
             if (pm.id === selectedMatch.id) {
               const currentCatWinners = { ...(pm.categoryWinners || selectedMatch.categoryWinners || {}) }
               if (isFinalWinner) {
-                currentCatWinners[selectedCategory] = finalMatch.winner.name
+                currentCatWinners[catToUpdate] = finalMatch.winner.name
               } else if (finalMatch && !finalMatch.winner) {
-                delete currentCatWinners[selectedCategory]
+                delete currentCatWinners[catToUpdate]
               }
 
               // Check if all configured categories have crowned winners
               const allCategoriesFinished = configuredCategories.length > 0 && configuredCategories.every((cat) => {
-                if (cat === selectedCategory) {
+                if (cat === catToUpdate) {
                   return isFinalWinner
                 }
                 if (currentCatWinners[cat] && typeof currentCatWinners[cat] === 'string' && currentCatWinners[cat].trim().length > 0) {
@@ -1933,7 +1969,7 @@ export const BadmintonFixturesManager = ({
       ...clearedScores,
       winner: null,
       status: 'scheduled',
-    })
+    }, match.categoryName)
     setQuickScoreScheduleMatch((prev) => ({
       ...prev,
       ...clearedScores,
@@ -1943,6 +1979,7 @@ export const BadmintonFixturesManager = ({
   }
 
   const handleScoreChange = (match, field, value) => {
+    if (!match) return
     const effectiveMatchSets = match.matchSets || (
       match.status === 'completed'
         ? Math.max(
@@ -1987,7 +2024,7 @@ export const BadmintonFixturesManager = ({
       matchPoints: maxPts,
       winner: autoWinner,
       status: nextStatus,
-    })
+    }, match.categoryName)
   }
 
   const handleSwapPlayers = (source, target) => {
@@ -5840,10 +5877,38 @@ export const BadmintonFixturesManager = ({
                                   {p1?.name || 'TBD'}
                                 </span>
                               )}
-                              {isP1Rep && (
-                                <span className="schedule-player-reported-badge" title="Reported at desk">
-                                  ✓ Reported
-                                </span>
+                              {!isPublicView && p1 && !p1.isBye ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    togglePlayerReporting(p1, m.categoryName)
+                                  }}
+                                  title={isP1Rep ? 'Click to UNTICK Player 1 (Desk Check-in)' : 'Click to TICK Player 1 (Desk Check-in)'}
+                                  style={{
+                                    background: isP1Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
+                                    border: `1px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                                    color: isP1Rep ? '#4ade80' : '#94a3b8',
+                                    borderRadius: '6px',
+                                    padding: '2px 8px',
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                >
+                                  <span>{isP1Rep ? '☑️' : '⬜'}</span>
+                                  <span>{isP1Rep ? 'Reported' : 'Check-in'}</span>
+                                </button>
+                              ) : (
+                                isP1Rep && (
+                                  <span className="schedule-player-reported-badge" title="Reported at desk">
+                                    ✓ Reported
+                                  </span>
+                                )
                               )}
                               {Boolean(!p1?.isBye && (p1?.place || p1?.court)) && (
                                 <span className="schedule-player-meta-tag">
@@ -5870,10 +5935,38 @@ export const BadmintonFixturesManager = ({
                                   {p2?.name || 'TBD'}
                                 </span>
                               )}
-                              {isP2Rep && (
-                                <span className="schedule-player-reported-badge" title="Reported at desk">
-                                  ✓ Reported
-                                </span>
+                              {!isPublicView && p2 && !p2.isBye ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    togglePlayerReporting(p2, m.categoryName)
+                                  }}
+                                  title={isP2Rep ? 'Click to UNTICK Player 2 (Desk Check-in)' : 'Click to TICK Player 2 (Desk Check-in)'}
+                                  style={{
+                                    background: isP2Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
+                                    border: `1px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                                    color: isP2Rep ? '#4ade80' : '#94a3b8',
+                                    borderRadius: '6px',
+                                    padding: '2px 8px',
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                >
+                                  <span>{isP2Rep ? '☑️' : '⬜'}</span>
+                                  <span>{isP2Rep ? 'Reported' : 'Check-in'}</span>
+                                </button>
+                              ) : (
+                                isP2Rep && (
+                                  <span className="schedule-player-reported-badge" title="Reported at desk">
+                                    ✓ Reported
+                                  </span>
+                                )
                               )}
                               {Boolean(!p2?.isBye && (p2?.place || p2?.court)) && (
                                 <span className="schedule-player-meta-tag">
@@ -6036,7 +6129,34 @@ export const BadmintonFixturesManager = ({
                                         {p1?.name || 'TBD'}
                                       </span>
                                     )}
-                                    {isP1Rep && <span className="schedule-player-reported-badge">✓ Reported</span>}
+                                    {!isPublicView && p1 && !p1.isBye ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          togglePlayerReporting(p1, m.categoryName)
+                                        }}
+                                        title={isP1Rep ? 'Click to UNTICK Player 1' : 'Click to TICK Player 1'}
+                                        style={{
+                                          background: isP1Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
+                                          border: `1px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                                          color: isP1Rep ? '#4ade80' : '#94a3b8',
+                                          borderRadius: '4px',
+                                          padding: '1px 6px',
+                                          fontSize: '10.5px',
+                                          fontWeight: '700',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                        }}
+                                      >
+                                        <span>{isP1Rep ? '☑️' : '⬜'}</span>
+                                        <span>{isP1Rep ? 'Rep' : 'In'}</span>
+                                      </button>
+                                    ) : (
+                                      isP1Rep && <span className="schedule-player-reported-badge">✓ Reported</span>
+                                    )}
                                     {Boolean(!p1?.isBye && (p1?.place || p1?.court)) && (
                                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                                         ({[p1.place, p1.court].filter(Boolean).join(' • ')})
@@ -6054,7 +6174,34 @@ export const BadmintonFixturesManager = ({
                                         {p2?.name || 'TBD'}
                                       </span>
                                     )}
-                                    {isP2Rep && <span className="schedule-player-reported-badge">✓ Reported</span>}
+                                    {!isPublicView && p2 && !p2.isBye ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          togglePlayerReporting(p2, m.categoryName)
+                                        }}
+                                        title={isP2Rep ? 'Click to UNTICK Player 2' : 'Click to TICK Player 2'}
+                                        style={{
+                                          background: isP2Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
+                                          border: `1px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                                          color: isP2Rep ? '#4ade80' : '#94a3b8',
+                                          borderRadius: '4px',
+                                          padding: '1px 6px',
+                                          fontSize: '10.5px',
+                                          fontWeight: '700',
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                        }}
+                                      >
+                                        <span>{isP2Rep ? '☑️' : '⬜'}</span>
+                                        <span>{isP2Rep ? 'Rep' : 'In'}</span>
+                                      </button>
+                                    ) : (
+                                      isP2Rep && <span className="schedule-player-reported-badge">✓ Reported</span>
+                                    )}
                                     {Boolean(!p2?.isBye && (p2?.place || p2?.court)) && (
                                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                                         ({[p2.place, p2.court].filter(Boolean).join(' • ')})
@@ -6227,13 +6374,16 @@ export const BadmintonFixturesManager = ({
                 </div>
               )}
 
-              {/* 4. Ultra-Clean, Simplified Score Update Modal (Admin Only) */}
+              {/* 4. Professional, Comprehensive Manual Score & Check-in Modal (Admin Only) */}
               {!isPublicView && quickScoreScheduleMatch && (() => {
                 const m = quickScoreScheduleMatch
                 const p1 = m.player1
                 const p2 = m.player2
-                const setsCount = Number(matchTotalSets) || 3
-                const maxPts = Number(matchTotalPoints) || 21
+                const setsCount = Number(m.matchSets || matchTotalSets) || 3
+                const maxPts = Number(m.matchPoints || matchTotalPoints) || 30
+
+                const isP1Rep = isPlayerReported(p1)
+                const isP2Rep = isPlayerReported(p2)
 
                 // Calculate current sets won
                 let p1Won = 0
@@ -6247,11 +6397,42 @@ export const BadmintonFixturesManager = ({
                   }
                 }
 
+                const handleSaveAndClose = () => {
+                  // Recompute winner
+                  const calculatedWinner = calculateBadmintonWinner(m, p1, p2, setsCount)
+                  const hasAnyScore = Array.from({ length: setsCount }, (_, i) => i + 1).some((s) => {
+                    const sA = m[`scoreSet${s}A`]
+                    const sB = m[`scoreSet${s}B`]
+                    return (sA !== '' && sA !== undefined) || (sB !== '' && sB !== undefined)
+                  })
+                  const nextStatus = m.status === 'completed' || calculatedWinner
+                    ? 'completed'
+                    : hasAnyScore
+                      ? 'live'
+                      : (m.status || 'scheduled')
+
+                  const updates = {
+                    winner: calculatedWinner || m.winner || null,
+                    status: nextStatus,
+                    matchSets: setsCount,
+                    matchPoints: maxPts,
+                  }
+                  for (let s = 1; s <= setsCount; s++) {
+                    updates[`scoreSet${s}A`] = m[`scoreSet${s}A`] !== undefined ? m[`scoreSet${s}A`] : ''
+                    updates[`scoreSet${s}B`] = m[`scoreSet${s}B`] !== undefined ? m[`scoreSet${s}B`] : ''
+                  }
+
+                  handleUpdateMatch(m.id, updates, m.categoryName)
+                  setQuickScoreScheduleMatch(null)
+                  setSwapToast(`✓ Match #${m.matchNumber || ''} scores & result saved successfully!`)
+                  setTimeout(() => setSwapToast(null), 3000)
+                }
+
                 return (
                   <div className="custom-modal-overlay" onClick={() => setQuickScoreScheduleMatch(null)}>
                     <div
                       className="custom-modal-box"
-                      style={{ maxWidth: '460px', width: '92%' }}
+                      style={{ maxWidth: '520px', width: '94%' }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       {/* Modal Header */}
@@ -6262,11 +6443,11 @@ export const BadmintonFixturesManager = ({
                               M#{m.matchNumber}
                             </span>
                             <span style={{ fontSize: '13px', color: '#38bdf8', fontWeight: '700' }}>
-                              {m.roundName}
+                              {m.categoryName ? `${formatCategoryName(m.categoryName)} • ` : ''}{m.roundName}
                             </span>
                           </div>
                           <h3 style={{ margin: '4px 0 0 0', fontSize: '17px', color: '#f8fafc' }}>
-                            ⚡ Enter Match Scores ({setsCount} {setsCount === 1 ? 'Set' : 'Sets'})
+                            ⚡ Manual Match Scoring & Player Check-in
                           </h3>
                         </div>
                         <button
@@ -6278,48 +6459,98 @@ export const BadmintonFixturesManager = ({
                         </button>
                       </div>
 
-                      {/* Players & Sets Won Summary */}
+                      {/* Players & Check-in Cards */}
                       <div
                         style={{
-                          background: 'rgba(15, 23, 42, 0.65)',
+                          background: 'rgba(15, 23, 42, 0.75)',
                           borderRadius: '10px',
-                          padding: '12px 16px',
+                          padding: '12px 14px',
                           marginBottom: '16px',
                           display: 'grid',
                           gridTemplateColumns: '1fr auto 1fr',
                           alignItems: 'center',
-                          gap: '12px',
+                          gap: '10px',
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                         }}
                       >
+                        {/* Player 1 Card */}
                         <div style={{ textAlign: 'left' }}>
-                          <div style={{ fontWeight: '800', color: p1Won > p2Won ? '#4ade80' : '#f8fafc', fontSize: '14px' }}>
-                            {p1?.name || 'Player 1'}
+                          <div style={{ fontWeight: '800', color: p1Won > p2Won ? '#4ade80' : '#f8fafc', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                            <span>{p1?.name || 'Player 1'}</span>
+                            {p1Won > p2Won && <span title="Leading / Winner">👑</span>}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                            Sets Won: <strong style={{ color: '#38bdf8' }}>{p1Won}</strong>
+                          <div style={{ fontSize: '12px', color: '#94a3b8', margin: '3px 0 6px 0' }}>
+                            Sets Won: <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{p1Won}</strong>
                           </div>
+                          {p1 && !p1.isBye && (
+                            <button
+                              type="button"
+                              onClick={() => togglePlayerReporting(p1, m.categoryName)}
+                              title="Click to toggle desk reporting"
+                              style={{
+                                background: isP1Rep ? 'rgba(34, 197, 94, 0.25)' : 'rgba(148, 163, 184, 0.12)',
+                                border: `1px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                                color: isP1Rep ? '#4ade80' : '#cbd5e1',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <span>{isP1Rep ? '☑️' : '⬜'}</span>
+                              <span>{isP1Rep ? 'Reported' : 'Check-in'}</span>
+                            </button>
+                          )}
                         </div>
 
                         <div style={{ fontSize: '12px', fontWeight: '800', color: '#64748b' }}>VS</div>
 
+                        {/* Player 2 Card */}
                         <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: '800', color: p2Won > p1Won ? '#4ade80' : '#f8fafc', fontSize: '14px' }}>
-                            {p2?.name || 'Player 2'}
+                          <div style={{ fontWeight: '800', color: p2Won > p1Won ? '#4ade80' : '#f8fafc', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', flexWrap: 'wrap' }}>
+                            {p2Won > p1Won && <span title="Leading / Winner">👑</span>}
+                            <span>{p2?.name || 'Player 2'}</span>
                           </div>
-                          <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                            Sets Won: <strong style={{ color: '#38bdf8' }}>{p2Won}</strong>
+                          <div style={{ fontSize: '12px', color: '#94a3b8', margin: '3px 0 6px 0' }}>
+                            Sets Won: <strong style={{ color: '#38bdf8', fontSize: '13px' }}>{p2Won}</strong>
                           </div>
+                          {p2 && !p2.isBye && (
+                            <button
+                              type="button"
+                              onClick={() => togglePlayerReporting(p2, m.categoryName)}
+                              title="Click to toggle desk reporting"
+                              style={{
+                                background: isP2Rep ? 'rgba(34, 197, 94, 0.25)' : 'rgba(148, 163, 184, 0.12)',
+                                border: `1px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                                color: isP2Rep ? '#4ade80' : '#cbd5e1',
+                                borderRadius: '6px',
+                                padding: '3px 8px',
+                                fontSize: '11px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                            >
+                              <span>{isP2Rep ? '☑️' : '⬜'}</span>
+                              <span>{isP2Rep ? 'Reported' : 'Check-in'}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      {/* Sets Inputs */}
+                      {/* Sets Inputs with Steppers */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
                         {Array.from({ length: setsCount }, (_, i) => i + 1).map((sNum) => {
                           const keyA = `scoreSet${sNum}A`
                           const keyB = `scoreSet${sNum}B`
-                          const valA = m[keyA] !== undefined ? m[keyA] : ''
-                          const valB = m[keyB] !== undefined ? m[keyB] : ''
+                          const valA = m[keyA] !== undefined && m[keyA] !== '' ? Number(m[keyA]) : ''
+                          const valB = m[keyB] !== undefined && m[keyB] !== '' ? Number(m[keyB]) : ''
 
                           return (
                             <div
@@ -6329,25 +6560,38 @@ export const BadmintonFixturesManager = ({
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
                                 background: 'rgba(255, 255, 255, 0.03)',
-                                padding: '8px 14px',
+                                padding: '8px 12px',
                                 borderRadius: '8px',
                                 border: '1px solid rgba(255, 255, 255, 0.06)',
                               }}
                             >
-                              <span style={{ fontWeight: '800', color: '#94a3b8', fontSize: '12.5px', width: '50px' }}>
+                              <span style={{ fontWeight: '800', color: '#94a3b8', fontSize: '12.5px', width: '45px' }}>
                                 Set {sNum}
                               </span>
 
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              {/* P1 Score controls */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <button
+                                  type="button"
+                                  className="pro-stepper-btn"
+                                  onClick={() => {
+                                    const nextV = Math.max(0, (typeof valA === 'number' ? valA : 0) - 1)
+                                    handleScoreChange(m, keyA, nextV)
+                                    setQuickScoreScheduleMatch((prev) => ({ ...prev, [keyA]: nextV }))
+                                  }}
+                                  style={{ width: '28px', height: '28px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.15)', cursor: 'pointer', fontWeight: '800' }}
+                                >
+                                  -
+                                </button>
                                 <input
                                   type="text"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
                                   maxLength={3}
-                                  value={valA}
+                                  value={m[keyA] !== undefined ? m[keyA] : ''}
                                   placeholder="0"
                                   className="simple-score-input"
-                                  style={{ width: '54px', height: '36px', fontSize: '16px', fontWeight: '800' }}
+                                  style={{ width: '48px', height: '32px', fontSize: '15px', fontWeight: '800', textAlign: 'center', background: '#0f172a', border: '1px solid #38bdf8', borderRadius: '6px', color: '#fff' }}
                                   onFocus={(e) => e.target.select()}
                                   onChange={(e) => {
                                     const raw = e.target.value.replace(/\D/g, '')
@@ -6356,16 +6600,45 @@ export const BadmintonFixturesManager = ({
                                     setQuickScoreScheduleMatch((prev) => ({ ...prev, [keyA]: v }))
                                   }}
                                 />
-                                <span style={{ color: '#64748b', fontWeight: '800' }}>-</span>
+                                <button
+                                  type="button"
+                                  className="pro-stepper-btn"
+                                  onClick={() => {
+                                    const nextV = Math.min(maxPts, (typeof valA === 'number' ? valA : 0) + 1)
+                                    handleScoreChange(m, keyA, nextV)
+                                    setQuickScoreScheduleMatch((prev) => ({ ...prev, [keyA]: nextV }))
+                                  }}
+                                  style={{ width: '28px', height: '28px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.15)', cursor: 'pointer', fontWeight: '800' }}
+                                >
+                                  +
+                                </button>
+                              </div>
+
+                              <span style={{ color: '#64748b', fontWeight: '800' }}>-</span>
+
+                              {/* P2 Score controls */}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <button
+                                  type="button"
+                                  className="pro-stepper-btn"
+                                  onClick={() => {
+                                    const nextV = Math.max(0, (typeof valB === 'number' ? valB : 0) - 1)
+                                    handleScoreChange(m, keyB, nextV)
+                                    setQuickScoreScheduleMatch((prev) => ({ ...prev, [keyB]: nextV }))
+                                  }}
+                                  style={{ width: '28px', height: '28px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.15)', cursor: 'pointer', fontWeight: '800' }}
+                                >
+                                  -
+                                </button>
                                 <input
                                   type="text"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
                                   maxLength={3}
-                                  value={valB}
+                                  value={m[keyB] !== undefined ? m[keyB] : ''}
                                   placeholder="0"
                                   className="simple-score-input"
-                                  style={{ width: '54px', height: '36px', fontSize: '16px', fontWeight: '800' }}
+                                  style={{ width: '48px', height: '32px', fontSize: '15px', fontWeight: '800', textAlign: 'center', background: '#0f172a', border: '1px solid #38bdf8', borderRadius: '6px', color: '#fff' }}
                                   onFocus={(e) => e.target.select()}
                                   onChange={(e) => {
                                     const raw = e.target.value.replace(/\D/g, '')
@@ -6374,10 +6647,81 @@ export const BadmintonFixturesManager = ({
                                     setQuickScoreScheduleMatch((prev) => ({ ...prev, [keyB]: v }))
                                   }}
                                 />
+                                <button
+                                  type="button"
+                                  className="pro-stepper-btn"
+                                  onClick={() => {
+                                    const nextV = Math.min(maxPts, (typeof valB === 'number' ? valB : 0) + 1)
+                                    handleScoreChange(m, keyB, nextV)
+                                    setQuickScoreScheduleMatch((prev) => ({ ...prev, [keyB]: nextV }))
+                                  }}
+                                  style={{ width: '28px', height: '28px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.15)', cursor: 'pointer', fontWeight: '800' }}
+                                >
+                                  +
+                                </button>
                               </div>
                             </div>
                           )
                         })}
+                      </div>
+
+                      {/* Quick Winner / Reset Actions */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updates = { winner: p1, status: 'completed' }
+                            handleUpdateMatch(m.id, updates, m.categoryName)
+                            setQuickScoreScheduleMatch((prev) => ({ ...prev, ...updates }))
+                          }}
+                          style={{
+                            background: m.winner?.id === p1?.id ? 'rgba(34, 197, 94, 0.3)' : 'rgba(30, 41, 59, 0.6)',
+                            border: `1px solid ${m.winner?.id === p1?.id ? '#22c55e' : 'rgba(148, 163, 184, 0.2)'}`,
+                            color: m.winner?.id === p1?.id ? '#4ade80' : '#cbd5e1',
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            fontSize: '11.5px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          <span>👑</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p1?.name || 'Player 1'} Won
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updates = { winner: p2, status: 'completed' }
+                            handleUpdateMatch(m.id, updates, m.categoryName)
+                            setQuickScoreScheduleMatch((prev) => ({ ...prev, ...updates }))
+                          }}
+                          style={{
+                            background: m.winner?.id === p2?.id ? 'rgba(34, 197, 94, 0.3)' : 'rgba(30, 41, 59, 0.6)',
+                            border: `1px solid ${m.winner?.id === p2?.id ? '#22c55e' : 'rgba(148, 163, 184, 0.2)'}`,
+                            color: m.winner?.id === p2?.id ? '#4ade80' : '#cbd5e1',
+                            padding: '8px 10px',
+                            borderRadius: '8px',
+                            fontSize: '11.5px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '5px',
+                          }}
+                        >
+                          <span>👑</span>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {p2?.name || 'Player 2'} Won
+                          </span>
+                        </button>
                       </div>
 
                       {/* Modal Footer Actions */}
@@ -6385,12 +6729,12 @@ export const BadmintonFixturesManager = ({
                         <button
                           type="button"
                           className="btn-modal-cancel"
-                          onClick={() => setQuickScoreScheduleMatch(null)}
-                          style={{ flex: 1, padding: '9px 14px', borderRadius: '8px', fontSize: '13px' }}
+                          onClick={() => handleResetMatchScore(m)}
+                          style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', fontSize: '12px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fca5a5' }}
                         >
-                          Close
+                          🔄 Clear
                         </button>
-                        
+
                         {!isLiveUmpireMode && (
                           <button
                             type="button"
@@ -6415,16 +6759,17 @@ export const BadmintonFixturesManager = ({
                             🖨️ Sheet
                           </button>
                         )}
+
                         <button
                           type="button"
                           className="btn-primary-gradient"
-                          onClick={() => setQuickScoreScheduleMatch(null)}
+                          onClick={handleSaveAndClose}
                           style={{
-                            flex: 1,
+                            flex: 2,
                             padding: '9px 14px',
                             borderRadius: '8px',
                             fontSize: '13px',
-                            fontWeight: '700',
+                            fontWeight: '800',
                           }}
                         >
                           ✓ Save Score
