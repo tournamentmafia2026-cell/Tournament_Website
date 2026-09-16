@@ -570,34 +570,22 @@ export const StadiumTvLiveCast = ({
   // Partition matches (Stabilized with deep equality to prevent blinking)
   const prevPartitionRef = React.useRef({ displayLiveMatches: [], displayUpcomingMatches: [] })
   const { displayLiveMatches, displayUpcomingMatches } = useMemo(() => {
-    const uncompleted = activePool.filter((m) => {
-      const isCompleted = m.status === 'completed' || !!m.winner || m.isCompleted
-      if (isCompleted) return false
-      if (m.player1?.isBye && m.player2?.isBye) return false
-      return true
-    })
-
+    // STRICT FILTER: Match MUST currently have status === 'live'
     const activeLive = []
-    const upcomingQueue = []
 
-    uncompleted.forEach((m) => {
-      const isLiveMatch = m.status === 'live' || (m.isLive === true && m.status !== 'completed')
+    activePool.forEach((m) => {
+      // If completed or winner decided, not live
+      if (m.status === 'completed' || !!m.winner || m.isCompleted) return
+      // If BYE match, not live
+      if (m.player1?.isBye || m.player2?.isBye) return
+      // STRICT CHECK: Status MUST explicitly be 'live' (never 'scheduled', 'upcoming', etc.)
+      if (m.status !== 'live') return
 
-      if (isLiveMatch) {
-        // ALWAYS display as Live Match on Court
-        activeLive.push({
-          ...m,
-          assignedCourtName: m.court || null,
-          isLiveDisplay: true,
-        })
-      } else if (m.status === 'upcoming' || m.isNextOnCourt === true) {
-        // ONLY matches that are explicitly marked as 'upcoming' or queued for next on court
-        upcomingQueue.push({
-          ...m,
-          assignedCourtName: m.court || null,
-          isLiveDisplay: false,
-        })
-      }
+      activeLive.push({
+        ...m,
+        assignedCourtName: m.court || null,
+        isLiveDisplay: true,
+      })
     })
 
     // Sort live matches by Court Name / Match Number
@@ -608,13 +596,7 @@ export const StadiumTvLiveCast = ({
       return (a.matchNumber || 0) - (b.matchNumber || 0)
     })
 
-    // Sort upcoming matches by round and match number
-    upcomingQueue.sort((a, b) => {
-      if (a.round !== b.round) return (a.round || 1) - (b.round || 1)
-      return (a.matchNumber || 0) - (b.matchNumber || 0)
-    })
-
-    const result = { displayLiveMatches: activeLive, displayUpcomingMatches: upcomingQueue }
+    const result = { displayLiveMatches: activeLive, displayUpcomingMatches: [] }
     if (fastDeepEqual(prevPartitionRef.current, result)) {
       return prevPartitionRef.current
     }
