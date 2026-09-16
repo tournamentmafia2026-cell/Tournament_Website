@@ -76,6 +76,16 @@ export function PublicPortal({
   }, [sortedMatches, publicFilter])
 
   const selectedMatchCategories = selectedMatch ? getMatchCategories(selectedMatch) : []
+  const currentCategory = (selectedMatchCategories.includes(activeCategory) ? activeCategory : selectedMatchCategories[0]) || null
+
+  React.useEffect(() => {
+    if (selectedMatch && selectedMatchCategories.length > 0) {
+      if (!selectedMatchCategories.includes(activeCategory)) {
+        setActiveCategory(selectedMatchCategories[0])
+      }
+    }
+  }, [selectedMatch?.id, selectedMatchCategories, activeCategory, setActiveCategory])
+
   const groupedSelectedParticipants = selectedMatch
     ? selectedMatchCategories.reduce((entries, category) => {
         entries[category] = (authenticators[selectedMatch.id] || []).filter(
@@ -192,7 +202,7 @@ export function PublicPortal({
               {selectedMatchCategories.map((category) => {
                 const isPub = publishedStatusMap[`${selectedMatch.id}-${category}`]
                 const pCount = (groupedSelectedParticipants[category] || []).length
-                const isActive = activeCategory === category
+                const isActive = currentCategory === category
 
                 return (
                   <button
@@ -210,18 +220,18 @@ export function PublicPortal({
             </div>
 
             {/* Active Category Details Panel */}
-            {activeCategory && (
+            {currentCategory && (
               <div className="pub-hub-cat-detail-panel">
                 <div className="pub-cat-panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                   <div className="pub-cat-title-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    <span className="cat-title-text">{activeCategory}</span>
+                    <span className="cat-title-text">{currentCategory}</span>
                     <span className="cat-entries-badge">
-                      {(groupedSelectedParticipants[activeCategory] || []).length} Registered Entries
+                      {(groupedSelectedParticipants[currentCategory] || []).length} Registered Entries
                     </span>
-                    {publishedStatusMap[`${selectedMatch.id}-${activeCategory}`] && (
+                    {publishedStatusMap[`${selectedMatch.id}-${currentCategory}`] && (
                       <button
                         type="button"
-                        onClick={() => onOpenFixtures(selectedMatch, activeCategory)}
+                        onClick={() => onOpenFixtures(selectedMatch, currentCategory)}
                         style={{
                           padding: '5px 12px',
                           borderRadius: '8px',
@@ -241,19 +251,19 @@ export function PublicPortal({
                     )}
                   </div>
 
-                  {selectedMatch.categoryWinners?.[activeCategory] && (
+                  {selectedMatch.categoryWinners?.[currentCategory] && (
                     <div className="pub-cat-winner-pill">
                       <span className="winner-trophy">🏆</span>
                       <span className="winner-label">Category Champion:</span>
-                      <strong className="winner-name">{formatPersonName(selectedMatch.categoryWinners[activeCategory])}</strong>
+                      <strong className="winner-name">{formatPersonName(selectedMatch.categoryWinners[currentCategory])}</strong>
                     </div>
                   )}
                 </div>
 
                 {/* Participant Entries Grid */}
-                {(groupedSelectedParticipants[activeCategory] || []).length > 0 ? (
+                {(groupedSelectedParticipants[currentCategory] || []).length > 0 ? (
                   <div className="pub-players-grid">
-                    {(groupedSelectedParticipants[activeCategory] || []).map((participant, pIdx) => {
+                    {(groupedSelectedParticipants[currentCategory] || []).map((participant, pIdx) => {
                       const displayName = participant.name?.trim() ? participant.name : 'Participant'
                       const isSeed = participant.seed || participant.isSeed
 
@@ -285,7 +295,7 @@ export function PublicPortal({
                 ) : (
                   <div className="pub-no-players-box">
                     <span className="no-players-icon">👥</span>
-                    <p>No players listed under {activeCategory} yet.</p>
+                    <p>No players listed under {currentCategory} yet.</p>
                   </div>
                 )}
               </div>
@@ -367,7 +377,11 @@ export function PublicPortal({
                     key={match.id} 
                     className={`pro-tournament-card ${status === 'ongoing' ? 'is-ongoing' : ''}`}
                     style={{ '--card-index': idx, cursor: 'pointer' }}
-                    onClick={() => setSelectedMatch(match)}
+                    onClick={() => {
+                      setSelectedMatch(match)
+                      const firstCat = getMatchCategories(match)[0] || 'Men Singles'
+                      setActiveCategory(firstCat)
+                    }}
                   >
                     <div className="pro-card-banner">
                       {match.image ? (
@@ -498,6 +512,8 @@ export function PublicPortal({
                             onClick={(e) => {
                               e.stopPropagation()
                               setSelectedMatch(match)
+                              const firstCat = getMatchCategories(match)[0] || 'Men Singles'
+                              setActiveCategory(firstCat)
                             }}
                             className="pro-btn-action btn-details flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
                           >
