@@ -19,6 +19,7 @@ import { LiveStreamSetupModal } from './components/LiveStreamSetupModal'
 import { StadiumTvLiveCast } from './components/StadiumTvLiveCast'
 import { PublicSponsorShowcase } from './components/PublicSponsorShowcase'
 import { FixtureSeedingModal } from './components/FixtureSeedingModal'
+import { BadmintonAnimatedBackground } from './components/BadmintonAnimatedBackground'
 
 import { generateBadmintonDraw, getNextPowerOfTwo } from './utils/badmintonDrawEngine'
 import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from './utils/courtConfig'
@@ -769,6 +770,9 @@ export default function App() {
 
   return (
     <div className="app-container">
+      {/* Ambient Badminton Court Geometry & Animated Flying Shuttles */}
+      <BadmintonAnimatedBackground />
+
       {/* 1. PUBLIC TOURNAMENT PORTAL VIEW */}
       {!authOpen && (
         <div className="public-portal-page" style={{ width: '100%', minHeight: '100vh' }}>

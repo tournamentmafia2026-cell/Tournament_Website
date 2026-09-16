@@ -39,6 +39,21 @@ export const StadiumTvLiveCast = ({
   const [currentTime, setCurrentTime] = useState(() => new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showControls, setShowControls] = useState(true)
+  const [tvTheme, setTvTheme] = useState(() => {
+    try {
+      return localStorage.getItem('badminton-tv-theme') || 'white'
+    } catch {
+      return 'white'
+    }
+  })
+
+  const toggleTvTheme = () => {
+    const next = tvTheme === 'white' ? 'dark' : 'white'
+    setTvTheme(next)
+    try {
+      localStorage.setItem('badminton-tv-theme', next)
+    } catch (e) {}
+  }
   const idleTimerRef = React.useRef(null)
 
   const [isCourtConfigModalOpen, setIsCourtConfigModalOpen] = useState(false)
@@ -834,7 +849,7 @@ export const StadiumTvLiveCast = ({
   return (
     <div
       style={containerStyle}
-      className={`stadium-tv-cast-container tv-rotate-${rotation} ${isPortrait ? 'is-portrait-tv' : 'is-landscape-tv'} ${liveCountClass} ${displayUpcomingMatches.length === 0 ? 'no-upcoming' : 'has-upcoming'}`}
+      className={`stadium-tv-cast-container tv-theme-${tvTheme} tv-rotate-${rotation} ${isPortrait ? 'is-portrait-tv' : 'is-landscape-tv'} ${liveCountClass} ${displayUpcomingMatches.length === 0 ? 'no-upcoming' : 'has-upcoming'}`}
       onDoubleClick={handleToggleFullscreen}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
@@ -871,6 +886,28 @@ export const StadiumTvLiveCast = ({
               pointerEvents: showControls ? 'auto' : 'none',
             }}
           >
+            {/* Theme Toggle Button: ☀️ White Background / 🌙 Dark Stadium */}
+            <button
+              type="button"
+              onClick={toggleTvTheme}
+              className="stadium-tv-btn"
+              style={{
+                background: tvTheme === 'white'
+                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                  : 'rgba(30, 41, 59, 0.85)',
+                color: '#ffffff',
+                border: tvTheme === 'white' ? '1.5px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.25)',
+                fontWeight: '800',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: tvTheme === 'white' ? '0 2px 10px rgba(2, 132, 199, 0.4)' : 'none',
+              }}
+              title="Toggle White Background / Dark Stadium Mode"
+            >
+              <span>{tvTheme === 'white' ? '☀️ White Mode' : '🌙 Dark Mode'}</span>
+            </button>
+
             {/* Category Filter */}
             <select
               value={selectedCategory}

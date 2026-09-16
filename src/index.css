@@ -13226,4 +13226,377 @@ input:checked + .slider:before {
   }
 }
 
+/* =========================================================
+   ADVANCED BADMINTON ANIMATION SYSTEM & COURT GEOMETRY
+   ========================================================= */
+
+/* Ambient Animated Court Stage */
+.badminton-ambient-stage {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+  opacity: 0.85;
+}
+
+.badminton-court-lines-svg-wrap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.65;
+  mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 30%, rgba(0,0,0,0.1) 85%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 30%, rgba(0,0,0,0.1) 85%);
+}
+
+.badminton-court-lines-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.2));
+}
+
+.court-line-outer {
+  animation: courtBoundaryPulse 8s ease-in-out infinite alternate;
+}
+
+.court-net-line {
+  animation: netShimmer 4s ease-in-out infinite alternate;
+}
+
+@keyframes courtBoundaryPulse {
+  0% {
+    stroke-opacity: 0.15;
+    filter: drop-shadow(0 0 4px rgba(16, 185, 129, 0.2));
+  }
+  50% {
+    stroke-opacity: 0.45;
+    filter: drop-shadow(0 0 16px rgba(56, 189, 248, 0.4));
+  }
+  100% {
+    stroke-opacity: 0.2;
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.25));
+  }
+}
+
+@keyframes netShimmer {
+  0% {
+    stroke-opacity: 0.3;
+    filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.4));
+  }
+  50% {
+    stroke-opacity: 0.8;
+    filter: drop-shadow(0 0 20px rgba(56, 189, 248, 0.8)) drop-shadow(0 0 35px rgba(255, 255, 255, 0.6));
+  }
+  100% {
+    stroke-opacity: 0.35;
+    filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.45));
+  }
+}
+
+/* Floating Parabolic Animated Shuttlecocks */
+.badminton-floating-shuttle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  animation: shuttleFloatCrossScreen linear infinite;
+  will-change: transform;
+}
+
+.shuttle-wobble-inner {
+  animation: shuttleAirWobble ease-in-out infinite alternate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.5));
+}
+
+@keyframes shuttleFloatCrossScreen {
+  0% {
+    transform: translate3d(-10vw, 0, 0) rotate(15deg);
+  }
+  25% {
+    transform: translate3d(25vw, -35px, 0) rotate(45deg);
+  }
+  50% {
+    transform: translate3d(55vw, 20px, 0) rotate(-15deg);
+  }
+  75% {
+    transform: translate3d(80vw, -40px, 0) rotate(35deg);
+  }
+  100% {
+    transform: translate3d(115vw, 10px, 0) rotate(65deg);
+  }
+}
+
+@keyframes shuttleAirWobble {
+  0% {
+    transform: rotate(-12deg) scale(0.92);
+  }
+  50% {
+    transform: rotate(18deg) scale(1.08);
+  }
+  100% {
+    transform: rotate(-8deg) scale(0.96);
+  }
+}
+
+/* High Speed Smash Trajectory Streaks */
+.smash-streak {
+  position: absolute;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(56, 189, 248, 0.85) 60%, #ffffff 90%, transparent 100%);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 8px #38bdf8);
+}
+
+.smash-streak-1 {
+  top: 22%;
+  left: -20%;
+  width: 320px;
+  transform: rotate(-18deg);
+  animation: smashZip 7s cubic-bezier(0.25, 1, 0.5, 1) infinite 1.5s;
+}
+
+.smash-streak-2 {
+  top: 68%;
+  left: -20%;
+  width: 420px;
+  transform: rotate(14deg);
+  animation: smashZip 9s cubic-bezier(0.25, 1, 0.5, 1) infinite 4.5s;
+}
+
+.smash-streak-3 {
+  top: 48%;
+  left: -20%;
+  width: 380px;
+  transform: rotate(-8deg);
+  animation: smashZip 11s cubic-bezier(0.25, 1, 0.5, 1) infinite 7s;
+}
+
+@keyframes smashZip {
+  0% {
+    left: -30%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.9;
+  }
+  30% {
+    left: 130%;
+    opacity: 0;
+  }
+  100% {
+    left: 130%;
+    opacity: 0;
+  }
+}
+
+/* Interactive Smash Click Ripples */
+.smash-click-ripple {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.smash-click-ripple .ripple-ring {
+  position: absolute;
+  inset: -25px;
+  border-radius: 50%;
+  border: 2px solid #38bdf8;
+  opacity: 1;
+  animation: smashExpandRing 0.8s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+.smash-click-ripple .ripple-ring.ring-2 {
+  inset: -15px;
+  border-color: #22c55e;
+  animation-delay: 0.1s;
+}
+
+.smash-click-ripple .smash-shuttle-spark {
+  position: absolute;
+  top: -12px;
+  left: -12px;
+  font-size: 20px;
+  animation: smashSparkPop 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes smashExpandRing {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(3.5);
+    opacity: 0;
+  }
+}
+
+@keyframes smashSparkPop {
+  0% {
+    transform: scale(0) rotate(-45deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.4) rotate(25deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.8) translateY(-30px) rotate(90deg);
+    opacity: 0;
+  }
+}
+
+/* =========================================================
+   STADIUM TV LIVE CAST - WHITE THEME & ULTRA CRISP WHITE TEXT
+   ========================================================= */
+
+/* White Background Mode for Stadium TV */
+.stadium-tv-cast-container.tv-theme-white {
+  background: radial-gradient(circle at top center, #ffffff 0%, #f8fafc 45%, #e2e8f0 100%) !important;
+  color: #0f172a !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-tv-header {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-bottom: 2px solid rgba(14, 165, 233, 0.4) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-tv-title {
+  color: #0f172a !important;
+  text-shadow: none !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-tv-venue-meta {
+  color: #475569 !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-tv-select {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-section-title {
+  color: #0f172a !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-section-subtitle {
+  color: #64748b !important;
+}
+
+/* White Theme Live Courts Tables & Rows */
+.stadium-tv-cast-container.tv-theme-white .stadium-broadcast-table thead th {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  border-bottom: 2px solid #0284c7 !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-broadcast-table tbody tr {
+  background: #ffffff !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  border: 1.5px solid #cbd5e1 !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-broadcast-table tbody td {
+  border-top: 1.5px solid #e2e8f0 !important;
+  border-bottom: 1.5px solid #e2e8f0 !important;
+}
+
+/* Court Badges with Pure White Text */
+.stadium-tv-cast-container.tv-theme-white .court-label-pill,
+.stadium-tv-cast-container .court-label-pill {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35) !important;
+}
+
+/* Category Badges with Pure White Text */
+.stadium-tv-cast-container.tv-theme-white .category-label-pill,
+.stadium-tv-cast-container .category-label-pill {
+  background: linear-gradient(135deg, #475569 0%, #334155 100%) !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+}
+
+/* Player Name Cells with High Contrast Pure White Text on Badges */
+.stadium-tv-cast-container.tv-theme-white .table-player-name {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .serving-indicator {
+  background: #16a34a !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+
+/* Score Bubbles and Point Indicators */
+.stadium-tv-cast-container.tv-theme-white .clean-point-bubble {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  border: 1.5px solid #38bdf8 !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25) !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .clean-point-bubble.leading-point {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%) !important;
+  color: #ffffff !important;
+  border-color: #4ade80 !important;
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.45) !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .set-score-mini {
+  background: #0f172a !important;
+  color: #ffffff !important;
+  border: 1px solid #334155 !important;
+}
+
+/* Upcoming Matches Section in White Theme */
+.stadium-tv-cast-container.tv-theme-white .stadium-upcoming-card {
+  background: #ffffff !important;
+  border: 1.5px solid #cbd5e1 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05) !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-upcoming-card .upcoming-player-name {
+  color: #0f172a !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-upcoming-card .upcoming-time-tag {
+  background: #f1f5f9 !important;
+  color: #0284c7 !important;
+  border: 1px solid #bae6fd !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .stadium-divider-pill {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%) !important;
+  color: #b45309 !important;
+  border: 1.5px solid #f59e0b !important;
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.2) !important;
+}
+
+/* Universal Crisp Pure White Typography for Dark & White Live Stadium Elements */
+.stadium-tv-cast-container .stadium-broadcast-table thead th,
+.stadium-tv-cast-container .table-player-name,
+.stadium-tv-cast-container .stadium-live-score-badge,
+.stadium-tv-cast-container .clean-point-bubble,
+.stadium-tv-cast-container .court-label-pill,
+.stadium-tv-cast-container .category-label-pill {
+  letter-spacing: 0.015em;
+  -webkit-font-smoothing: antialiased;
+}
+
+
 
