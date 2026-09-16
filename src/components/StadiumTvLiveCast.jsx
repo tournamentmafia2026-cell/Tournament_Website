@@ -675,6 +675,16 @@ export const StadiumTvLiveCast = ({
     }
   }, [hasAnyMatches])
 
+  // Automatically restore sponsor ad after 10 seconds if dismissed and still no matches on court
+  useEffect(() => {
+    if (isStandbyDismissed && !hasAnyMatches && visualAds.length > 0) {
+      const resumeTimer = setTimeout(() => {
+        setIsStandbyDismissed(false)
+      }, 10000)
+      return () => clearTimeout(resumeTimer)
+    }
+  }, [isStandbyDismissed, hasAnyMatches, visualAds.length])
+
   // Continuous rotation in Standby mode (when no matches)
   useEffect(() => {
     if (!isStandbyShowcaseActive || visualAds.length <= 1) return
@@ -1031,8 +1041,35 @@ export const StadiumTvLiveCast = ({
         {displayLiveMatches.length === 0 && displayUpcomingMatches.length === 0 ? (
           <div className="stadium-empty-live-box">
             <div className="stadium-empty-icon">🏸</div>
-            <h3>No Matches Currently Available</h3>
-            <p>Schedule list-ல் இருந்து மேட்ச்களை add அல்லது start செய்யும்போது தானாக இங்கே நேரலையில் காண்பிக்கப்படும்.</p>
+            <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#f8fafc', marginBottom: '8px' }}>
+              No Matches Currently Live
+            </h3>
+            <p style={{ color: '#94a3b8', fontSize: '13.5px', maxWidth: '540px', margin: '0 auto 16px', lineHeight: '1.5' }}>
+              Live status-ல் உள்ள போட்டிகள் மட்டுமே இங்கே TV Cast-ல் காண்பிக்கப்படும். Schedule / Fixtures பக்கத்தில் போட்டிகளை "Live" ஆக மாற்றும்போது உடனே நேரலையில் Scoreboard தோன்றும்.
+            </p>
+            {visualAds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsStandbyDismissed(false)}
+                className="stadium-tv-btn"
+                style={{
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  border: '1.5px solid #38bdf8',
+                  color: '#ffffff',
+                  fontWeight: '800',
+                  padding: '9px 20px',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: '0 4px 15px rgba(2, 132, 199, 0.4)',
+                }}
+              >
+                <span>⭐</span>
+                <span>Show Sponsors Now (Auto in 10s)</span>
+              </button>
+            )}
           </div>
         ) : (
           <>
