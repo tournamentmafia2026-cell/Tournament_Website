@@ -73,11 +73,9 @@ export const BadmintonFixturesManager = ({
     if (initialSelectedMatch && initialCategory) {
       setSelectedMatchId((previous) => previous === initialSelectedMatch.id ? previous : initialSelectedMatch.id)
       setSelectedCategory((previous) => previous === initialCategory ? previous : initialCategory)
-      setFixturesLevel((previous) => previous === 'draw' ? previous : 'draw')
-    } else {
-      setFixturesLevel((previous) => previous === 'tournaments' ? previous : 'tournaments')
+      setFixturesLevel('draw')
     }
-  }, [initialSelectedMatch?.id, initialCategory, isPublicView])
+  }, [initialSelectedMatch?.id, initialCategory])
 
   const [activeLiveMatchId, setActiveLiveMatchId] = useState(() => {
     try {
