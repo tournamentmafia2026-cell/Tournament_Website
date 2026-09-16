@@ -269,11 +269,9 @@ export const BadmintonFixturesManager = ({
 
   const [reportedPlayers, setReportedPlayers] = useState(() => {
     try {
+      localStorage.removeItem('badminton-permanent-reported-cache')
       const saved = localStorage.getItem('badminton-reported-players')
-      const perm = localStorage.getItem('badminton-permanent-reported-cache')
-      const savedObj = saved ? JSON.parse(saved) : {}
-      const permObj = perm ? JSON.parse(perm) : {}
-      return { ...permObj, ...savedObj }
+      return saved ? JSON.parse(saved) : {}
     } catch {
       return {}
     }
@@ -468,32 +466,8 @@ export const BadmintonFixturesManager = ({
             })
           }
 
-          if (data.reportedPlayers && typeof data.reportedPlayers === 'object') {
-            // Only merge from background fetch if user has not performed a local reporting action in the last 60 seconds
-            if (Date.now() - (lastLocalReportedUpdateRef.current || 0) > 60000) {
-              setReportedPlayers((prev) => {
-                let changed = false
-                const next = { ...prev }
-                Object.keys(data.reportedPlayers).forEach((k) => {
-                  const sVal = data.reportedPlayers[k]
-                  if (typeof sVal === 'object' && sVal !== null) {
-                    const mergedSub = { ...(next[k] || {}), ...sVal }
-                    if (!isDeepEqual(next[k], mergedSub)) {
-                      next[k] = mergedSub
-                      changed = true
-                    }
-                  } else if (sVal && next[k] !== sVal) {
-                    next[k] = sVal
-                    changed = true
-                  }
-                })
-                if (!changed) return prev
-                try {
-                  localStorage.setItem('badminton-reported-players', JSON.stringify(next))
-                } catch (e) {}
-                return next
-              })
-            }
+          if (data.reportedPlayers && typeof data.reportedPlayers === 'object' && isPublicView) {
+            setReportedPlayers((prev) => (isDeepEqual(prev, data.reportedPlayers) ? prev : data.reportedPlayers))
           }
 
           if (data.liveUmpireMode !== undefined) {
@@ -515,33 +489,12 @@ export const BadmintonFixturesManager = ({
         })
         .catch(() => {})
 
-      // 2. Fetch reported players from Supabase Cloud DB (Smart merge)
-      if (Date.now() - (lastLocalReportedUpdateRef.current || 0) > 60000) {
+      // 2. Fetch reported players from Supabase Cloud DB for public viewers
+      if (isPublicView) {
         SupabaseService.getReportedPlayers()
           .then((supaRep) => {
             if (supaRep && typeof supaRep === 'object') {
-              setReportedPlayers((prev) => {
-                let changed = false
-                const next = { ...prev }
-                Object.keys(supaRep).forEach((k) => {
-                  const sVal = supaRep[k]
-                  if (typeof sVal === 'object' && sVal !== null) {
-                    const mergedSub = { ...(next[k] || {}), ...sVal }
-                    if (!isDeepEqual(next[k], mergedSub)) {
-                      next[k] = mergedSub
-                      changed = true
-                    }
-                  } else if (sVal && next[k] !== sVal) {
-                    next[k] = sVal
-                    changed = true
-                  }
-                })
-                if (!changed) return prev
-                try {
-                  localStorage.setItem('badminton-reported-players', JSON.stringify(next))
-                } catch (e) {}
-                return next
-              })
+              setReportedPlayers((prev) => (isDeepEqual(prev, supaRep) ? prev : supaRep))
             }
           })
           .catch(() => {})
@@ -587,15 +540,14 @@ export const BadmintonFixturesManager = ({
 
   useEffect(() => {
     try {
-      if (reportedPlayers && Object.keys(reportedPlayers).length > 0) {
+      localStorage.removeItem('badminton-permanent-reported-cache')
+      if (reportedPlayers && typeof reportedPlayers === 'object') {
         localStorage.setItem('badminton-reported-players', JSON.stringify(reportedPlayers))
       }
     } catch (e) {
       console.error('Error saving reported players', e)
     }
   }, [reportedPlayers])
-
-  const PERMANENT_REPORTED_KEY = 'badminton-permanent-reported-cache'
 
   // Helper to extract clean normalized identifier tokens from any player object or ID/name string
   const getPlayerTokens = (playerOrId) => {
@@ -661,14 +613,6 @@ export const BadmintonFixturesManager = ({
       const nextFullMap = { ...prev }
       const currentCatMap = { ...(prev[key] || {}) }
 
-      // Get permanent cache
-      let permCache = {}
-      try {
-        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
-        if (savedPerm) permCache = JSON.parse(savedPerm)
-      } catch (e) {}
-      const permTournCat = { ...(permCache[key] || {}) }
-
       if (isCurrentlyReported) {
         // UNTICK: User manually clicked to untick this player
         tokens.forEach((tok) => {
@@ -676,28 +620,21 @@ export const BadmintonFixturesManager = ({
           delete nextFullMap[`${tournId}-${category}-${tok}`]
           delete nextFullMap[`${tournId}-${tok}`]
           delete nextFullMap[tok]
-          delete permTournCat[tok]
-          delete permCache[`${tournId}-${category}-${tok}`]
-          delete permCache[`${tournId}-${tok}`]
-          delete permCache[tok]
         })
       } else {
         // TICK: User ticked this player as reported
         tokens.forEach((tok) => {
           currentCatMap[tok] = true
           nextFullMap[`${tournId}-${category}-${tok}`] = true
-          permTournCat[tok] = true
-          permCache[`${tournId}-${category}-${tok}`] = true
         })
       }
 
       nextFullMap[key] = currentCatMap
-      permCache[key] = permTournCat
 
-      // Synchronously write to primary and permanent localStorage
+      // Synchronously write to primary localStorage and purge legacy permanent cache
       try {
         localStorage.setItem('badminton-reported-players', JSON.stringify(nextFullMap))
-        localStorage.setItem(PERMANENT_REPORTED_KEY, JSON.stringify(permCache))
+        localStorage.removeItem('badminton-permanent-reported-cache')
       } catch (e) {}
 
       // Update participant list in authenticators so isReported is baked into player records
@@ -851,30 +788,21 @@ export const BadmintonFixturesManager = ({
       const nextFullMap = { ...prev }
       const newMap = {}
 
-      let permCache = {}
-      try {
-        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
-        if (savedPerm) permCache = JSON.parse(savedPerm)
-      } catch (e) {}
-
       if (status) {
         categoryPlayers.forEach((p) => {
           const tokens = getPlayerTokens(p)
           tokens.forEach((tok) => {
             newMap[tok] = true
-            nextFullMap[`${tournId}-${tok}`] = true
-            if (!permCache[key]) permCache[key] = {}
-            permCache[key][tok] = true
-            permCache[`${tournId}-${tok}`] = true
+            nextFullMap[`${tournId}-${selectedCategory}-${tok}`] = true
           })
         })
       } else {
         categoryPlayers.forEach((p) => {
           const tokens = getPlayerTokens(p)
           tokens.forEach((tok) => {
+            delete nextFullMap[`${tournId}-${selectedCategory}-${tok}`]
             delete nextFullMap[`${tournId}-${tok}`]
-            if (permCache[key]) delete permCache[key][tok]
-            delete permCache[`${tournId}-${tok}`]
+            delete nextFullMap[tok]
           })
         })
       }
@@ -882,7 +810,7 @@ export const BadmintonFixturesManager = ({
 
       try {
         localStorage.setItem('badminton-reported-players', JSON.stringify(nextFullMap))
-        localStorage.setItem(PERMANENT_REPORTED_KEY, JSON.stringify(permCache))
+        localStorage.removeItem('badminton-permanent-reported-cache')
       } catch (e) {}
 
       // Update authenticators list
@@ -1148,22 +1076,16 @@ export const BadmintonFixturesManager = ({
 
       try {
         const savedReported = localStorage.getItem('badminton-reported-players')
-        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
-        const repObj = savedReported ? JSON.parse(savedReported) : {}
-        const permObj = savedPerm ? JSON.parse(savedPerm) : {}
-        const mergedRep = { ...permObj, ...repObj }
-        if (Object.keys(mergedRep).length > 0) {
-          setReportedPlayers((prev) => (isDeepEqual(prev, mergedRep) ? prev : mergedRep))
+        const repObj = savedReported ? JSON.parse(savedReported) : null
+        if (repObj && typeof repObj === 'object') {
+          setReportedPlayers((prev) => (isDeepEqual(prev, repObj) ? prev : repObj))
         }
       } catch (e) {}
     }
 
     const handleReportedCustomEvent = (e) => {
       if (e?.detail && typeof e.detail === 'object') {
-        const savedPerm = localStorage.getItem(PERMANENT_REPORTED_KEY)
-        const permObj = savedPerm ? JSON.parse(savedPerm) : {}
-        const merged = { ...permObj, ...e.detail }
-        setReportedPlayers((prev) => (isDeepEqual(prev, merged) ? prev : merged))
+        setReportedPlayers((prev) => (isDeepEqual(prev, e.detail) ? prev : e.detail))
       }
     }
 
