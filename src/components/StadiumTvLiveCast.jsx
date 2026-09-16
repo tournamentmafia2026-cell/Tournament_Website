@@ -812,7 +812,7 @@ export const StadiumTvLiveCast = ({
   return (
     <div
       style={containerStyle}
-      className={`stadium-tv-cast-container tv-theme-${tvTheme} tv-rotate-${rotation} ${isPortrait ? 'is-portrait-tv' : 'is-landscape-tv'} ${liveCountClass} ${displayUpcomingMatches.length === 0 ? 'no-upcoming' : 'has-upcoming'}`}
+      className={`stadium-tv-cast-container tv-theme-${tvTheme} tv-rotate-${rotation} ${isPortrait ? 'is-portrait-tv' : 'is-landscape-tv'} ${liveCountClass} no-upcoming`}
       onDoubleClick={handleToggleFullscreen}
       onClick={(e) => e.stopPropagation()}
       onMouseDown={(e) => e.stopPropagation()}
@@ -1016,7 +1016,7 @@ export const StadiumTvLiveCast = ({
 
       {/* 2. MAIN TV BODY */}
       <main className="stadium-tv-main">
-        {displayLiveMatches.length === 0 && displayUpcomingMatches.length === 0 ? (
+        {displayLiveMatches.length === 0 ? (
           <div className="stadium-empty-live-box">
             <div className="stadium-empty-icon">🏸</div>
             <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#f8fafc', marginBottom: '8px' }}>
