@@ -1843,13 +1843,8 @@ export const BadmintonFixturesManager = ({
         setSwapToast(`🚀 Match #${assigningLiveMatch.matchNumber || ''} is now LIVE on ${chosenCourt}! Assigned to Umpire: ${targetName}`)
       } else {
         setSwapToast(`🚀 Match #${assigningLiveMatch.matchNumber || ''} is now LIVE on ${chosenCourt}!`)
-        setQuickScoreScheduleMatch({
-          ...assigningLiveMatch,
-          court: chosenCourt,
-          status: 'live',
-          isLive: true,
-        })
       }
+      setScheduleFilter('live')
     } else {
       setSwapToast(`📋 Match #${assigningLiveMatch.matchNumber || ''} assigned to ${chosenCourt} (Scheduled Queue)!`)
     }
