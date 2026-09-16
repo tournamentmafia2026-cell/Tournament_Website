@@ -308,18 +308,22 @@ export default function App() {
     const url = `${window.location.origin}${window.location.pathname}?livecast=true${tid ? `&tid=${encodeURIComponent(tid)}` : ''}`
     const win = window.open(url, `BadmintonLiveCast_${tid || 'general'}`, 'width=1920,height=1080,menubar=no,toolbar=no,location=no,status=no')
     if (win) win.focus()
+    setIsLiveStreamActive(true)
     try {
       localStorage.setItem('badminton-live-stream-active', 'true')
       localStorage.setItem('badminton-live-stream-match-id', String(tid))
       if (match?.id) syncServerData({ liveStreamActive: true, liveStreamMatchId: String(tid) })
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
   }
 
   const handleFixturesLiveStreamStop = () => {
+    setIsLiveStreamActive(false)
     try {
       localStorage.setItem('badminton-live-stream-active', 'false')
       localStorage.removeItem('badminton-live-stream-match-id')
       syncServerData({ liveStreamActive: false, liveStreamMatchId: '' })
+      window.dispatchEvent(new Event('storage'))
     } catch (e) {}
   }
 
