@@ -581,29 +581,29 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
           <div
             style={{
               display: 'inline-block',
-              padding: '3px 10px',
+              padding: '4px 12px',
               borderRadius: '999px',
-              background: 'rgba(56, 189, 248, 0.12)',
-              border: '1px solid rgba(56, 189, 248, 0.3)',
+              background: 'rgba(56, 189, 248, 0.1)',
+              border: '1px solid rgba(56, 189, 248, 0.25)',
               color: '#38bdf8',
-              fontSize: '10.5px',
+              fontSize: '11px',
               fontWeight: '800',
-              letterSpacing: '0.12em',
+              letterSpacing: '0.08em',
               textTransform: 'uppercase',
-              marginBottom: '8px',
+              marginBottom: '10px',
             }}
           >
-            OFFICIAL PORTAL ACCESS
+            TOURNAMENT ACCESS PORTAL
           </div>
 
-          <h2 style={{ margin: '0 0 6px 0', fontSize: '22px', fontWeight: '900', color: '#f8fafc', letterSpacing: '-0.02em' }}>
-            {view === 'login' ? 'Tournament Sign-In' : 'Admin Mobile Verification'}
+          <h2 style={{ margin: '0 0 6px 0', fontSize: '23px', fontWeight: '900', color: '#f8fafc', letterSpacing: '-0.02em' }}>
+            {view === 'login' ? 'Portal Sign-In' : 'Admin Security Verification'}
           </h2>
 
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8', lineHeight: '1.45' }}>
             {view === 'login'
-              ? 'Chief Organizer & Assigned Court Umpire Dashboard'
-              : 'Enter your Mobile Number to receive confidential OTP'}
+              ? 'Enter your mobile number or username to continue'
+              : 'Enter your registered mobile number to receive verification code'}
           </p>
         </div>
 
@@ -658,59 +658,6 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
         {/* ==================================================================== */}
         {view === 'login' && (
           <form onSubmit={handleUnifiedLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Role Helper Indicator Strip */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '8px',
-                padding: '4px',
-                background: 'rgba(15, 23, 42, 0.8)',
-                borderRadius: '14px',
-                border: '1px solid rgba(148, 163, 184, 0.15)',
-              }}
-            >
-              <div
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  fontSize: '11.5px',
-                  fontWeight: '800',
-                  color: '#93c5fd',
-                  background: 'rgba(59, 130, 246, 0.12)',
-                  border: '1px solid rgba(59, 130, 246, 0.25)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                }}
-              >
-                <span>👑</span>
-                <span>Chief Admin</span>
-              </div>
-
-              <div
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: '10px',
-                  textAlign: 'center',
-                  fontSize: '11.5px',
-                  fontWeight: '800',
-                  color: '#86efac',
-                  background: 'rgba(34, 197, 94, 0.12)',
-                  border: '1px solid rgba(34, 197, 94, 0.25)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                }}
-              >
-                <span>🏸</span>
-                <span>Court Umpire</span>
-              </div>
-            </div>
-
             {/* Login ID Input */}
             <div>
               <label
@@ -778,19 +725,43 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
 
             {/* Password Input */}
             <div>
-              <label
-                style={{
-                  display: 'block',
-                  fontSize: '11px',
-                  fontWeight: '800',
-                  color: '#94a3b8',
-                  marginBottom: '8px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                }}
-              >
-                Password
-              </label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    color: '#94a3b8',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setView('admin-verify-phone')
+                    setErrorMessage('')
+                    setStatusNotification('')
+                    setAdminOtpStep(1)
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '11.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    padding: 0,
+                    transition: 'color 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#7dd3fc')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#38bdf8')}
+                >
+                  Forgot Password?
+                </button>
+              </div>
               <div style={{ position: 'relative' }}>
                 <span
                   style={{
@@ -874,7 +845,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                 letterSpacing: '0.02em',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 boxShadow: '0 6px 20px rgba(2, 132, 199, 0.4)',
-                marginTop: '6px',
+                marginTop: '4px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -888,51 +859,49 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                 if (!isLoading) e.currentTarget.style.boxShadow = '0 6px 20px rgba(2, 132, 199, 0.4)'
               }}
             >
-              <span>{isLoading ? 'Verifying Credentials...' : 'Sign In to Dashboard'}</span>
+              <span>{isLoading ? 'Signing In...' : 'Sign In'}</span>
               <span>→</span>
             </button>
 
-            {/* Quick Admin Set/Reset Password Link */}
-            <div
+            {/* Professional Reset Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setView('admin-verify-phone')
+                setErrorMessage('')
+                setStatusNotification('')
+                setAdminOtpStep(1)
+              }}
               style={{
-                background: 'rgba(30, 41, 59, 0.6)',
+                width: '100%',
+                padding: '11px 16px',
+                borderRadius: '12px',
+                background: 'rgba(30, 41, 59, 0.5)',
                 border: '1px solid rgba(148, 163, 184, 0.2)',
-                borderRadius: '14px',
-                padding: '14px 16px',
-                textAlign: 'center',
-                marginTop: '4px',
+                color: '#cbd5e1',
+                fontSize: '12.5px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(56, 189, 248, 0.12)'
+                e.currentTarget.style.borderColor = 'rgba(56, 189, 248, 0.35)'
+                e.currentTarget.style.color = '#38bdf8'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(30, 41, 59, 0.5)'
+                e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)'
+                e.currentTarget.style.color = '#cbd5e1'
               }}
             >
-              <div style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>
-                New Mobile Number or forgot password?
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setView('admin-verify-phone')
-                  setErrorMessage('')
-                  setStatusNotification('')
-                  setAdminOtpStep(1)
-                }}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#38bdf8',
-                  fontSize: '12.5px',
-                  fontWeight: '800',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#7dd3fc')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#38bdf8')}
-              >
-                <span>🛡️</span>
-                <span>Verify Mobile & Set Admin Password via OTP →</span>
-              </button>
-            </div>
+              <span>🔑</span>
+              <span>Reset Admin Access</span>
+            </button>
 
             {/* Security Badge Footer */}
             <div
@@ -941,14 +910,14 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '6px',
-                marginTop: '6px',
+                marginTop: '4px',
                 fontSize: '11px',
                 color: '#64748b',
                 fontWeight: '600',
               }}
             >
               <span>🔒</span>
-              <span>256-Bit Encrypted Secure Cloud Authentication</span>
+              <span>Secure Cloud Authentication</span>
             </div>
           </form>
         )}
@@ -1030,7 +999,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     lineHeight: '1.45',
                   }}
                 >
-                  🔒 <strong>Verification Protocol:</strong> A confidential 6-digit random verification OTP will be sent directly to your official email (tournamentmafia2026@gmail.com).
+                  🔒 <strong>Security Verification:</strong> A confidential 6-digit verification code will be sent to your official registered email (tournamentmafia2026@gmail.com).
                 </div>
 
                 <button
@@ -1048,7 +1017,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     boxShadow: '0 6px 20px rgba(2, 132, 199, 0.4)',
                   }}
                 >
-                  {isLoading ? 'Sending Verification OTP...' : 'Send Verification OTP →'}
+                  {isLoading ? 'Sending Security Code...' : 'Send Verification Code →'}
                 </button>
 
                 <div style={{ textAlign: 'center', marginTop: '4px' }}>
@@ -1088,7 +1057,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     Check Your Registered Email
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px', lineHeight: '1.4' }}>
-                    Enter the 6-digit random OTP code sent to your registered official email.
+                    Enter the 6-digit security code sent to your registered email.
                   </div>
                 </div>
 
@@ -1105,7 +1074,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       letterSpacing: '0.08em',
                     }}
                   >
-                    ENTER 6-DIGIT OTP
+                    ENTER 6-DIGIT CODE
                   </label>
                   <input
                     type="text"
@@ -1145,7 +1114,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       textTransform: 'uppercase',
                     }}
                   >
-                    SET NEW PASSWORD FOR ({adminPhone})
+                    NEW PASSWORD FOR ({adminPhone})
                   </label>
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -1178,7 +1147,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                       textTransform: 'uppercase',
                     }}
                   >
-                    CONFIRM PASSWORD
+                    CONFIRM NEW PASSWORD
                   </label>
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -1228,7 +1197,7 @@ export function OrganizerAuthModal({ isOpen, onClose, onSuccess }) {
                     boxShadow: '0 6px 20px rgba(22, 163, 74, 0.4)',
                   }}
                 >
-                  ✓ Verify OTP & Activate Admin Access
+                  ✓ Save & Sign In to Dashboard
                 </button>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12.5px', marginTop: '4px' }}>
