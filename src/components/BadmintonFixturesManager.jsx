@@ -17,7 +17,7 @@ import { StadiumTvLiveCast } from './StadiumTvLiveCast'
 import { CourtConfigModal } from './CourtConfigModal'
 import { PublicSponsorShowcase } from './PublicSponsorShowcase'
 import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
-import { getSavedCourtConfig, generateCourtsList } from '../utils/courtConfig'
+import { getSavedCourtConfig, generateCourtsList, saveCourtConfig, DEFAULT_COURT_CONFIG } from '../utils/courtConfig'
 import { printOfficialFixturesA4 } from '../utils/printFixturesEngine'
 import { isDoublesCategory, sortBadmintonCategories } from '../utils/badmintonCategories'
 import { fastDeepEqual } from '../utils/fastDeepEqual'
@@ -216,6 +216,18 @@ export const BadmintonFixturesManager = ({
   const configuredCourts = useMemo(() => {
     return generateCourtsList(courtConfig)
   }, [courtConfig])
+
+  const activeLiveMatches = useMemo(() => {
+    const list = []
+    Object.values(tournamentDraws || {}).forEach((draw) => {
+      (draw?.matches || []).forEach((m) => {
+        if ((m.status === 'live' || m.isLive === true) && m.status !== 'completed' && m.court) {
+          list.push(m)
+        }
+      })
+    })
+    return list
+  }, [tournamentDraws])
 
   const activeAdsCount = (sponsorAds || []).filter((a) => a.active !== false).length
 
@@ -1740,31 +1752,7 @@ export const BadmintonFixturesManager = ({
   const handlePromptStartLive = (match) => {
     if (!match) return
 
-    let curList = availableUmpiresList || []
-    try {
-      const saved = localStorage.getItem('badminton-temporary-credentials')
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed)) {
-          curList = parsed.filter((c) => c.role === 'umpire' || c.scope === 'umpire' || !c.role)
-        }
-      }
-    } catch {}
-
-    // When in Manual Mode (GREEN) or when NO umpire logins exist: Umpire selection is bypassed! Set to live and open manual scoring
-    if (!isLiveUmpireMode || curList.length === 0) {
-      handleUpdateMatch(match.id, { status: 'live', isLive: true })
-      setQuickScoreScheduleMatch(match)
-      setSwapToast(
-        curList.length === 0
-          ? `🟢 Match #${match.matchNumber || ''} is now LIVE (Manual Scoring Mode • No Umpires Created)!`
-          : `🟢 Match #${match.matchNumber || ''} is now LIVE (Manual Scoring Mode)!`
-      )
-      setTimeout(() => setSwapToast(null), 3500)
-      return
-    }
-
-    const targetCourt = match.court || selectedMatch?.courtName || 'Court 1'
+    const targetCourt = match.court || (configuredCourts && configuredCourts.length > 0 ? configuredCourts[0] : 'Court 1')
     loadAvailableUmpires(targetCourt)
     setAssigningLiveMatch(match)
     setSelectedLiveCourt(targetCourt)
@@ -1781,10 +1769,11 @@ export const BadmintonFixturesManager = ({
   const handleConfirmStartLiveMatch = (startLiveImmediately = true) => {
     if (!assigningLiveMatch) return
 
-    let targetUsername = selectedUmpireUsername
+    const chosenCourt = selectedLiveCourt || (configuredCourts && configuredCourts.length > 0 ? configuredCourts[0] : 'Court 1')
+    let targetUsername = selectedUmpireUsername || ''
     let targetName = 'Official Umpire'
 
-    if (isQuickCreateUmpire) {
+    if (isLiveUmpireMode && isQuickCreateUmpire) {
       if (!quickUmpireUser.trim() || !quickUmpirePass.trim()) {
         alert('Please enter a username and password for the new umpire.')
         return
@@ -1798,7 +1787,7 @@ export const BadmintonFixturesManager = ({
         username: targetUsername,
         password: quickUmpirePass.trim(),
         role: 'umpire',
-        assignedCourt: selectedLiveCourt,
+        assignedCourt: chosenCourt,
         assignedMatchId: selectedMatch?.id || '',
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
@@ -1819,7 +1808,7 @@ export const BadmintonFixturesManager = ({
       }).catch(() => {})
 
       SupabaseService.upsertCredential(newCred).catch(() => {})
-    } else {
+    } else if (isLiveUmpireMode && selectedUmpireUsername) {
       const found = availableUmpiresList.find((u) => u.username === selectedUmpireUsername)
       if (found) {
         targetName = found.authName || found.name || found.username
@@ -1829,16 +1818,26 @@ export const BadmintonFixturesManager = ({
     handleUpdateMatch(assigningLiveMatch.id, {
       status: startLiveImmediately ? 'live' : 'scheduled',
       isLive: Boolean(startLiveImmediately),
-      court: selectedLiveCourt,
-      assignedCourt: selectedLiveCourt,
+      court: chosenCourt,
+      assignedCourt: chosenCourt,
       assignedUmpireUsername: targetUsername,
       assignedUmpireName: targetName,
     })
 
     if (startLiveImmediately) {
-      setSwapToast(`🚀 Match #${assigningLiveMatch.matchNumber || ''} is now LIVE on ${selectedLiveCourt}! Assigned to Umpire: ${targetName}`)
+      if (isLiveUmpireMode && targetUsername) {
+        setSwapToast(`🚀 Match #${assigningLiveMatch.matchNumber || ''} is now LIVE on ${chosenCourt}! Assigned to Umpire: ${targetName}`)
+      } else {
+        setSwapToast(`🚀 Match #${assigningLiveMatch.matchNumber || ''} is now LIVE on ${chosenCourt}!`)
+        setQuickScoreScheduleMatch({
+          ...assigningLiveMatch,
+          court: chosenCourt,
+          status: 'live',
+          isLive: true,
+        })
+      }
     } else {
-      setSwapToast(`📋 Match #${assigningLiveMatch.matchNumber || ''} assigned to ${targetName} on ${selectedLiveCourt} (Showing in Upcoming Queue)!`)
+      setSwapToast(`📋 Match #${assigningLiveMatch.matchNumber || ''} assigned to ${chosenCourt} (Scheduled Queue)!`)
     }
     setTimeout(() => setSwapToast(null), 4000)
 
@@ -5748,7 +5747,32 @@ export const BadmintonFixturesManager = ({
 
                         {/* Meta Line: Court, Time, Venue */}
                         <div className="schedule-card-meta">
-                          {m.court && m.court !== 'BYE' && <span>🏟️ {m.court}</span>}
+                          {!isPublicView ? (
+                            <button
+                              type="button"
+                              onClick={() => handlePromptStartLive(m)}
+                              style={{
+                                background: m.status === 'live' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.15)',
+                                border: `1px solid ${m.status === 'live' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(56, 189, 248, 0.4)'}`,
+                                borderRadius: '6px',
+                                padding: '2px 8px',
+                                color: m.status === 'live' ? '#fca5a5' : '#38bdf8',
+                                fontSize: '11px',
+                                fontWeight: '800',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                              }}
+                              title="Click to select or change court"
+                            >
+                              <span>🏟️</span>
+                              <span>{m.court && m.court !== 'BYE' ? m.court : 'Select Court'}</span>
+                              <span style={{ fontSize: '9px', opacity: 0.8 }}>✏️</span>
+                            </button>
+                          ) : (
+                            m.court && m.court !== 'BYE' && <span>🏟️ {m.court}</span>
+                          )}
                           {m.time && (
                             <span style={{ color: '#38bdf8', fontWeight: '800' }}>
                               ⏱ {m.time}
@@ -6010,10 +6034,36 @@ export const BadmintonFixturesManager = ({
                               </td>
                               <td>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  {m.court && m.court !== 'BYE' && (
-                                    <span style={{ fontWeight: '700', color: '#f8fafc' }}>
-                                      🏟️ {m.court}
-                                    </span>
+                                  {!isPublicView ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePromptStartLive(m)}
+                                      style={{
+                                        background: m.status === 'live' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.15)',
+                                        border: `1px solid ${m.status === 'live' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(56, 189, 248, 0.4)'}`,
+                                        borderRadius: '6px',
+                                        padding: '2px 8px',
+                                        color: m.status === 'live' ? '#fca5a5' : '#38bdf8',
+                                        fontSize: '11px',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        width: 'fit-content',
+                                      }}
+                                      title="Click to select or change court"
+                                    >
+                                      <span>🏟️</span>
+                                      <span>{m.court && m.court !== 'BYE' ? m.court : 'Select Court'}</span>
+                                      <span style={{ fontSize: '9px', opacity: 0.8 }}>✏️</span>
+                                    </button>
+                                  ) : (
+                                    m.court && m.court !== 'BYE' && (
+                                      <span style={{ fontWeight: '700', color: '#f8fafc' }}>
+                                        🏟️ {m.court}
+                                      </span>
+                                    )
                                   )}
                                   {(m.time || m.scheduledTime) && (
                                     <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
@@ -7276,380 +7326,590 @@ export const BadmintonFixturesManager = ({
       })()}
 
       {/* ==================================================================== */}
-      {/* ASSIGN OFFICIAL UMPIRE & START LIVE MATCH MODAL (Admin Only)         */}
-      {/* ==================================================================== */}
-      {!isPublicView && assigningLiveMatch && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(2, 6, 23, 0.85)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 99999,
-            padding: '16px',
-          }}
-          onClick={() => setAssigningLiveMatch(null)}
-        >
+      {/* Interactive Court Selection & Live Match Launcher Modal */}
+      {!isPublicView && assigningLiveMatch && (() => {
+        const isP1Rep = isPlayerReported(assigningLiveMatch.player1)
+        const isP2Rep = isPlayerReported(assigningLiveMatch.player2)
+        const isBothRep = isMatchBothReported(assigningLiveMatch)
+
+        return (
           <div
             style={{
-              background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)',
-              border: '1.5px solid rgba(239, 68, 68, 0.5)',
-              borderRadius: '20px',
-              maxWidth: '560px',
-              width: '100%',
-              padding: '24px',
-              boxShadow: '0 25px 60px -15px rgba(239, 68, 68, 0.35), 0 0 40px rgba(0, 0, 0, 0.8)',
-              color: '#f8fafc',
-              position: 'relative',
-              maxHeight: '90vh',
-              overflowY: 'auto',
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(2, 6, 23, 0.85)',
+              backdropFilter: 'blur(10px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 99999,
+              padding: '16px',
+              animation: 'fadeIn 0.2s ease',
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setAssigningLiveMatch(null)}
           >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="live-pulse-dot" style={{ width: '10px', height: '10px', background: '#ef4444' }} />
-                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                    Live Court Match Initialization
-                  </span>
-                </div>
-                <h3 style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: '900', color: '#ffffff' }}>
-                  Assign Official Umpire & Start Live
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAssigningLiveMatch(null)}
-                style={{
-                  background: 'rgba(148, 163, 184, 0.1)',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '10px',
-                  color: '#94a3b8',
-                  width: '32px',
-                  height: '32px',
-                  cursor: 'pointer',
-                  fontSize: '16px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Match Summary Card */}
             <div
               style={{
-                background: 'rgba(15, 23, 42, 0.8)',
-                border: '1px solid rgba(56, 189, 248, 0.25)',
-                borderRadius: '14px',
-                padding: '14px 16px',
-                marginBottom: '18px',
+                background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)',
+                border: '1.5px solid rgba(56, 189, 248, 0.45)',
+                borderRadius: '20px',
+                maxWidth: '620px',
+                width: '100%',
+                padding: '24px',
+                boxShadow: '0 25px 60px -15px rgba(2, 132, 199, 0.35), 0 0 40px rgba(0, 0, 0, 0.85)',
+                color: '#f8fafc',
+                position: 'relative',
+                maxHeight: '92vh',
+                overflowY: 'auto',
+                boxSizing: 'border-box',
               }}
+              onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', color: '#94a3b8', marginBottom: '6px' }}>
-                <span style={{ fontWeight: '800', color: '#38bdf8' }}>Match #{assigningLiveMatch.matchNumber} • {assigningLiveMatch.roundName || 'Knockout Round'}</span>
-                <span>{selectedCategory}</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontWeight: '800', fontSize: '15px', color: '#ffffff' }}>
-                <span style={{ color: '#60a5fa' }}>{assigningLiveMatch.player1?.name || 'Player 1'}</span>
-                <span style={{ fontSize: '12px', color: '#64748b', padding: '0 8px' }}>VS</span>
-                <span style={{ color: '#f43f5e' }}>{assigningLiveMatch.player2?.name || 'Player 2'}</span>
-              </div>
-            </div>
-
-            {/* Court Selection */}
-            <div style={{ marginBottom: '18px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '800', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  🏸 Select Match Court ({configuredCourts.length} Available):
-                </label>
+              {/* Modal Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="live-pulse-dot" style={{ width: '10px', height: '10px', background: '#ef4444' }} />
+                    <span style={{ fontSize: '12px', fontWeight: '800', color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                      Match Court Setup & Live Launcher
+                    </span>
+                  </div>
+                  <h3 style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: '900', color: '#ffffff' }}>
+                    Select Match Court & Launch Live
+                  </h3>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setIsCourtConfigModalOpen(true)}
+                  onClick={() => setAssigningLiveMatch(null)}
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '11.5px',
-                    fontWeight: '800',
+                    background: 'rgba(148, 163, 184, 0.1)',
+                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                    borderRadius: '10px',
+                    color: '#94a3b8',
+                    width: '32px',
+                    height: '32px',
                     cursor: 'pointer',
-                    textDecoration: 'underline',
-                    padding: 0,
+                    fontSize: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
-                  ⚙️ Edit Courts
+                  ✕
                 </button>
               </div>
+
+              {/* Match Details Preview Card */}
               <div
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${Math.min(4, Math.max(2, configuredCourts.length))}, 1fr)`,
-                  gap: '8px',
-                  maxHeight: '140px',
-                  overflowY: 'auto',
+                  background: 'rgba(15, 23, 42, 0.85)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  marginBottom: '16px',
+                  boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)',
                 }}
               >
-                {configuredCourts.map((court) => (
-                  <button
-                    key={court}
-                    type="button"
-                    onClick={() => setSelectedLiveCourt(court)}
-                    style={{
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      background: selectedLiveCourt === court ? 'rgba(59, 130, 246, 0.35)' : 'rgba(15, 23, 42, 0.6)',
-                      border: selectedLiveCourt === court ? '2px solid #38bdf8' : '1px solid rgba(148, 163, 184, 0.2)',
-                      color: selectedLiveCourt === court ? '#ffffff' : '#94a3b8',
-                      fontWeight: '800',
-                      fontSize: '12px',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                      boxShadow: selectedLiveCourt === court ? '0 0 10px rgba(56, 189, 248, 0.35)' : 'none',
-                    }}
-                  >
-                    {court}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Umpire Selection Section */}
-            <div style={{ marginBottom: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label style={{ fontSize: '12px', fontWeight: '800', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  👤 Select Official Umpire Login ({availableUmpiresList.length} Available):
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsQuickCreateUmpire(!isQuickCreateUmpire)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '11.5px',
-                    fontWeight: '800',
-                    cursor: 'pointer',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  {isQuickCreateUmpire ? '← Choose From Available Umpires' : '➕ Create New Umpire'}
-                </button>
-              </div>
-
-              {!isQuickCreateUmpire ? (
-                <>
-                  {/* Search Filter for Umpires if > 4 */}
-                  {availableUmpiresList.length > 4 && (
-                    <div style={{ marginBottom: '8px' }}>
-                      <input
-                        type="text"
-                        value={umpireSearchQuery}
-                        onChange={(e) => setUmpireSearchQuery(e.target.value)}
-                        placeholder="🔍 Search umpire by name, username, or court..."
-                        style={{
-                          width: '100%',
-                          padding: '7px 12px',
-                          borderRadius: '8px',
-                          background: 'rgba(15, 23, 42, 0.6)',
-                          border: '1px solid rgba(148, 163, 184, 0.25)',
-                          color: '#fff',
-                          fontSize: '12px',
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {availableUmpiresList.length > 0 ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto', paddingRight: '2px' }}>
-                      {availableUmpiresList
-                        .filter((umpire) => {
-                          if (!umpireSearchQuery.trim()) return true
-                          const q = umpireSearchQuery.toLowerCase()
-                          const name = (umpire.authName || umpire.name || '').toLowerCase()
-                          const user = (umpire.username || '').toLowerCase()
-                          const court = (umpire.assignedCourt || umpire.courtName || '').toLowerCase()
-                          return name.includes(q) || user.includes(q) || court.includes(q)
-                        })
-                        .map((umpire) => {
-                          const isSelected = selectedUmpireUsername === umpire.username
-                          return (
-                            <div
-                              key={umpire.username || umpire.id}
-                              onClick={() => {
-                                setSelectedUmpireUsername(umpire.username)
-                                if (umpire.assignedCourt && umpire.assignedCourt !== 'All Courts') {
-                                  setSelectedLiveCourt(umpire.assignedCourt)
-                                } else if (umpire.courtName && umpire.courtName !== 'Main Stadium' && umpire.courtName !== 'All Courts') {
-                                  setSelectedLiveCourt(umpire.courtName)
-                                }
-                              }}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                padding: '10px 14px',
-                                borderRadius: '10px',
-                                background: isSelected ? 'rgba(59, 130, 246, 0.22)' : 'rgba(15, 23, 42, 0.5)',
-                                border: isSelected ? '2px solid #3b82f6' : '1px solid rgba(148, 163, 184, 0.2)',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <div
-                                  style={{
-                                    width: '16px',
-                                    height: '16px',
-                                    borderRadius: '50%',
-                                    border: isSelected ? '5px solid #3b82f6' : '2px solid #64748b',
-                                    background: '#0f172a',
-                                    flexShrink: 0,
-                                  }}
-                                />
-                                <div>
-                                  <div style={{ fontSize: '13px', fontWeight: '800', color: isSelected ? '#ffffff' : '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    {umpire.authName || umpire.name || 'Official Umpire'}
-                                    {umpire.expiry === 'Permanent' && (
-                                      <span style={{ fontSize: '9.5px', background: 'rgba(16, 185, 129, 0.2)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '1px 5px', borderRadius: '4px', fontWeight: '700' }}>
-                                        Official
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                                    Username: <code style={{ color: '#38bdf8', fontWeight: '700' }}>{umpire.username}</code> • Pass: <code style={{ color: '#94a3b8' }}>{umpire.password || '••••'}</code>
-                                  </div>
-                                </div>
-                              </div>
-                              {umpire.assignedCourt && (
-                                <span style={{ fontSize: '10px', fontWeight: '700', background: isSelected ? 'rgba(59, 130, 246, 0.3)' : 'rgba(148, 163, 184, 0.15)', padding: '3px 8px', borderRadius: '5px', color: isSelected ? '#93c5fd' : '#94a3b8', border: isSelected ? '1px solid #3b82f6' : 'none' }}>
-                                  {umpire.assignedCourt}
-                                </span>
-                              )}
-                            </div>
-                          )
-                        })}
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '10px', border: '1px dashed rgba(148, 163, 184, 0.3)' }}>
-                      <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#94a3b8' }}>
-                        No umpire logins available. Click below to create one instantly!
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => setIsQuickCreateUmpire(true)}
-                        style={{
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                          color: '#fff',
-                          border: 'none',
-                          fontWeight: '800',
-                          fontSize: '12px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        ➕ Quick Create Umpire
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                /* Quick Create Umpire Box */
-                <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1.5px solid rgba(56, 189, 248, 0.4)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: '800' }}>
-                    ⚡ Instant Umpire Credential Setup:
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '3px' }}>Umpire Official Name:</label>
-                    <input
-                      type="text"
-                      value={quickUmpireName}
-                      onChange={(e) => setQuickUmpireName(e.target.value)}
-                      placeholder="e.g. Court 1 Umpire"
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.3)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '3px' }}>Username:</label>
-                      <input
-                        type="text"
-                        value={quickUmpireUser}
-                        onChange={(e) => setQuickUmpireUser(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.3)', color: '#38bdf8', fontWeight: '800', fontSize: '13px', boxSizing: 'border-box' }}
-                      />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '3px' }}>Password:</label>
-                      <input
-                        type="text"
-                        value={quickUmpirePass}
-                        onChange={(e) => setQuickUmpirePass(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.3)', color: '#4ade80', fontWeight: '800', fontSize: '13px', boxSizing: 'border-box' }}
-                      />
-                    </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#94a3b8', marginBottom: '8px' }}>
+                  <span style={{ fontWeight: '800', color: '#38bdf8' }}>
+                    Match #{assigningLiveMatch.matchNumber} • {assigningLiveMatch.roundName || 'Knockout Round'}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ color: '#cbd5e1', fontWeight: '700' }}>{selectedCategory}</span>
+                    {isBothRep ? (
+                      <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#4ade80', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '1px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: '800' }}>
+                        ⚡ Ready to Play
+                      </span>
+                    ) : (
+                      <span style={{ background: 'rgba(234, 179, 8, 0.15)', color: '#facc15', border: '1px solid rgba(234, 179, 8, 0.3)', padding: '1px 6px', borderRadius: '4px', fontSize: '10.5px', fontWeight: '800' }}>
+                        ⏳ {(isP1Rep || isP2Rep) ? '1 Player Reported' : 'Awaiting Check-in'}
+                      </span>
+                    )}
                   </div>
                 </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(148, 163, 184, 0.15)' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#60a5fa' }}>
+                      {assigningLiveMatch.player1?.name || 'Player 1'}
+                    </div>
+                    {isP1Rep && (
+                      <div style={{ fontSize: '10.5px', color: '#4ade80', fontWeight: '700', marginTop: '2px' }}>
+                        ✓ Reported
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontWeight: '900', fontSize: '12px', color: '#64748b' }}>VS</div>
+                  <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(148, 163, 184, 0.15)', textAlign: 'right' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '900', color: '#f43f5e' }}>
+                      {assigningLiveMatch.player2?.name || 'Player 2'}
+                    </div>
+                    {isP2Rep && (
+                      <div style={{ fontSize: '10.5px', color: '#4ade80', fontWeight: '700', marginTop: '2px' }}>
+                        ✓ Reported
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 1: Court Count Input & Stepper */}
+              <div
+                style={{
+                  background: 'rgba(15, 23, 42, 0.7)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    🏟️ Total Stadium Courts ({configuredCourts.length} Configured):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsCourtConfigModalOpen(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#38bdf8',
+                      fontSize: '11.5px',
+                      fontWeight: '800',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      padding: 0,
+                    }}
+                  >
+                    ⚙️ Custom Naming (A, B, C...)
+                  </button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = Number(courtConfig?.count !== undefined ? courtConfig.count : configuredCourts.length) || 1
+                      const next = Math.max(1, cur - 1)
+                      const nextCfg = { ...(courtConfig || DEFAULT_COURT_CONFIG), count: next }
+                      saveCourtConfig(nextCfg)
+                      setCourtConfig(nextCfg)
+                    }}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '8px',
+                      background: 'rgba(30, 41, 59, 0.9)',
+                      border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                      color: '#38bdf8',
+                      fontSize: '18px',
+                      fontWeight: '900',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    title="Decrease Courts"
+                  >
+                    −
+                  </button>
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={courtConfig?.count !== undefined ? courtConfig.count : configuredCourts.length}
+                      onChange={(e) => {
+                        const cleaned = e.target.value.replace(/[^0-9]/g, '')
+                        const nextCount = cleaned === '' ? '' : parseInt(cleaned, 10) || 1
+                        const nextCfg = { ...(courtConfig || DEFAULT_COURT_CONFIG), count: nextCount }
+                        saveCourtConfig(nextCfg)
+                        setCourtConfig(nextCfg)
+                      }}
+                      placeholder="Enter court count (e.g. 4)"
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: '#0f172a',
+                        border: '1.5px solid #38bdf8',
+                        color: '#ffffff',
+                        fontSize: '16px',
+                        fontWeight: '900',
+                        textAlign: 'center',
+                        boxSizing: 'border-box',
+                        boxShadow: '0 0 12px rgba(56, 189, 248, 0.2)',
+                      }}
+                    />
+                    <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '11px', color: '#94a3b8', fontWeight: '800', pointerEvents: 'none' }}>
+                      Courts
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cur = Number(courtConfig?.count !== undefined ? courtConfig.count : configuredCourts.length) || 0
+                      const next = cur + 1
+                      const nextCfg = { ...(courtConfig || DEFAULT_COURT_CONFIG), count: next }
+                      saveCourtConfig(nextCfg)
+                      setCourtConfig(nextCfg)
+                    }}
+                    style={{
+                      width: '40px',
+                      height: '40px',
+                      borderRadius: '8px',
+                      background: 'rgba(30, 41, 59, 0.9)',
+                      border: '1.5px solid rgba(56, 189, 248, 0.4)',
+                      color: '#38bdf8',
+                      fontSize: '18px',
+                      fontWeight: '900',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    title="Increase Courts"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 2: Choose Court from Cards */}
+              <div style={{ marginBottom: '18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: '800', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    🏸 Choose Match Court to Play:
+                  </label>
+                  <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800' }}>
+                    Selected: <strong>{selectedLiveCourt}</strong>
+                  </span>
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                    gap: '10px',
+                    maxHeight: '190px',
+                    overflowY: 'auto',
+                    padding: '2px',
+                  }}
+                >
+                  {configuredCourts.map((court) => {
+                    const isSelected = selectedLiveCourt === court
+                    const liveM = (activeLiveMatches || []).find(
+                      (m) => (m.court === court || m.assignedCourt === court) && m.id !== assigningLiveMatch.id
+                    )
+                    return (
+                      <div
+                        key={court}
+                        onClick={() => setSelectedLiveCourt(court)}
+                        style={{
+                          padding: '12px 10px',
+                          borderRadius: '12px',
+                          background: isSelected
+                            ? 'linear-gradient(135deg, rgba(14, 165, 233, 0.35) 0%, rgba(3, 105, 161, 0.45) 100%)'
+                            : liveM
+                              ? 'rgba(239, 68, 68, 0.12)'
+                              : 'rgba(15, 23, 42, 0.75)',
+                          border: isSelected
+                            ? '2px solid #38bdf8'
+                            : liveM
+                              ? '1px solid rgba(239, 68, 68, 0.4)'
+                              : '1px solid rgba(148, 163, 184, 0.25)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '4px',
+                          transition: 'all 0.15s ease',
+                          boxShadow: isSelected ? '0 0 16px rgba(56, 189, 248, 0.4)' : 'none',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '13px', fontWeight: '900', color: isSelected ? '#ffffff' : '#e2e8f0' }}>
+                            🏟️ {court}
+                          </span>
+                          {isSelected && (
+                            <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: '900' }}>✓</span>
+                          )}
+                        </div>
+                        {liveM ? (
+                          <div style={{ fontSize: '10px', color: '#f87171', fontWeight: '700', lineHeight: 1.2, marginTop: '2px' }}>
+                            🔴 M#{liveM.matchNumber}: {liveM.player1?.name || 'P1'} vs {liveM.player2?.name || 'P2'}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: '10.5px', color: '#4ade80', fontWeight: '700', marginTop: '2px' }}>
+                            🟢 Available
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Scoring Mode Box: Manual vs Live Umpire */}
+              {!isLiveUmpireMode ? (
+                <div
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.3)',
+                    borderRadius: '10px',
+                    padding: '10px 14px',
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                >
+                  <span style={{ fontSize: '18px' }}>🟢</span>
+                  <div style={{ fontSize: '12px', color: '#a7f3d0' }}>
+                    <strong>Manual Scoring Mode:</strong> Match will be set to Live on <strong>{selectedLiveCourt}</strong> immediately. You can enter scores directly from the Schedule Desk or Live Scoresheet!
+                  </div>
+                </div>
+              ) : (
+                /* Umpire Selection Section when Live Umpire Mode is ON */
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: '800', color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      👤 Select Official Umpire Login ({availableUmpiresList.length} Available):
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickCreateUmpire(!isQuickCreateUmpire)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#38bdf8',
+                        fontSize: '11.5px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      {isQuickCreateUmpire ? '← Choose From Available Umpires' : '➕ Create New Umpire'}
+                    </button>
+                  </div>
+
+                  {!isQuickCreateUmpire ? (
+                    <>
+                      {availableUmpiresList.length > 4 && (
+                        <div style={{ marginBottom: '8px' }}>
+                          <input
+                            type="text"
+                            value={umpireSearchQuery}
+                            onChange={(e) => setUmpireSearchQuery(e.target.value)}
+                            placeholder="🔍 Search umpire by name, username, or court..."
+                            style={{
+                              width: '100%',
+                              padding: '7px 12px',
+                              borderRadius: '8px',
+                              background: 'rgba(15, 23, 42, 0.6)',
+                              border: '1px solid rgba(148, 163, 184, 0.25)',
+                              color: '#fff',
+                              fontSize: '12px',
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {availableUmpiresList.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '2px' }}>
+                          {availableUmpiresList
+                            .filter((umpire) => {
+                              if (!umpireSearchQuery.trim()) return true
+                              const q = umpireSearchQuery.toLowerCase()
+                              const name = (umpire.authName || umpire.name || '').toLowerCase()
+                              const user = (umpire.username || '').toLowerCase()
+                              const court = (umpire.assignedCourt || umpire.courtName || '').toLowerCase()
+                              return name.includes(q) || user.includes(q) || court.includes(q)
+                            })
+                            .map((umpire) => {
+                              const isSelected = selectedUmpireUsername === umpire.username
+                              return (
+                                <div
+                                  key={umpire.username || umpire.id}
+                                  onClick={() => {
+                                    setSelectedUmpireUsername(umpire.username)
+                                    if (umpire.assignedCourt && umpire.assignedCourt !== 'All Courts') {
+                                      setSelectedLiveCourt(umpire.assignedCourt)
+                                    } else if (umpire.courtName && umpire.courtName !== 'Main Stadium' && umpire.courtName !== 'All Courts') {
+                                      setSelectedLiveCourt(umpire.courtName)
+                                    }
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '10px 14px',
+                                    borderRadius: '10px',
+                                    background: isSelected ? 'rgba(59, 130, 246, 0.22)' : 'rgba(15, 23, 42, 0.5)',
+                                    border: isSelected ? '2px solid #3b82f6' : '1px solid rgba(148, 163, 184, 0.2)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease',
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div
+                                      style={{
+                                        width: '16px',
+                                        height: '16px',
+                                        borderRadius: '50%',
+                                        border: isSelected ? '5px solid #3b82f6' : '2px solid #64748b',
+                                        background: '#0f172a',
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                    <div>
+                                      <div style={{ fontSize: '13px', fontWeight: '800', color: isSelected ? '#ffffff' : '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        {umpire.authName || umpire.name || 'Official Umpire'}
+                                      </div>
+                                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                                        Username: <code style={{ color: '#38bdf8', fontWeight: '700' }}>{umpire.username}</code> • Pass: <code style={{ color: '#94a3b8' }}>{umpire.password || '••••'}</code>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {umpire.assignedCourt && (
+                                    <span style={{ fontSize: '10px', fontWeight: '700', background: isSelected ? 'rgba(59, 130, 246, 0.3)' : 'rgba(148, 163, 184, 0.15)', padding: '3px 8px', borderRadius: '5px', color: isSelected ? '#93c5fd' : '#94a3b8', border: isSelected ? '1px solid #3b82f6' : 'none' }}>
+                                      {umpire.assignedCourt}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })}
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '14px', background: 'rgba(15, 23, 42, 0.5)', borderRadius: '10px', border: '1px dashed rgba(148, 163, 184, 0.3)' }}>
+                          <p style={{ margin: '0 0 10px 0', fontSize: '12px', color: '#94a3b8' }}>
+                            No umpire logins available. Click below to create one instantly!
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setIsQuickCreateUmpire(true)}
+                            style={{
+                              padding: '7px 14px',
+                              borderRadius: '8px',
+                              background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                              color: '#fff',
+                              border: 'none',
+                              fontWeight: '800',
+                              fontSize: '12px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            ➕ Quick Create Umpire
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    /* Quick Create Umpire Box */
+                    <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1.5px solid rgba(56, 189, 248, 0.4)', borderRadius: '12px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ fontSize: '11.5px', color: '#38bdf8', fontWeight: '800' }}>
+                        ⚡ Instant Umpire Credential Setup:
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '3px' }}>Umpire Official Name:</label>
+                        <input
+                          type="text"
+                          value={quickUmpireName}
+                          onChange={(e) => setQuickUmpireName(e.target.value)}
+                          placeholder="e.g. Court 1 Umpire"
+                          style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.3)', color: '#fff', fontSize: '13px', boxSizing: 'border-box' }}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '3px' }}>Username:</label>
+                          <input
+                            type="text"
+                            value={quickUmpireUser}
+                            onChange={(e) => setQuickUmpireUser(e.target.value)}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.3)', color: '#38bdf8', fontWeight: '800', fontSize: '13px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginBottom: '3px' }}>Password:</label>
+                          <input
+                            type="text"
+                            value={quickUmpirePass}
+                            onChange={(e) => setQuickUmpirePass(e.target.value)}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#0f172a', border: '1px solid rgba(148, 163, 184, 0.3)', color: '#4ade80', fontWeight: '800', fontSize: '13px', boxSizing: 'border-box' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
-            </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
-              <button
-                type="button"
-                disabled={!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0}
-                onClick={() => handleConfirmStartLiveMatch(true)}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                  border: 'none',
-                  color: '#ffffff',
-                  fontWeight: '900',
-                  fontSize: '14px',
-                  cursor: (!isQuickCreateUmpire && !selectedUmpireUsername && availableUmpiresList.length === 0) ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 18px rgba(239, 68, 68, 0.45)',
-                  transition: 'all 0.2s ease',
-                }}
-              >
-                <span className="live-pulse-dot" style={{ width: '8px', height: '8px', background: '#ffffff' }} />
-                <span>🚀 Launch Live</span>
-              </button>
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmStartLiveMatch(true)}
+                  style={{
+                    width: '100%',
+                    padding: '14px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontWeight: '900',
+                    fontSize: '15px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    boxShadow: '0 4px 20px rgba(239, 68, 68, 0.45)',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <span className="live-pulse-dot" style={{ width: '8px', height: '8px', background: '#ffffff' }} />
+                  <span>🔴 Start Match Live on {selectedLiveCourt}</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setAssigningLiveMatch(null)}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  borderRadius: '10px',
-                  background: 'rgba(148, 163, 184, 0.1)',
-                  border: '1px solid rgba(148, 163, 184, 0.25)',
-                  color: '#94a3b8',
-                  fontWeight: '700',
-                  fontSize: '12.5px',
-                  cursor: 'pointer',
-                }}
-              >
-                ✕ Cancel
-              </button>
+                <button
+                  type="button"
+                  onClick={() => handleConfirmStartLiveMatch(false)}
+                  style={{
+                    width: '100%',
+                    padding: '11px',
+                    borderRadius: '10px',
+                    background: 'rgba(2, 132, 199, 0.18)',
+                    border: '1px solid rgba(56, 189, 248, 0.4)',
+                    color: '#38bdf8',
+                    fontWeight: '800',
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  📋 Assign Court ({selectedLiveCourt}) & Keep Scheduled
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAssigningLiveMatch(null)}
+                  style={{
+                    width: '100%',
+                    padding: '10px',
+                    borderRadius: '10px',
+                    background: 'rgba(148, 163, 184, 0.1)',
+                    border: '1px solid rgba(148, 163, 184, 0.25)',
+                    color: '#94a3b8',
+                    fontWeight: '700',
+                    fontSize: '12.5px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ✕ Cancel
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Interactive Match Breakdown Details & Quick Scoring Popup Modal */}
       {viewingMatchDetails && (() => {
