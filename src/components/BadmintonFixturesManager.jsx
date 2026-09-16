@@ -5284,17 +5284,7 @@ export const BadmintonFixturesManager = ({
                     </div>
                   </div>
 
-                  <div
-                    className={`schedule-stat-card ready ${scheduleFilter === 'ready' ? 'active' : ''}`}
-                    onClick={() => setScheduleFilter((prev) => (prev === 'ready' ? 'all' : 'ready'))}
-                    title="Click to filter Ready to Play matches (both players checked in at desk)"
-                  >
-                    <span className="schedule-stat-icon">⚡</span>
-                    <div className="schedule-stat-info">
-                      <span className="schedule-stat-num">{readyScheduleCount}</span>
-                      <span className="schedule-stat-label">Ready to Play</span>
-                    </div>
-                  </div>
+
 
                   <div
                     className={`schedule-stat-card live ${scheduleFilter === 'live' ? 'active' : ''}`}
@@ -5592,15 +5582,7 @@ export const BadmintonFixturesManager = ({
                       <span>All Matches</span>
                       <span className="schedule-chip-count">{totalScheduleCount}</span>
                     </button>
-                    <button
-                      type="button"
-                      className={`schedule-status-chip ready ${scheduleFilter === 'ready' ? 'active' : ''}`}
-                      onClick={() => setScheduleFilter('ready')}
-                      title="Matches where BOTH players have reported at desk and are ready to play!"
-                    >
-                      <span>⚡ Ready to Play</span>
-                      <span className="schedule-chip-count">{readyScheduleCount}</span>
-                    </button>
+
                     <button
                       type="button"
                       className={`schedule-status-chip live ${scheduleFilter === 'live' ? 'active' : ''}`}
@@ -5728,15 +5710,7 @@ export const BadmintonFixturesManager = ({
                         key={matchUniqueKey}
                         className={`schedule-card ${m.status === 'live' ? 'is-live' : m.status === 'completed' ? 'is-completed' : ''} ${isBothRep ? 'both-reported' : ''}`}
                       >
-                        {/* Ready to Play Banner when BOTH players reported */}
-                        {isBothRep && (
-                          <div className="schedule-ready-banner">
-                            <span>⚡ Court Ready • Both Players Reported</span>
-                            <span style={{ fontSize: '10.5px', background: 'rgba(56, 189, 248, 0.25)', padding: '2px 6px', borderRadius: '4px' }}>
-                              Ready to Play
-                            </span>
-                          </div>
-                        )}
+
 
                         {/* Header: Match Num, Round Badge, Dynamic Status Selector */}
                         <div className="schedule-card-header">
@@ -6029,34 +6003,7 @@ export const BadmintonFixturesManager = ({
                                         {p1?.name || 'TBD'}
                                       </span>
                                     )}
-                                    {!isPublicView && p1 && !p1.isBye ? (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          togglePlayerReporting(p1, m.categoryName)
-                                        }}
-                                        title={isP1Rep ? 'Click to UNTICK Player 1' : 'Click to TICK Player 1'}
-                                        style={{
-                                          background: isP1Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
-                                          border: `1px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
-                                          color: isP1Rep ? '#4ade80' : '#94a3b8',
-                                          borderRadius: '4px',
-                                          padding: '1px 6px',
-                                          fontSize: '10.5px',
-                                          fontWeight: '700',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '3px',
-                                        }}
-                                      >
-                                        <span>{isP1Rep ? '☑️' : '⬜'}</span>
-                                        <span>{isP1Rep ? 'Rep' : 'In'}</span>
-                                      </button>
-                                    ) : (
-                                      isP1Rep && <span className="schedule-player-reported-badge">✓ Reported</span>
-                                    )}
+{isP1Rep && <span className="schedule-player-reported-badge">✓ Reported</span>}
                                     {Boolean(!p1?.isBye && (p1?.place || p1?.court)) && (
                                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                                         ({[p1.place, p1.court].filter(Boolean).join(' • ')})
@@ -6074,34 +6021,7 @@ export const BadmintonFixturesManager = ({
                                         {p2?.name || 'TBD'}
                                       </span>
                                     )}
-                                    {!isPublicView && p2 && !p2.isBye ? (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          togglePlayerReporting(p2, m.categoryName)
-                                        }}
-                                        title={isP2Rep ? 'Click to UNTICK Player 2' : 'Click to TICK Player 2'}
-                                        style={{
-                                          background: isP2Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
-                                          border: `1px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
-                                          color: isP2Rep ? '#4ade80' : '#94a3b8',
-                                          borderRadius: '4px',
-                                          padding: '1px 6px',
-                                          fontSize: '10.5px',
-                                          fontWeight: '700',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '3px',
-                                        }}
-                                      >
-                                        <span>{isP2Rep ? '☑️' : '⬜'}</span>
-                                        <span>{isP2Rep ? 'Rep' : 'In'}</span>
-                                      </button>
-                                    ) : (
-                                      isP2Rep && <span className="schedule-player-reported-badge">✓ Reported</span>
-                                    )}
+{isP2Rep && <span className="schedule-player-reported-badge">✓ Reported</span>}
                                     {Boolean(!p2?.isBye && (p2?.place || p2?.court)) && (
                                       <span style={{ fontSize: '11px', color: '#94a3b8' }}>
                                         ({[p2.place, p2.court].filter(Boolean).join(' • ')})
