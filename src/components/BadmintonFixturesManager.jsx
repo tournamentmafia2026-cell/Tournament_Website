@@ -5829,38 +5829,10 @@ export const BadmintonFixturesManager = ({
                                   {p1?.name || 'TBD'}
                                 </span>
                               )}
-                              {!isPublicView && p1 && !p1.isBye ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    togglePlayerReporting(p1, m.categoryName)
-                                  }}
-                                  title={isP1Rep ? 'Click to UNTICK Player 1 (Desk Check-in)' : 'Click to TICK Player 1 (Desk Check-in)'}
-                                  style={{
-                                    background: isP1Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
-                                    border: `1px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
-                                    color: isP1Rep ? '#4ade80' : '#94a3b8',
-                                    borderRadius: '6px',
-                                    padding: '2px 8px',
-                                    fontSize: '11px',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.15s ease',
-                                  }}
-                                >
-                                  <span>{isP1Rep ? '☑️' : '⬜'}</span>
-                                  <span>{isP1Rep ? 'Reported' : 'Check-in'}</span>
-                                </button>
-                              ) : (
-                                isP1Rep && (
-                                  <span className="schedule-player-reported-badge" title="Reported at desk">
-                                    ✓ Reported
-                                  </span>
-                                )
+                              {isP1Rep && (
+                                <span className="schedule-player-reported-badge" title="Reported at desk">
+                                  ✓ Reported
+                                </span>
                               )}
                               {Boolean(!p1?.isBye && (p1?.place || p1?.court)) && (
                                 <span className="schedule-player-meta-tag">
@@ -5887,38 +5859,10 @@ export const BadmintonFixturesManager = ({
                                   {p2?.name || 'TBD'}
                                 </span>
                               )}
-                              {!isPublicView && p2 && !p2.isBye ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    togglePlayerReporting(p2, m.categoryName)
-                                  }}
-                                  title={isP2Rep ? 'Click to UNTICK Player 2 (Desk Check-in)' : 'Click to TICK Player 2 (Desk Check-in)'}
-                                  style={{
-                                    background: isP2Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.1)',
-                                    border: `1px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
-                                    color: isP2Rep ? '#4ade80' : '#94a3b8',
-                                    borderRadius: '6px',
-                                    padding: '2px 8px',
-                                    fontSize: '11px',
-                                    fontWeight: '700',
-                                    cursor: 'pointer',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.15s ease',
-                                  }}
-                                >
-                                  <span>{isP2Rep ? '☑️' : '⬜'}</span>
-                                  <span>{isP2Rep ? 'Reported' : 'Check-in'}</span>
-                                </button>
-                              ) : (
-                                isP2Rep && (
-                                  <span className="schedule-player-reported-badge" title="Reported at desk">
-                                    ✓ Reported
-                                  </span>
-                                )
+                              {isP2Rep && (
+                                <span className="schedule-player-reported-badge" title="Reported at desk">
+                                  ✓ Reported
+                                </span>
                               )}
                               {Boolean(!p2?.isBye && (p2?.place || p2?.court)) && (
                                 <span className="schedule-player-meta-tag">
@@ -8340,63 +8284,50 @@ export const BadmintonFixturesManager = ({
                 </button>
               </div>
 
-              {/* Matchup Header with Check-in status */}
+              {/* Matchup Header */}
               <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: '1fr auto 1fr',
                   alignItems: 'center',
-                  gap: '8px',
+                  gap: '12px',
                   background: '#1e293b',
                   borderRadius: '12px',
-                  padding: '12px 14px',
+                  padding: '12px 16px',
                   marginBottom: '16px',
                   border: '1px solid rgba(148, 163, 184, 0.2)',
                 }}
               >
                 {/* Player 1 Card */}
                 <div style={{ textAlign: 'left' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     {Boolean(p1?.seed || p1?.isSeed) && (
                       <span className="official-seed-pill" style={{ fontSize: '10px', padding: '1px 4px' }}>
                         S{p1.seed}
                       </span>
                     )}
-                    <strong style={{ fontSize: '14px', color: isP1Winner ? '#4ade80' : '#60a5fa' }}>
+                    <strong style={{ fontSize: '15px', color: isP1Winner ? '#4ade80' : '#60a5fa' }}>
                       {p1?.name || (p1?.isBye ? 'BYE' : 'TBD')}
                     </strong>
                     {isP1Winner && <span>👑</span>}
                   </div>
-                  {p1 && !p1.isBye && (
-                    <button
-                      type="button"
-                      onClick={() => togglePlayerReporting(p1, targetMatch.categoryName)}
-                      style={{
-                        background: isP1Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.15)',
-                        border: `1px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
-                        color: isP1Rep ? '#4ade80' : '#cbd5e1',
-                        borderRadius: '6px',
-                        padding: '2px 8px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {isP1Rep ? '☑️ Reported' : '⬜ Check-in'}
-                    </button>
+                  {isP1Rep && (
+                    <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: '700' }}>
+                      ✓ Reported
+                    </span>
                   )}
                 </div>
 
                 {/* VS Badge */}
-                <div style={{ fontWeight: '900', fontSize: '12px', color: '#94a3b8', padding: '0 4px' }}>
+                <div style={{ fontWeight: '900', fontSize: '13px', color: '#64748b', padding: '0 4px' }}>
                   VS
                 </div>
 
                 {/* Player 2 Card */}
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', flexWrap: 'wrap' }}>
                     {isP2Winner && <span>👑</span>}
-                    <strong style={{ fontSize: '14px', color: isP2Winner ? '#4ade80' : '#f43f5e' }}>
+                    <strong style={{ fontSize: '15px', color: isP2Winner ? '#4ade80' : '#f43f5e' }}>
                       {p2?.name || (p2?.isBye ? 'BYE' : 'TBD')}
                     </strong>
                     {Boolean(p2?.seed || p2?.isSeed) && (
@@ -8405,23 +8336,10 @@ export const BadmintonFixturesManager = ({
                       </span>
                     )}
                   </div>
-                  {p2 && !p2.isBye && (
-                    <button
-                      type="button"
-                      onClick={() => togglePlayerReporting(p2, targetMatch.categoryName)}
-                      style={{
-                        background: isP2Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.15)',
-                        border: `1px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
-                        color: isP2Rep ? '#4ade80' : '#cbd5e1',
-                        borderRadius: '6px',
-                        padding: '2px 8px',
-                        fontSize: '11px',
-                        fontWeight: '700',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {isP2Rep ? '☑️ Reported' : '⬜ Check-in'}
-                    </button>
+                  {isP2Rep && (
+                    <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: '700' }}>
+                      ✓ Reported
+                    </span>
                   )}
                 </div>
               </div>
