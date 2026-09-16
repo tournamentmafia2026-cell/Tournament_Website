@@ -2676,7 +2676,11 @@ export const BadmintonFixturesManager = ({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleLaunchLiveTv(match.id)
+                        if (onStartLiveStream) {
+                          onStartLiveStream(match)
+                        } else {
+                          handleLaunchLiveTv(match.id)
+                        }
                       }}
                       style={{
                         padding: '10px 14px',
