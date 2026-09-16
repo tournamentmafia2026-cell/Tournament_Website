@@ -8274,7 +8274,7 @@ export const BadmintonFixturesManager = ({
       </div>
 
       {/* ==================================================================== */}
-            {/* QUICK MATCH SCORING & DESK CHECK-IN MODAL (Admin Schedule Mode)      */}
+                  {/* QUICK MATCH SCORING & DESK CHECK-IN MODAL (Admin Schedule Mode)      */}
       {/* ==================================================================== */}
       {!isPublicView && quickScoreScheduleMatch && (() => {
         const targetMatch = (currentDraw?.matches || []).find((m) => m.id === quickScoreScheduleMatch.id) || quickScoreScheduleMatch
@@ -8305,8 +8305,8 @@ export const BadmintonFixturesManager = ({
             style={{
               position: 'fixed',
               inset: 0,
-              background: 'rgba(2, 6, 23, 0.9)',
-              backdropFilter: 'blur(10px)',
+              background: 'rgba(2, 6, 23, 0.88)',
+              backdropFilter: 'blur(8px)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -8317,13 +8317,13 @@ export const BadmintonFixturesManager = ({
           >
             <div
               style={{
-                background: 'linear-gradient(150deg, #0f172a 0%, #1e293b 100%)',
-                border: '1.5px solid rgba(59, 130, 246, 0.5)',
-                borderRadius: '20px',
-                maxWidth: '640px',
+                background: '#0f172a',
+                border: '1.5px solid #3b82f6',
+                borderRadius: '18px',
+                maxWidth: '520px',
                 width: '100%',
-                padding: '24px',
-                boxShadow: '0 25px 60px -15px rgba(59, 130, 246, 0.4), 0 0 40px rgba(0, 0, 0, 0.9)',
+                padding: '20px 22px',
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8), 0 0 30px rgba(59, 130, 246, 0.25)',
                 color: '#f8fafc',
                 position: 'relative',
                 maxHeight: '92vh',
@@ -8332,370 +8332,335 @@ export const BadmintonFixturesManager = ({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', borderBottom: '1px solid rgba(148, 163, 184, 0.2)', paddingBottom: '12px' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: '800', background: 'rgba(59, 130, 246, 0.25)', color: '#60a5fa', padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase' }}>
-                      Match #{targetMatch.matchNumber || targetMatch.id}
-                    </span>
-                    <span style={{ fontSize: '11.5px', color: '#cbd5e1', fontWeight: '700' }}>
-                      {targetMatch.roundName || 'Knockout Round'} • {formatCategoryName(targetMatch.categoryName || selectedCategory)}
-                    </span>
-                    {targetMatch.court && (
-                      <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: '800' }}>
-                        📍 {targetMatch.court}
-                      </span>
-                    )}
-                  </div>
-                  <h3 style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: '900', color: '#ffffff' }}>
-                    {targetMatch.status === 'completed' ? '✏️ Modify Match Score' : '⚡ Enter Match Score'}
-                  </h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid rgba(148, 163, 184, 0.2)', paddingBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: '800', background: '#2563eb', color: '#ffffff', padding: '3px 8px', borderRadius: '6px' }}>
+                    Match #{targetMatch.matchNumber || targetMatch.id}
+                  </span>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#ffffff' }}>
+                    🏸 Enter Match Score
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setQuickScoreScheduleMatch(null)}
                   style={{
-                    background: 'rgba(148, 163, 184, 0.1)',
-                    border: '1px solid rgba(148, 163, 184, 0.2)',
-                    borderRadius: '10px',
+                    background: 'rgba(148, 163, 184, 0.15)',
+                    border: 'none',
+                    borderRadius: '8px',
                     color: '#94a3b8',
-                    width: '32px',
-                    height: '32px',
+                    width: '28px',
+                    height: '28px',
                     cursor: 'pointer',
-                    fontSize: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
+                    fontSize: '15px',
+                    fontWeight: '800',
                   }}
                 >
                   ✕
                 </button>
               </div>
 
-              {/* Desk Check-in Section */}
+              {/* Matchup Header with Check-in status */}
               <div
                 style={{
-                  background: 'rgba(15, 23, 42, 0.8)',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
-                  borderRadius: '12px',
-                  padding: '12px 16px',
-                  marginBottom: '16px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr auto 1fr',
                   alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '10px',
+                  gap: '8px',
+                  background: '#1e293b',
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  marginBottom: '16px',
+                  border: '1px solid rgba(148, 163, 184, 0.2)',
                 }}
               >
-                <span style={{ fontSize: '11.5px', fontWeight: '800', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Desk Check-in:
-                </span>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {/* Player 1 Card */}
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                    {Boolean(p1?.seed || p1?.isSeed) && (
+                      <span className="official-seed-pill" style={{ fontSize: '10px', padding: '1px 4px' }}>
+                        S{p1.seed}
+                      </span>
+                    )}
+                    <strong style={{ fontSize: '14px', color: isP1Winner ? '#4ade80' : '#60a5fa' }}>
+                      {p1?.name || (p1?.isBye ? 'BYE' : 'TBD')}
+                    </strong>
+                    {isP1Winner && <span>👑</span>}
+                  </div>
                   {p1 && !p1.isBye && (
                     <button
                       type="button"
                       onClick={() => togglePlayerReporting(p1, targetMatch.categoryName)}
                       style={{
-                        background: isP1Rep ? 'rgba(34, 197, 94, 0.25)' : 'rgba(148, 163, 184, 0.15)',
-                        border: `1.5px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                        background: isP1Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.15)',
+                        border: `1px solid ${isP1Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
                         color: isP1Rep ? '#4ade80' : '#cbd5e1',
-                        borderRadius: '8px',
-                        padding: '4px 10px',
-                        fontSize: '11.5px',
+                        borderRadius: '6px',
+                        padding: '2px 8px',
+                        fontSize: '11px',
                         fontWeight: '700',
                         cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
                       }}
                     >
-                      <span>{isP1Rep ? '☑️' : '⬜'}</span>
-                      <span>{p1?.name}: {isP1Rep ? 'Reported' : 'Check-in'}</span>
+                      {isP1Rep ? '☑️ Reported' : '⬜ Check-in'}
                     </button>
                   )}
+                </div>
+
+                {/* VS Badge */}
+                <div style={{ fontWeight: '900', fontSize: '12px', color: '#94a3b8', padding: '0 4px' }}>
+                  VS
+                </div>
+
+                {/* Player 2 Card */}
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '4px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                    {isP2Winner && <span>👑</span>}
+                    <strong style={{ fontSize: '14px', color: isP2Winner ? '#4ade80' : '#f43f5e' }}>
+                      {p2?.name || (p2?.isBye ? 'BYE' : 'TBD')}
+                    </strong>
+                    {Boolean(p2?.seed || p2?.isSeed) && (
+                      <span className="official-seed-pill" style={{ fontSize: '10px', padding: '1px 4px' }}>
+                        S{p2.seed}
+                      </span>
+                    )}
+                  </div>
                   {p2 && !p2.isBye && (
                     <button
                       type="button"
                       onClick={() => togglePlayerReporting(p2, targetMatch.categoryName)}
                       style={{
-                        background: isP2Rep ? 'rgba(34, 197, 94, 0.25)' : 'rgba(148, 163, 184, 0.15)',
-                        border: `1.5px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
+                        background: isP2Rep ? 'rgba(34, 197, 94, 0.2)' : 'rgba(148, 163, 184, 0.15)',
+                        border: `1px solid ${isP2Rep ? '#22c55e' : 'rgba(148, 163, 184, 0.3)'}`,
                         color: isP2Rep ? '#4ade80' : '#cbd5e1',
-                        borderRadius: '8px',
-                        padding: '4px 10px',
-                        fontSize: '11.5px',
+                        borderRadius: '6px',
+                        padding: '2px 8px',
+                        fontSize: '11px',
                         fontWeight: '700',
                         cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
                       }}
                     >
-                      <span>{isP2Rep ? '☑️' : '⬜'}</span>
-                      <span>{p2?.name}: {isP2Rep ? 'Reported' : 'Check-in'}</span>
+                      {isP2Rep ? '☑️ Reported' : '⬜ Check-in'}
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Simple Manual Scorecard Table */}
+              {/* Set-by-Set Score Inputs */}
               {!isByeMatch ? (
-                <div
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.95)',
-                    border: '1.5px solid rgba(59, 130, 246, 0.35)',
-                    borderRadius: '16px',
-                    padding: '16px',
-                    marginBottom: '18px',
-                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '800', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span>🏸</span>
-                      <span>Type Sets Score Directly</span>
-                    </span>
-                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                      Target: {maxPts} Pts • Best of {totalSets} Sets
-                    </span>
+                <div style={{ background: '#1e293b', borderRadius: '14px', padding: '16px', marginBottom: '16px', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '11px', fontWeight: '800', textTransform: 'uppercase', marginBottom: '10px', padding: '0 4px' }}>
+                    <span>{p1?.name || 'Player 1'} (Left)</span>
+                    <span>Set Scores</span>
+                    <span>{p2?.name || 'Player 2'} (Right)</span>
                   </div>
 
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 8px' }}>
-                      <thead>
-                        <tr style={{ color: '#94a3b8', fontSize: '11.5px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          <th style={{ textAlign: 'left', padding: '6px 10px', width: '42%' }}>Player / Team</th>
-                          {setsArr.map((s) => (
-                            <th key={s} style={{ textAlign: 'center', padding: '6px 4px', width: `${44 / totalSets}%` }}>
-                              Set {s}
-                            </th>
-                          ))}
-                          <th style={{ textAlign: 'center', padding: '6px 8px', width: '14%' }}>Winner</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {/* Player 1 Row */}
-                        <tr
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {setsArr.map((s) => {
+                      const keyA = `scoreSet${s}A`
+                      const keyB = `scoreSet${s}B`
+                      const valA = targetMatch[keyA] !== undefined ? targetMatch[keyA] : ''
+                      const valB = targetMatch[keyB] !== undefined ? targetMatch[keyB] : ''
+
+                      return (
+                        <div
+                          key={s}
                           style={{
-                            background: isP1Winner ? 'rgba(34, 197, 94, 0.15)' : 'rgba(30, 41, 59, 0.7)',
-                            border: `1.5px solid ${isP1Winner ? '#22c55e' : 'rgba(59, 130, 246, 0.3)'}`,
-                            borderRadius: '12px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: '#0f172a',
+                            padding: '8px 14px',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(148, 163, 184, 0.15)',
                           }}
                         >
-                          <td style={{ padding: '10px 12px', borderRadius: '12px 0 0 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {Boolean(p1?.seed || p1?.isSeed) && (
-                                <span className="official-seed-pill" title={`Seed #${p1.seed}`}>
-                                  S{p1.seed}
-                                </span>
-                              )}
-                              <div>
-                                <div style={{ fontWeight: '800', fontSize: '14.5px', color: isP1Winner ? '#4ade80' : '#60a5fa' }}>
-                                  {p1?.name || 'Player 1'}
-                                </div>
-                                {Boolean(p1?.place || p1?.court) && (
-                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                    {[p1.place, p1.court].filter(Boolean).join(' • ')}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
+                          <span style={{ fontSize: '13px', fontWeight: '800', color: '#38bdf8', minWidth: '50px' }}>
+                            Set {s}:
+                          </span>
 
-                          {setsArr.map((s) => {
-                            const keyA = `scoreSet${s}A`
-                            return (
-                              <td key={s} style={{ padding: '6px 4px', textAlign: 'center' }}>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={maxPts}
-                                  value={targetMatch[keyA] !== undefined ? targetMatch[keyA] : ''}
-                                  onChange={(e) => {
-                                    const raw = e.target.value
-                                    if (raw === '') handleScoreChange(targetMatch, keyA, '')
-                                    else handleScoreChange(targetMatch, keyA, Math.max(0, Math.min(maxPts, Number(raw))))
-                                  }}
-                                  placeholder="0"
-                                  style={{
-                                    width: '54px',
-                                    height: '42px',
-                                    textAlign: 'center',
-                                    background: '#090d16',
-                                    border: '2px solid rgba(56, 189, 248, 0.6)',
-                                    borderRadius: '10px',
-                                    color: '#ffffff',
-                                    fontWeight: '900',
-                                    fontSize: '18px',
-                                    outline: 'none',
-                                  }}
-                                  onFocus={(e) => e.target.select()}
-                                />
-                              </td>
-                            )
-                          })}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            {/* Player 1 Score Input */}
+                            <input
+                              type="number"
+                              min="0"
+                              max={maxPts}
+                              value={valA}
+                              onChange={(e) => {
+                                const raw = e.target.value
+                                if (raw === '') handleScoreChange(targetMatch, keyA, '')
+                                else handleScoreChange(targetMatch, keyA, Math.max(0, Math.min(maxPts, Number(raw))))
+                              }}
+                              placeholder="0"
+                              style={{
+                                width: '60px',
+                                height: '42px',
+                                textAlign: 'center',
+                                background: '#1e293b',
+                                border: '2px solid #38bdf8',
+                                borderRadius: '8px',
+                                color: '#ffffff',
+                                fontWeight: '900',
+                                fontSize: '20px',
+                                outline: 'none',
+                              }}
+                              onFocus={(e) => e.target.select()}
+                            />
 
-                          <td style={{ padding: '6px 8px', textAlign: 'center', borderRadius: '0 12px 12px 0' }}>
+                            <span style={{ fontSize: '18px', fontWeight: '900', color: '#64748b' }}>-</span>
+
+                            {/* Player 2 Score Input */}
+                            <input
+                              type="number"
+                              min="0"
+                              max={maxPts}
+                              value={valB}
+                              onChange={(e) => {
+                                const raw = e.target.value
+                                if (raw === '') handleScoreChange(targetMatch, keyB, '')
+                                else handleScoreChange(targetMatch, keyB, Math.max(0, Math.min(maxPts, Number(raw))))
+                              }}
+                              placeholder="0"
+                              style={{
+                                width: '60px',
+                                height: '42px',
+                                textAlign: 'center',
+                                background: '#1e293b',
+                                border: '2px solid #f43f5e',
+                                borderRadius: '8px',
+                                color: '#ffffff',
+                                fontWeight: '900',
+                                fontSize: '20px',
+                                outline: 'none',
+                              }}
+                              onFocus={(e) => e.target.select()}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '4px' }}>
                             <button
                               type="button"
                               onClick={() => {
-                                if (isP1Winner) {
-                                  handleUpdateMatch(targetMatch.id, { winner: null, status: 'scheduled' })
-                                } else {
-                                  handleUpdateMatch(targetMatch.id, { winner: p1, status: 'completed' })
-                                }
+                                handleScoreChange(targetMatch, keyA, 21)
+                                handleScoreChange(targetMatch, keyB, valB !== '' ? valB : 15)
                               }}
+                              title="Set 21 for Player 1"
                               style={{
-                                background: isP1Winner ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' : 'rgba(148, 163, 184, 0.12)',
-                                border: `1.5px solid ${isP1Winner ? '#22c55e' : 'rgba(148, 163, 184, 0.25)'}`,
-                                color: isP1Winner ? '#ffffff' : '#94a3b8',
-                                borderRadius: '8px',
-                                padding: '6px 10px',
-                                fontSize: '11px',
+                                background: 'rgba(56, 189, 248, 0.15)',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                                color: '#38bdf8',
+                                borderRadius: '6px',
+                                padding: '3px 6px',
+                                fontSize: '10px',
                                 fontWeight: '800',
                                 cursor: 'pointer',
-                                whiteSpace: 'nowrap',
                               }}
                             >
-                              {isP1Winner ? '🏆 Won' : 'Select'}
+                              21
                             </button>
-                          </td>
-                        </tr>
-
-                        {/* Player 2 Row */}
-                        <tr
-                          style={{
-                            background: isP2Winner ? 'rgba(34, 197, 94, 0.15)' : 'rgba(30, 41, 59, 0.7)',
-                            border: `1.5px solid ${isP2Winner ? '#22c55e' : 'rgba(244, 63, 94, 0.3)'}`,
-                            borderRadius: '12px',
-                          }}
-                        >
-                          <td style={{ padding: '10px 12px', borderRadius: '12px 0 0 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {Boolean(p2?.seed || p2?.isSeed) && (
-                                <span className="official-seed-pill" title={`Seed #${p2.seed}`}>
-                                  S{p2.seed}
-                                </span>
-                              )}
-                              <div>
-                                <div style={{ fontWeight: '800', fontSize: '14.5px', color: isP2Winner ? '#4ade80' : '#f43f5e' }}>
-                                  {p2?.name || 'Player 2'}
-                                </div>
-                                {Boolean(p2?.place || p2?.court) && (
-                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                    {[p2.place, p2.court].filter(Boolean).join(' • ')}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-
-                          {setsArr.map((s) => {
-                            const keyB = `scoreSet${s}B`
-                            return (
-                              <td key={s} style={{ padding: '6px 4px', textAlign: 'center' }}>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={maxPts}
-                                  value={targetMatch[keyB] !== undefined ? targetMatch[keyB] : ''}
-                                  onChange={(e) => {
-                                    const raw = e.target.value
-                                    if (raw === '') handleScoreChange(targetMatch, keyB, '')
-                                    else handleScoreChange(targetMatch, keyB, Math.max(0, Math.min(maxPts, Number(raw))))
-                                  }}
-                                  placeholder="0"
-                                  style={{
-                                    width: '54px',
-                                    height: '42px',
-                                    textAlign: 'center',
-                                    background: '#090d16',
-                                    border: '2px solid rgba(244, 63, 94, 0.6)',
-                                    borderRadius: '10px',
-                                    color: '#ffffff',
-                                    fontWeight: '900',
-                                    fontSize: '18px',
-                                    outline: 'none',
-                                  }}
-                                  onFocus={(e) => e.target.select()}
-                                />
-                              </td>
-                            )
-                          })}
-
-                          <td style={{ padding: '6px 8px', textAlign: 'center', borderRadius: '0 12px 12px 0' }}>
                             <button
                               type="button"
                               onClick={() => {
-                                if (isP2Winner) {
-                                  handleUpdateMatch(targetMatch.id, { winner: null, status: 'scheduled' })
-                                } else {
-                                  handleUpdateMatch(targetMatch.id, { winner: p2, status: 'completed' })
-                                }
+                                handleScoreChange(targetMatch, keyA, valA !== '' ? valA : 15)
+                                handleScoreChange(targetMatch, keyB, 21)
                               }}
+                              title="Set 21 for Player 2"
                               style={{
-                                background: isP2Winner ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' : 'rgba(148, 163, 184, 0.12)',
-                                border: `1.5px solid ${isP2Winner ? '#22c55e' : 'rgba(148, 163, 184, 0.25)'}`,
-                                color: isP2Winner ? '#ffffff' : '#94a3b8',
-                                borderRadius: '8px',
-                                padding: '6px 10px',
-                                fontSize: '11px',
+                                background: 'rgba(244, 63, 94, 0.15)',
+                                border: '1px solid rgba(244, 63, 94, 0.3)',
+                                color: '#f43f5e',
+                                borderRadius: '6px',
+                                padding: '3px 6px',
+                                fontSize: '10px',
                                 fontWeight: '800',
                                 cursor: 'pointer',
-                                whiteSpace: 'nowrap',
                               }}
                             >
-                              {isP2Winner ? '🏆 Won' : 'Select'}
+                              21
                             </button>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               ) : (
-                <div style={{ padding: '16px', background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '12px', marginBottom: '18px', textAlign: 'center' }}>
-                  <span style={{ fontSize: '14px', fontWeight: '800', color: '#c084fc' }}>⚡ BYE Walkover Match (Automatic Advance)</span>
+                <div style={{ padding: '14px', background: 'rgba(168, 85, 247, 0.1)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '10px', marginBottom: '16px', textAlign: 'center' }}>
+                  <span style={{ fontSize: '13px', fontWeight: '800', color: '#c084fc' }}>⚡ BYE Walkover Match</span>
                 </div>
               )}
 
-              {/* Status Switcher & Reset Score */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ fontSize: '11.5px', color: '#94a3b8', fontWeight: '700' }}>Status:</span>
-                  {['scheduled', 'live', 'completed'].map((st) => (
-                    <button
-                      key={st}
-                      type="button"
-                      onClick={() => {
-                        if (st === 'live') {
-                          handleUpdateMatch(targetMatch.id, { status: 'live', isLive: true })
-                        } else {
-                          handleUpdateMatch(targetMatch.id, { status: st, isLive: false })
-                        }
-                      }}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                        fontWeight: '800',
-                        textTransform: 'uppercase',
-                        background: targetMatch.status === st ? '#3b82f6' : 'rgba(30, 41, 59, 0.8)',
-                        color: targetMatch.status === st ? '#ffffff' : '#94a3b8',
-                        border: targetMatch.status === st ? '1px solid #60a5fa' : '1px solid rgba(148, 163, 184, 0.2)',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {st === 'scheduled' ? '⏰ Scheduled' : st === 'live' ? '🔴 Live' : '✓ Completed'}
-                    </button>
-                  ))}
+              {/* 1-Click Winner Selection */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', textTransform: 'uppercase', marginBottom: '6px' }}>
+                  Choose Match Winner:
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isP1Winner) {
+                        handleUpdateMatch(targetMatch.id, { winner: null, status: 'scheduled' })
+                      } else {
+                        handleUpdateMatch(targetMatch.id, { winner: p1, status: 'completed' })
+                      }
+                    }}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: isP1Winner ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' : '#1e293b',
+                      border: `1.5px solid ${isP1Winner ? '#22c55e' : 'rgba(56, 189, 248, 0.35)'}`,
+                      color: isP1Winner ? '#ffffff' : '#60a5fa',
+                      fontWeight: '800',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>{isP1Winner ? '🏆' : '👑'}</span>
+                    <span>{p1?.name || 'Player 1'} {isP1Winner ? 'Won' : 'Winner'}</span>
+                  </button>
 
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isP2Winner) {
+                        handleUpdateMatch(targetMatch.id, { winner: null, status: 'scheduled' })
+                      } else {
+                        handleUpdateMatch(targetMatch.id, { winner: p2, status: 'completed' })
+                      }
+                    }}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      background: isP2Winner ? 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)' : '#1e293b',
+                      border: `1.5px solid ${isP2Winner ? '#22c55e' : 'rgba(244, 63, 94, 0.35)'}`,
+                      color: isP2Winner ? '#ffffff' : '#f43f5e',
+                      fontWeight: '800',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>{isP2Winner ? '🏆' : '👑'}</span>
+                    <span>{p2?.name || 'Player 2'} {isP2Winner ? 'Won' : 'Winner'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(148, 163, 184, 0.2)', paddingTop: '14px' }}>
                 <button
                   type="button"
                   onClick={() => handleResetMatchScore(targetMatch)}
                   style={{
-                    padding: '6px 12px',
+                    padding: '8px 12px',
                     borderRadius: '8px',
                     background: 'rgba(239, 68, 68, 0.12)',
                     border: '1px solid rgba(239, 68, 68, 0.3)',
@@ -8705,49 +8670,45 @@ export const BadmintonFixturesManager = ({
                     cursor: 'pointer',
                   }}
                 >
-                  🔄 Clear Scores
-                </button>
-              </div>
-
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', borderTop: '1px solid rgba(148, 163, 184, 0.2)', paddingTop: '16px' }}>
-                <button
-                  type="button"
-                  onClick={() => handleOpenScoresheet(targetMatch)}
-                  style={{
-                    padding: '10px 16px',
-                    borderRadius: '10px',
-                    background: 'rgba(56, 189, 248, 0.15)',
-                    border: '1px solid rgba(56, 189, 248, 0.4)',
-                    color: '#38bdf8',
-                    fontWeight: '800',
-                    fontSize: '12.5px',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <span>🖨️ Scoresheet</span>
+                  🔄 Clear
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setQuickScoreScheduleMatch(null)}
-                  style={{
-                    padding: '10px 24px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
-                  }}
-                >
-                  ✓ Done / Save
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenScoresheet(targetMatch)}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.35)',
+                      color: '#38bdf8',
+                      fontWeight: '800',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    🖨️ Print
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQuickScoreScheduleMatch(null)}
+                    style={{
+                      padding: '8px 22px',
+                      borderRadius: '8px',
+                      background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                      border: 'none',
+                      color: '#ffffff',
+                      fontWeight: '900',
+                      fontSize: '13px',
+                      cursor: 'pointer',
+                      boxShadow: '0 4px 14px rgba(34, 197, 94, 0.4)',
+                    }}
+                  >
+                    ✓ Save Score
+                  </button>
+                </div>
               </div>
             </div>
           </div>
