@@ -5924,60 +5924,20 @@ export const BadmintonFixturesManager = ({
 
                         {/* Actions Footer */}
                         <div className="schedule-card-actions">
-                          {!isPublicView && (
-                            <>
-                              {isLiveUmpireMode ? (
-                                /* Live Umpire Mode ON: Show ONLY Send to Live */
-                                (m.status === 'scheduled' || !m.status) ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => handlePromptStartLive(m)}
-                                    style={{
-                                      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                                      color: '#ffffff',
-                                      border: 'none',
-                                      borderRadius: '8px',
-                                      padding: '6px 14px',
-                                      fontSize: '11.5px',
-                                      fontWeight: '800',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '6px',
-                                      boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)',
-                                    }}
-                                  >
-                                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
-                                    <span>🔴 Send to Live</span>
-                                  </button>
-                                ) : m.status === 'completed' ? (
-                                  <button
-                                    type="button"
-                                    className="btn-schedule-score"
-                                    style={{
-                                      background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                                    }}
-                                    onClick={() => setQuickScoreScheduleMatch(m)}
-                                  >
-                                    ✏️ Modify Result
-                                  </button>
-                                ) : null
-                              ) : (
-                                /* Live Umpire Mode OFF (Manual): Show ONLY Score Button */
-                                <button
-                                  type="button"
-                                  className="btn-schedule-score"
-                                  style={{
-                                    background: m.status === 'completed'
-                                      ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
-                                      : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                                  }}
-                                  onClick={() => setQuickScoreScheduleMatch(m)}
-                                >
-                                  {m.status === 'completed' ? '✏️ Modify Result' : '⚡ Score'}
-                                </button>
-                              )}
-                            </>
+                          {!isPublicView && !isLiveUmpireMode && (
+                            /* Live Umpire Mode OFF (Manual): Show ONLY Score Button */
+                            <button
+                              type="button"
+                              className="btn-schedule-score"
+                              style={{
+                                background: m.status === 'completed'
+                                  ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
+                                  : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                              }}
+                              onClick={() => setQuickScoreScheduleMatch(m)}
+                            >
+                              {m.status === 'completed' ? '✏️ Modify Result' : '⚡ Score'}
+                            </button>
                           )}
 
                           
@@ -6194,68 +6154,27 @@ export const BadmintonFixturesManager = ({
                               </td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px' }}>
-                                  {!isPublicView && (
-                                    <>
-                                      {isLiveUmpireMode ? (
-                                        (m.status === 'scheduled' || !m.status) ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => handlePromptStartLive(m)}
-                                            style={{
-                                              background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-                                              color: '#fff',
-                                              border: 'none',
-                                              borderRadius: '4px',
-                                              padding: '5px 8px',
-                                              fontSize: '11px',
-                                              fontWeight: '800',
-                                              cursor: 'pointer',
-                                              whiteSpace: 'nowrap',
-                                            }}
-                                          >
-                                            🔴 Send to Live
-                                          </button>
-                                        ) : m.status === 'completed' ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => setQuickScoreScheduleMatch(m)}
-                                            style={{
-                                              background: 'linear-gradient(135deg, #059669 0%, #047857 100%)',
-                                              color: '#fff',
-                                              border: 'none',
-                                              borderRadius: '4px',
-                                              padding: '5px 8px',
-                                              fontSize: '11px',
-                                              fontWeight: '700',
-                                              cursor: 'pointer',
-                                              whiteSpace: 'nowrap',
-                                            }}
-                                          >
-                                            ✏️ Modify
-                                          </button>
-                                        ) : null
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => setQuickScoreScheduleMatch(m)}
-                                          style={{
-                                            background: m.status === 'completed'
-                                              ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
-                                              : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                                            color: '#fff',
-                                            border: 'none',
-                                            borderRadius: '4px',
-                                            padding: '5px 8px',
-                                            fontSize: '11px',
-                                            fontWeight: '700',
-                                            cursor: 'pointer',
-                                            whiteSpace: 'nowrap',
-                                          }}
-                                        >
-                                          {m.status === 'completed' ? '✏️ Modify' : '⚡ Score'}
-                                        </button>
-                                      )}
-                                    </>
+                                  {!isPublicView && !isLiveUmpireMode && (
+                                    /* Live Umpire Mode OFF (Manual): Show ONLY Score Button */
+                                    <button
+                                      type="button"
+                                      onClick={() => setQuickScoreScheduleMatch(m)}
+                                      style={{
+                                        background: m.status === 'completed'
+                                          ? 'linear-gradient(135deg, #059669 0%, #047857 100%)'
+                                          : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                                        color: '#fff',
+                                        border: 'none',
+                                        borderRadius: '4px',
+                                        padding: '5px 8px',
+                                        fontSize: '11px',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {m.status === 'completed' ? '✏️ Modify' : '⚡ Score'}
+                                    </button>
                                   )}
                                   <button
                                     type="button"
