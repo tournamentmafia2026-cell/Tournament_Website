@@ -1000,7 +1000,88 @@ export const StadiumAdManagerModal = ({
                 </div>
               </div>
 
-              {/* Card 4: Top Scrolling Announcement Text */}
+              {/* Card 4: Scrolling Marquee Speed */}
+              <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
+                    ⚡ Scrolling Text Speed (Marquee / Ticker Speed)
+                  </h4>
+                  <span style={{ fontSize: '12px', fontWeight: '900', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', padding: '2px 10px', borderRadius: '6px' }}>
+                    {localSettings.tickerSpeed === 'ultra-slow' ? 'Ultra Slow (45s)' :
+                     localSettings.tickerSpeed === 'slow' ? 'Slow (32s)' :
+                     localSettings.tickerSpeed === 'normal' ? 'Normal (22s)' :
+                     localSettings.tickerSpeed === 'fast' ? 'Fast (14s)' :
+                     localSettings.tickerSpeed === 'ultra-fast' ? 'Ultra Fast (8s)' :
+                     `${localSettings.tickerSpeed || 22}s Duration`}
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 14px', fontSize: '12.5px', color: '#94a3b8' }}>
+                  Controls how fast the scrolling text and sponsor ticker move across the screen on the TV Live Cast.
+                </p>
+
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {[
+                    { label: '🐌 Ultra Slow (45s)', value: 'ultra-slow', sec: 45 },
+                    { label: '🚶 Slow (32s)', value: 'slow', sec: 32 },
+                    { label: '⚡ Normal (22s)', value: 'normal', sec: 22 },
+                    { label: '🚀 Fast (14s)', value: 'fast', sec: 14 },
+                    { label: '🏎️ Ultra Fast (8s)', value: 'ultra-fast', sec: 8 },
+                  ].map((opt) => {
+                    const isSelected = (localSettings.tickerSpeed || 'slow') === opt.value || localSettings.tickerSpeed === opt.sec || String(localSettings.tickerSpeed) === String(opt.sec)
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleUpdateSetting('tickerSpeed', opt.value)}
+                        style={{
+                          background: isSelected ? '#0284c7' : '#0f172a',
+                          border: isSelected ? '1.5px solid #38bdf8' : '1px solid #334155',
+                          color: '#ffffff',
+                          padding: '8px 14px',
+                          borderRadius: '8px',
+                          fontSize: '13px',
+                          fontWeight: '800',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    )
+                  })}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Custom (Secs):</span>
+                    <input
+                      type="number"
+                      min="4"
+                      max="120"
+                      value={
+                        typeof localSettings.tickerSpeed === 'number'
+                          ? localSettings.tickerSpeed
+                          : localSettings.tickerSpeed === 'ultra-slow' ? 45
+                          : localSettings.tickerSpeed === 'slow' ? 32
+                          : localSettings.tickerSpeed === 'normal' ? 22
+                          : localSettings.tickerSpeed === 'fast' ? 14
+                          : localSettings.tickerSpeed === 'ultra-fast' ? 8
+                          : Number(localSettings.tickerSpeed) || 32
+                      }
+                      onChange={(e) => handleUpdateSetting('tickerSpeed', Math.max(4, Number(e.target.value) || 32))}
+                      style={{
+                        width: '60px',
+                        background: '#0f172a',
+                        border: '1.5px solid #334155',
+                        borderRadius: '8px',
+                        padding: '6px 8px',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        textAlign: 'center',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 5: Top Scrolling Announcement Text */}
               <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
                 <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
                   📢 Top Scrolling Announcement Text
@@ -1027,7 +1108,7 @@ export const StadiumAdManagerModal = ({
                 />
               </div>
 
-              {/* Card 5: Bottom Sponsor Ticker Text */}
+              {/* Card 6: Bottom Sponsor Ticker Text */}
               <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
                 <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
                   🏷️ Bottom Official Sponsor Scrolling Ticker
