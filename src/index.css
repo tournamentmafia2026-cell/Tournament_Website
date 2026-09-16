@@ -10500,19 +10500,20 @@ select {
 
 /* Category & Round Cell */
 .table-cat-title {
-  font-size: clamp(9px, 0.9cqi, 12px);
-  font-weight: 800;
-  color: #f8fafc;
+  font-size: clamp(10px, 1.05cqi, 13px);
+  font-weight: 900;
+  color: #38bdf8;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: 0.02em;
 }
 
 .table-cat-sub {
-  font-size: clamp(7.5px, 0.75cqi, 9.5px);
-  color: #94a3b8;
-  font-weight: 600;
-  margin-top: 1px;
+  font-size: clamp(8px, 0.8cqi, 10.5px);
+  color: #cbd5e1;
+  font-weight: 700;
+  margin-top: 2px;
 }
 
 /* Player Cells */
@@ -13521,12 +13522,22 @@ input:checked + .slider:before {
   box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35) !important;
 }
 
-/* Category Badges with Pure White Text */
+/* Category Badges & Text with High Contrast */
 .stadium-tv-cast-container.tv-theme-white .category-label-pill,
 .stadium-tv-cast-container .category-label-pill {
   background: linear-gradient(135deg, #475569 0%, #334155 100%) !important;
   color: #ffffff !important;
   font-weight: 800 !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .table-cat-title {
+  color: #0284c7 !important;
+  font-weight: 900 !important;
+}
+
+.stadium-tv-cast-container.tv-theme-white .table-cat-sub {
+  color: #475569 !important;
+  font-weight: 700 !important;
 }
 
 /* Player Name Cells with High Contrast Pure White Text on Badges */

@@ -533,20 +533,47 @@ export const StadiumTvLiveCast = ({
     if (!currentTournament) return []
     const tId = currentTournament.id
     const matchesList = []
+    const seenMatchIds = new Set()
 
+    // 1. Scan defined categories
     tournamentCategories.forEach((cat) => {
       const drawKey = `${tId}-${cat}`
       const draw = tournamentDraws[drawKey]
       if (draw && draw.matches && Array.isArray(draw.matches)) {
         draw.matches.forEach((m) => {
-          // Exclude BYE vs BYE placeholder matches
           if (m.player1?.isBye && m.player2?.isBye) return
-          matchesList.push({
-            ...m,
-            categoryName: cat,
-            drawKey,
-          })
+          const mId = m.id || `${drawKey}-${m.matchNumber}`
+          if (!seenMatchIds.has(mId)) {
+            seenMatchIds.add(mId)
+            matchesList.push({
+              ...m,
+              categoryName: m.categoryName || m.category || cat || draw.categoryName || 'Open Category',
+              drawKey,
+            })
+          }
         })
+      }
+    })
+
+    // 2. Scan all tournamentDraws keys matching this tournament
+    Object.keys(tournamentDraws || {}).forEach((key) => {
+      if (key.startsWith(`${tId}-`)) {
+        const catFromKey = key.replace(`${tId}-`, '')
+        const draw = tournamentDraws[key]
+        if (draw && draw.matches && Array.isArray(draw.matches)) {
+          draw.matches.forEach((m) => {
+            if (m.player1?.isBye && m.player2?.isBye) return
+            const mId = m.id || `${key}-${m.matchNumber}`
+            if (!seenMatchIds.has(mId)) {
+              seenMatchIds.add(mId)
+              matchesList.push({
+                ...m,
+                categoryName: m.categoryName || m.category || catFromKey || draw.categoryName || 'Open Category',
+                drawKey: key,
+              })
+            }
+          })
+        }
       }
     })
 
@@ -561,11 +588,11 @@ export const StadiumTvLiveCast = ({
     prevAllCategoryMatchesRef.current = rawAllCategoryMatches
     return rawAllCategoryMatches
   }, [rawAllCategoryMatches])
-  // Filter matches based on selected category
+
   // Filter matches based on selected category
   const activePool = useMemo(() => {
     if (selectedCategory === 'all') return allCategoryMatches
-    return allCategoryMatches.filter((m) => m.categoryName === selectedCategory)
+    return allCategoryMatches.filter((m) => (m.categoryName || '').toLowerCase() === selectedCategory.toLowerCase())
   }, [allCategoryMatches, selectedCategory])
 
   // Extract live matches (Stabilized with deep equality to prevent blinking)
@@ -1089,8 +1116,12 @@ export const StadiumTvLiveCast = ({
 
                             {/* 2. Category & Round */}
                             <td className="table-category-cell">
-                              <div className="table-cat-title">{formatCategoryName(m.categoryName)}</div>
-                              {m.roundName && <div className="table-cat-sub">{m.roundName}</div>}
+                              <div className="table-cat-title">
+                                {formatCategoryName(m.categoryName || m.category || 'Open Category')}
+                              </div>
+                              <div className="table-cat-sub">
+                                {m.roundName || (m.round ? `Round ${m.round}` : 'Live Match')}
+                              </div>
                             </td>
 
                             {/* 3. Player 1 */}
