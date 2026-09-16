@@ -112,7 +112,7 @@ export const StadiumAdManagerModal = ({
       logoUrl: formMediaType === 'image' ? formMediaUrl.trim() : '',
       videoUrl: formMediaType === 'video' ? formMediaUrl.trim() : '',
       active: true,
-      displayDuration: Number(formDuration) || 10,
+      displayDuration: Math.max(3, Number(formDuration) || 10),
     }
 
     let updatedList
@@ -153,7 +153,7 @@ export const StadiumAdManagerModal = ({
 
   // Reset to Defaults
   const handleResetDefaults = () => {
-    if (window.confirm('Reset all ads & settings to standard defaults?')) {
+    if (window.confirm('Reset all ads & timing settings to standard defaults?')) {
       setLocalAds(DEFAULT_SPONSOR_ADS)
       setLocalSettings(DEFAULT_AD_SETTINGS)
       if (onSaveAds) onSaveAds(DEFAULT_SPONSOR_ADS)
@@ -180,7 +180,7 @@ export const StadiumAdManagerModal = ({
       <div
         style={{
           width: '100%',
-          maxWidth: '860px',
+          maxWidth: '880px',
           maxHeight: '92vh',
           backgroundColor: '#0f172a',
           border: '1.5px solid #334155',
@@ -212,7 +212,7 @@ export const StadiumAdManagerModal = ({
                 Ads & Sponsors Manager
               </h2>
               <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: '#94a3b8' }}>
-                Manage live stream banners, sponsor slideshow, and broadcast timing
+                Add sponsor banners, commercial videos, and customize broadcast interval timings
               </p>
             </div>
           </div>
@@ -268,7 +268,7 @@ export const StadiumAdManagerModal = ({
               transition: 'all 0.2s',
             }}
           >
-            <span>⭐ Sponsors List</span>
+            <span>⭐ Sponsors Library</span>
             <span
               style={{
                 background: activeTab === 'sponsors' ? '#0284c7' : '#334155',
@@ -301,7 +301,7 @@ export const StadiumAdManagerModal = ({
               transition: 'all 0.2s',
             }}
           >
-            <span>⚙️ Broadcast Timing & Tickers</span>
+            <span>⏱️ Broadcast Timings & Tickers</span>
           </button>
         </div>
 
@@ -316,14 +316,16 @@ export const StadiumAdManagerModal = ({
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   marginBottom: '16px',
+                  flexWrap: 'wrap',
+                  gap: '10px',
                 }}
               >
                 <div>
                   <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '800', color: '#f8fafc' }}>
-                    Active Tournament Sponsors ({localAds.filter((a) => a.active !== false).length} Active)
+                    Sponsors & Commercials ({localAds.filter((a) => a.active !== false).length} Active)
                   </h3>
                   <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#94a3b8' }}>
-                    Sponsors rotate every 10 seconds automatically on the Live Cast screen.
+                    When no matches are active, sponsors rotate continuously. During live matches, ads popup on your configured interval.
                   </p>
                 </div>
 
@@ -346,7 +348,7 @@ export const StadiumAdManagerModal = ({
                       boxShadow: '0 4px 12px rgba(2, 132, 199, 0.35)',
                     }}
                   >
-                    <span>➕ Add Sponsor</span>
+                    <span>➕ Add Sponsor / Ad</span>
                   </button>
                 )}
               </div>
@@ -529,10 +531,55 @@ export const StadiumAdManagerModal = ({
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                    {/* Display Duration Seconds */}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#cbd5e1', marginBottom: '4px' }}>
+                        Display Duration (Seconds)
+                      </label>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        {[5, 10, 15, 20].map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setFormDuration(s)}
+                            style={{
+                              background: formDuration === s ? '#0284c7' : '#0f172a',
+                              border: formDuration === s ? '1.5px solid #38bdf8' : '1px solid #334155',
+                              color: '#ffffff',
+                              padding: '5px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: '800',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {s}s
+                          </button>
+                        ))}
+                        <input
+                          type="number"
+                          min="3"
+                          max="120"
+                          value={formDuration}
+                          onChange={(e) => setFormDuration(Number(e.target.value) || 10)}
+                          style={{
+                            width: '55px',
+                            background: '#0f172a',
+                            border: '1px solid #334155',
+                            borderRadius: '6px',
+                            padding: '4px 6px',
+                            color: '#ffffff',
+                            fontSize: '12px',
+                            textAlign: 'center',
+                          }}
+                        />
+                      </div>
+                    </div>
+
                     {/* Website / Phone / Location */}
                     <div>
                       <label style={{ display: 'block', fontSize: '12px', fontWeight: '800', color: '#cbd5e1', marginBottom: '4px' }}>
-                        Website / Phone / Stall # (Optional)
+                        Website / Phone / Location (Optional)
                       </label>
                       <input
                         type="text"
@@ -665,7 +712,7 @@ export const StadiumAdManagerModal = ({
 
                         {/* Text Info */}
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '3px', flexWrap: 'wrap' }}>
                             <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#ffffff' }}>
                               {ad.sponsorName}
                             </h4>
@@ -681,6 +728,18 @@ export const StadiumAdManagerModal = ({
                               }}
                             >
                               {ad.mediaType === 'video' ? '🎬 Video' : '🖼️ Image'}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: '800',
+                                color: '#94a3b8',
+                                background: 'rgba(255, 255, 255, 0.08)',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                              }}
+                            >
+                              ⏱️ {ad.displayDuration || 10}s show
                             </span>
                           </div>
 
@@ -766,21 +825,27 @@ export const StadiumAdManagerModal = ({
           ) : (
             /* TAB 2: BROADCAST & TIMING SETTINGS */
             <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              {/* Card 1: Live Ad Interval */}
+              {/* Card 1: Live Ad Interval (Minutes) */}
               <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
-                <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
-                  ⏱️ Ad Frequency During Live Matches
-                </h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
+                    ⏱️ Ad Frequency During Live Matches (Minutes Interval)
+                  </h4>
+                  <span style={{ fontSize: '12px', fontWeight: '900', color: '#38bdf8', background: 'rgba(56, 189, 248, 0.15)', padding: '2px 10px', borderRadius: '6px' }}>
+                    Every {localSettings.fullScreenIntervalMinutes || 1} Min{(localSettings.fullScreenIntervalMinutes || 1) > 1 ? 's' : ''}
+                  </span>
+                </div>
                 <p style={{ margin: '0 0 14px', fontSize: '12.5px', color: '#94a3b8' }}>
-                  When matches are live, ads will popup for 10 seconds, then return automatically to the live match stream.
+                  How often ads should popup during live matches on the TV Live Cast screen.
                 </p>
 
-                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
                   {[
-                    { label: 'Every 1 Minute', value: 1 },
-                    { label: 'Every 2 Minutes', value: 2 },
-                    { label: 'Every 5 Minutes', value: 5 },
-                    { label: 'Every 10 Minutes', value: 10 },
+                    { label: 'Every 1 Min', value: 1 },
+                    { label: 'Every 2 Mins', value: 2 },
+                    { label: 'Every 3 Mins', value: 3 },
+                    { label: 'Every 5 Mins', value: 5 },
+                    { label: 'Every 10 Mins', value: 10 },
                   ].map((opt) => (
                     <button
                       key={opt.value}
@@ -801,10 +866,137 @@ export const StadiumAdManagerModal = ({
                       {opt.label}
                     </button>
                   ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Custom (Mins):</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={localSettings.fullScreenIntervalMinutes || 1}
+                      onChange={(e) => handleUpdateSetting('fullScreenIntervalMinutes', Math.max(1, Number(e.target.value) || 1))}
+                      style={{
+                        width: '60px',
+                        background: '#0f172a',
+                        border: '1.5px solid #334155',
+                        borderRadius: '8px',
+                        padding: '6px 8px',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        textAlign: 'center',
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Card 2: Top Scrolling Announcement Text */}
+              {/* Card 2: Live Ad Duration (Seconds) */}
+              <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
+                    ⏳ Ad Display Duration on Live Screen (Seconds)
+                  </h4>
+                  <span style={{ fontSize: '12px', fontWeight: '900', color: '#10b981', background: 'rgba(16, 185, 129, 0.15)', padding: '2px 10px', borderRadius: '6px' }}>
+                    {localSettings.fullScreenDurationSeconds || 10} Seconds
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 14px', fontSize: '12.5px', color: '#94a3b8' }}>
+                  How many seconds each ad will stay visible on TV before returning automatically to the live match scoreboard.
+                </p>
+
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {[
+                    { label: '5 Secs', value: 5 },
+                    { label: '10 Secs', value: 10 },
+                    { label: '15 Secs', value: 15 },
+                    { label: '20 Secs', value: 20 },
+                    { label: '30 Secs', value: 30 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleUpdateSetting('fullScreenDurationSeconds', opt.value)}
+                      style={{
+                        background: localSettings.fullScreenDurationSeconds === opt.value ? '#059669' : '#0f172a',
+                        border: localSettings.fullScreenDurationSeconds === opt.value ? '1.5px solid #10b981' : '1px solid #334155',
+                        color: '#ffffff',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: 'auto' }}>
+                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>Custom (Secs):</span>
+                    <input
+                      type="number"
+                      min="3"
+                      max="120"
+                      value={localSettings.fullScreenDurationSeconds || 10}
+                      onChange={(e) => handleUpdateSetting('fullScreenDurationSeconds', Math.max(3, Number(e.target.value) || 10))}
+                      style={{
+                        width: '60px',
+                        background: '#0f172a',
+                        border: '1.5px solid #334155',
+                        borderRadius: '8px',
+                        padding: '6px 8px',
+                        color: '#ffffff',
+                        fontSize: '13px',
+                        textAlign: 'center',
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Standby Slide Duration (When NO matches are active) */}
+              <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <h4 style={{ margin: 0, fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
+                    🔄 Standby Slideshow Speed (When NO Live Matches)
+                  </h4>
+                  <span style={{ fontSize: '12px', fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '2px 10px', borderRadius: '6px' }}>
+                    Rotate every {localSettings.standbySlideDurationSeconds || 10}s
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 14px', fontSize: '12.5px', color: '#94a3b8' }}>
+                  When no matches are active, all tournament sponsors cycle continuously on TV.
+                </p>
+
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  {[
+                    { label: '5 Secs', value: 5 },
+                    { label: '10 Secs', value: 10 },
+                    { label: '15 Secs', value: 15 },
+                    { label: '20 Secs', value: 20 },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => handleUpdateSetting('standbySlideDurationSeconds', opt.value)}
+                      style={{
+                        background: localSettings.standbySlideDurationSeconds === opt.value ? '#d97706' : '#0f172a',
+                        border: localSettings.standbySlideDurationSeconds === opt.value ? '1.5px solid #fbbf24' : '1px solid #334155',
+                        color: '#ffffff',
+                        padding: '8px 16px',
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Card 4: Top Scrolling Announcement Text */}
               <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
                 <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
                   📢 Top Scrolling Announcement Text
@@ -831,7 +1023,7 @@ export const StadiumAdManagerModal = ({
                 />
               </div>
 
-              {/* Card 3: Bottom Sponsor Ticker Text */}
+              {/* Card 5: Bottom Sponsor Ticker Text */}
               <div style={{ background: '#1e293b', border: '1.5px solid #334155', borderRadius: '14px', padding: '18px' }}>
                 <h4 style={{ margin: '0 0 6px', fontSize: '15px', fontWeight: '900', color: '#f8fafc' }}>
                   🏷️ Bottom Official Sponsor Scrolling Ticker

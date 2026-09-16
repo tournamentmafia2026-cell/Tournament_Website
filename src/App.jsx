@@ -17,7 +17,6 @@ import { ConfirmDeleteModal } from './components/ConfirmDeleteModal'
 import { CourtConfigModal } from './components/CourtConfigModal'
 import { LiveStreamSetupModal } from './components/LiveStreamSetupModal'
 import { StadiumTvLiveCast } from './components/StadiumTvLiveCast'
-import { PublicSponsorShowcase } from './components/PublicSponsorShowcase'
 import { FixtureSeedingModal } from './components/FixtureSeedingModal'
 import { BadmintonAnimatedBackground } from './components/BadmintonAnimatedBackground'
 

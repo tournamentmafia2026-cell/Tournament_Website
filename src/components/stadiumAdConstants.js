@@ -60,17 +60,14 @@ export const DEFAULT_SPONSOR_ADS = [
 export const DEFAULT_AD_SETTINGS = {
   showBannerBar: true,
   showInTicker: true,
-  showOnPublicPage: true, // Show Sponsor Banners & Tickers on Public Spectator & Fixtures Page
-  publicDisplayMode: 'periodic', // 'periodic' (10s show, 1min cycle) | 'static' (always visible)
-  showFloatingSpotlight: false,
-  fullScreenIntervalMinutes: 1, // Repeat every 1 minute
-  fullScreenDurationSeconds: 10, // Display duration in seconds (10s)
-  tickerSpeed: 'slow', // 'ultra-slow' | 'slow' | 'normal' | 'fast' | 'ultra-fast' | seconds number
+  fullScreenIntervalMinutes: 1, // Repeat every 1 minute during live matches
+  fullScreenDurationSeconds: 10, // Display duration in seconds (10s) during live matches
+  standbySlideDurationSeconds: 10, // Continuous rotation speed (10s) when no matches are active
+  tickerSpeed: 'slow', // 'ultra-slow' | 'slow' | 'normal' | 'fast' | 'ultra-fast'
   topScrollingText: '🏆 Welcome to the Championship • Please report to your assigned court 10 minutes before match time.',
   bottomScrollingText: '⭐ Special Tournament Offer: Flat 20% off on all pro badminton gear at Arena Lobby Stall #1!',
   videoMuted: true,
   autoLoopVideo: true,
-  intermissionMode: false,
   rotationInterval: 10,
 }
 

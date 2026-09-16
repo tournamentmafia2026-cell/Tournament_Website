@@ -761,15 +761,16 @@ export const StadiumTvLiveCast = ({
     }
   }, [isStandbyDismissed, hasLiveMatches, visualAds.length])
 
-  // Continuous 10-second slide rotation in Standby mode (when no live matches are active)
+  // Continuous slide rotation in Standby mode (when no live matches are active)
   useEffect(() => {
     if (!isStandbyShowcaseActive || visualAds.length <= 1) return
-    const slideDurationMs = 10000 // 10 seconds per slide as requested
+    const slideSec = Number(adSettings?.standbySlideDurationSeconds) || 10
+    const slideDurationMs = Math.max(3000, slideSec * 1000)
     const timer = setInterval(() => {
       setFullScreenAdIndex((prev) => (prev + 1) % visualAds.length)
     }, slideDurationMs)
     return () => clearInterval(timer)
-  }, [isStandbyShowcaseActive, visualAds.length])
+  }, [isStandbyShowcaseActive, visualAds.length, adSettings?.standbySlideDurationSeconds])
 
   // 2. Interval mode: Trigger full-screen showcase during LIVE matches on configured interval
   useEffect(() => {
@@ -783,14 +784,18 @@ export const StadiumTvLiveCast = ({
 
     const intervalMs = Math.max(10000, intervalMins * 60 * 1000)
     const intervalTimer = setInterval(() => {
-      setFullScreenAdIndex((prev) => (prev + 1) % visualAds.length)
-      const durSec = Number(adSettings?.fullScreenDurationSeconds) || 10
-      setCountdownRemaining(durSec)
+      setFullScreenAdIndex((prev) => {
+        const nextIdx = (prev + 1) % visualAds.length
+        const nextAd = visualAds[nextIdx]
+        const durSec = Number(adSettings?.fullScreenDurationSeconds) || Number(nextAd?.displayDuration) || 10
+        setCountdownRemaining(durSec)
+        return nextIdx
+      })
       setIsIntervalAdVisible(true)
     }, intervalMs)
 
     return () => clearInterval(intervalTimer)
-  }, [hasLiveMatches, adSettings?.fullScreenIntervalMinutes, adSettings?.fullScreenDurationSeconds, visualAds.length])
+  }, [hasLiveMatches, adSettings?.fullScreenIntervalMinutes, adSettings?.fullScreenDurationSeconds, visualAds])
 
   // Countdown timer for Interval mode during live matches
   useEffect(() => {
