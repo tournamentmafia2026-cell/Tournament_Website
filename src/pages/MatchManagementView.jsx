@@ -41,10 +41,18 @@ export function MatchManagementView({
   onDeleteMatch,
   onTogglePublishStatus,
   publishedStatusMap = {},
-  onAddParticipant,
-  onUpdateParticipant,
-  onDeleteParticipant,
-  onNavigateToFixtures,
+  participantForm = { name: '', name1: '', name2: '', court: '', place: '', category: 'Men Singles' },
+  setParticipantForm = () => {},
+  editingParticipantId = null,
+  setEditingParticipantId = () => {},
+  onAddParticipant = () => {},
+  onUpdateParticipant = () => {},
+  onDeleteParticipant = () => {},
+  onResetParticipantForm = () => {},
+  onOpenModifyModal = () => {},
+  onRemoveParticipant = () => {},
+  onOpenEditMatchModal = () => {},
+  onNavigateToFixtures = () => {},
   onStartLiveStream,
   onStopLiveStream,
   successToast,
@@ -1066,7 +1074,7 @@ export function MatchManagementView({
                       </span>
                       <input 
                         type="text"
-                        value={participantForm.court}
+                        value={participantForm?.court || ''}
                         onChange={(e) => setParticipantForm({ ...participantForm, court: e.target.value })}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
@@ -1095,7 +1103,7 @@ export function MatchManagementView({
                       </span>
                       <input 
                         type="text"
-                        value={participantForm.place}
+                        value={participantForm?.place || ''}
                         onChange={(e) => setParticipantForm({ ...participantForm, place: e.target.value })}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
