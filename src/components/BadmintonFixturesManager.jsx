@@ -8309,27 +8309,29 @@ export const BadmintonFixturesManager = ({
 
                 
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleOpenScoresheet(liveMatch)
-                  }}
-                  style={{
-                    padding: '10px 16px',
-                    borderRadius: '10px',
-                    background: 'rgba(56, 189, 248, 0.15)',
-                    border: '1px solid rgba(56, 189, 248, 0.4)',
-                    color: '#38bdf8',
-                    fontWeight: '800',
-                    fontSize: '12.5px',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                  }}
-                >
-                  <span>🖨️ Print Scoresheet</span>
-                </button>
+                {!isPublicView && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleOpenScoresheet(liveMatch)
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      borderRadius: '10px',
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.4)',
+                      color: '#38bdf8',
+                      fontWeight: '800',
+                      fontSize: '12.5px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>🖨️ Print Scoresheet</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
