@@ -562,19 +562,19 @@ export const StadiumTvLiveCast = ({
     return rawAllCategoryMatches
   }, [rawAllCategoryMatches])
   // Filter matches based on selected category
+  // Filter matches based on selected category
   const activePool = useMemo(() => {
     if (selectedCategory === 'all') return allCategoryMatches
     return allCategoryMatches.filter((m) => m.categoryName === selectedCategory)
   }, [allCategoryMatches, selectedCategory])
 
-  // Partition matches (Stabilized with deep equality to prevent blinking)
-  const prevPartitionRef = React.useRef({ displayLiveMatches: [], displayUpcomingMatches: [] })
-  const { displayLiveMatches, displayUpcomingMatches } = useMemo(() => {
+  // Extract live matches (Stabilized with deep equality to prevent blinking)
+  const prevLiveMatchesRef = React.useRef([])
+  const displayLiveMatches = useMemo(() => {
     const activeLive = []
-    const activeUpcoming = []
 
     activePool.forEach((m) => {
-      // If completed or winner decided, not live/upcoming
+      // If completed or winner decided, skip
       if (m.status === 'completed' || !!m.winner || m.isCompleted) return
       // If BYE match, skip
       if (m.player1?.isBye || m.player2?.isBye) return
@@ -584,12 +584,6 @@ export const StadiumTvLiveCast = ({
           ...m,
           assignedCourtName: m.court || null,
           isLiveDisplay: true,
-        })
-      } else {
-        activeUpcoming.push({
-          ...m,
-          assignedCourtName: m.court || null,
-          isUpcomingDisplay: true,
         })
       }
     })
@@ -602,20 +596,11 @@ export const StadiumTvLiveCast = ({
       return (a.matchNumber || 0) - (b.matchNumber || 0)
     })
 
-    // Sort upcoming matches by Round / Match Number / Court
-    activeUpcoming.sort((a, b) => {
-      if ((a.round || 1) !== (b.round || 1)) {
-        return (a.round || 1) - (b.round || 1)
-      }
-      return (a.matchNumber || 0) - (b.matchNumber || 0)
-    })
-
-    const result = { displayLiveMatches: activeLive, displayUpcomingMatches: activeUpcoming }
-    if (fastDeepEqual(prevPartitionRef.current, result)) {
-      return prevPartitionRef.current
+    if (fastDeepEqual(prevLiveMatchesRef.current, activeLive)) {
+      return prevLiveMatchesRef.current
     }
-    prevPartitionRef.current = result
-    return result
+    prevLiveMatchesRef.current = activeLive
+    return activeLive
   }, [activePool])
 
   // Score change watcher for international TV point flash burst
@@ -628,7 +613,6 @@ export const StadiumTvLiveCast = ({
       const key2 = `${m.id}-p2`
       const prev1 = prevScoresMapRef.current[key1]
       const prev2 = prevScoresMapRef.current[key2]
-
       if (prev1 !== undefined && p1Pts > prev1) {
         setFlashScoredKeys((prev) => ({ ...prev, [key1]: true }))
         setTimeout(() => {
@@ -658,8 +642,7 @@ export const StadiumTvLiveCast = ({
   }, [activeAds])
 
   const hasLiveMatches = (displayLiveMatches || []).length > 0
-  const hasUpcomingMatches = (displayUpcomingMatches || []).length > 0
-  const hasAnyMatches = hasLiveMatches || hasUpcomingMatches
+  const hasAnyMatches = hasLiveMatches
 
   // 1. Standby Slideshow mode: Automatically active when NO LIVE matches are in progress
   const isStandbyShowcaseActive = !hasLiveMatches && visualAds.length > 0 && !isStandbyDismissed
@@ -1157,118 +1140,6 @@ export const StadiumTvLiveCast = ({
                             <td className="table-status-cell">
                               <span className={`stadium-bwf-badge ${bwfStatus.type}`}>
                                 {bwfStatus.label}
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-
-            {/* =========================================================
-               DISTINCT SEPARATION & DIVIDER (10cm visual spacing)
-               ========================================================= */}
-            {displayLiveMatches.length > 0 && displayUpcomingMatches.length > 0 && (
-              <div className="stadium-live-upcoming-divider">
-                <div className="stadium-divider-line" />
-                <span className="stadium-divider-pill">⏳ UPCOMING MATCHES QUEUE</span>
-                <div className="stadium-divider-line" />
-              </div>
-            )}
-
-            {/* =========================================================
-               SECTION 2: ⏳ UPCOMING MATCHES (Launched from Schedule)
-               ========================================================= */}
-            {displayUpcomingMatches.length > 0 && (
-              <section className="stadium-broadcast-section upcoming-section">
-                <div className="stadium-section-header">
-                  <div className="stadium-section-title-wrap">
-                    <span className="stadium-upcoming-pulse-dot" />
-                    <h2 className="stadium-section-title">⏳ UPCOMING MATCHES ({displayUpcomingMatches.length})</h2>
-                    <span className="stadium-section-subtitle">• Ready on Court (Waiting for Umpire to start)</span>
-                  </div>
-                  <span className="stadium-mode-tag upcoming-dispatch">
-                    🏸 Court Queue
-                  </span>
-                </div>
-
-                <div className="stadium-table-container upcoming-table-wrap">
-                  <table className="stadium-broadcast-table stadium-upcoming-table">
-                    <thead>
-                      <tr>
-                        <th className="th-court">COURT & MATCH</th>
-                        <th className="th-cat">CATEGORY & ROUND</th>
-                        <th className="th-p1" style={{ textAlign: 'right' }}>PLAYER / TEAM 1</th>
-                        <th className="th-score" style={{ textAlign: 'center' }}>SCORE / STATUS</th>
-                        <th className="th-p2" style={{ textAlign: 'left' }}>PLAYER / TEAM 2</th>
-                        <th className="th-status" style={{ textAlign: 'center' }}>STATUS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {displayUpcomingMatches.map((m, idx) => {
-                        const p1 = m.player1
-                        const p2 = m.player2
-                        const p1Name = p1?.name || 'Player 1'
-                        const p2Name = p2?.name || 'Player 2'
-                        const courtDisplay = m.court || `Match #${m.matchNumber || idx + 1}`
-
-                        return (
-                          <tr
-                            key={m.id || `upcoming-${idx}`}
-                            className="stadium-table-row upcoming-row"
-                          >
-                            {/* 1. Court & Match Pill */}
-                            <td className="table-court-cell">
-                              <div className="table-court-tag">
-                                <span className="clean-upcoming-dot" />
-                                <span className="court-name-bold" style={{ color: '#fbbf24' }}>{courtDisplay}</span>
-                              </div>
-                              <span className="table-match-pill">{m.court ? `Match #${m.matchNumber || idx + 1}` : 'Upcoming'}</span>
-                            </td>
-
-                            {/* 2. Category & Round */}
-                            <td className="table-category-cell">
-                              <div className="table-cat-title">{formatCategoryName(m.categoryName)}</div>
-                              {m.roundName && <div className="table-cat-sub">{m.roundName}</div>}
-                            </td>
-
-                            {/* 3. Player 1 */}
-                            <td className="table-player-cell p1-cell">
-                              <div className="table-player-wrap right-align">
-                                <span className="table-player-name">{p1Name}</span>
-                                {Boolean(p1?.seed || p1?.isSeed) && (
-                                  <span className="stadium-seed-badge">S{p1.seed || p1.seedNumber || ''}</span>
-                                )}
-                              </div>
-                              {p1?.place && <div className="table-player-place right-align">{p1.place}</div>}
-                            </td>
-
-                            {/* 4. VS / Scheduled Status */}
-                            <td className="table-score-cell">
-                              <div className="table-set-pill-wrap">
-                                <span className="table-vs-pill">VS</span>
-                                <span className="table-set-label">{m.roundName || 'Ready on Court'}</span>
-                              </div>
-                            </td>
-
-                            {/* 5. Player 2 */}
-                            <td className="table-player-cell p2-cell">
-                              <div className="table-player-wrap left-align">
-                                {Boolean(p2?.seed || p2?.isSeed) && (
-                                  <span className="stadium-seed-badge">S{p2.seed || p2.seedNumber || ''}</span>
-                                )}
-                                <span className="table-player-name">{p2Name}</span>
-                              </div>
-                              {p2?.place && <div className="table-player-place left-align">{p2.place}</div>}
-                            </td>
-
-                            {/* 6. Status Badge */}
-                            <td className="table-status-cell">
-                              <span className="stadium-bwf-badge badge-upcoming">
-                                ⏳ READY
                               </span>
                             </td>
                           </tr>
