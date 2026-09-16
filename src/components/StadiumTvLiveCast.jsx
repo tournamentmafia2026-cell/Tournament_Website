@@ -661,40 +661,39 @@ export const StadiumTvLiveCast = ({
   const hasUpcomingMatches = (displayUpcomingMatches || []).length > 0
   const hasAnyMatches = hasLiveMatches || hasUpcomingMatches
 
-  // 1. Standby mode: Active when NO matches are on screen
-  const isStandbyShowcaseActive = !hasAnyMatches && visualAds.length > 0 && !isStandbyDismissed
+  // 1. Standby Slideshow mode: Automatically active when NO LIVE matches are in progress
+  const isStandbyShowcaseActive = !hasLiveMatches && visualAds.length > 0 && !isStandbyDismissed
 
-  // Reset standby dismissal when matches appear or change
+  // Reset standby dismissal when matches become live
   useEffect(() => {
-    if (hasAnyMatches) {
+    if (hasLiveMatches) {
       setIsStandbyDismissed(false)
     }
-  }, [hasAnyMatches])
+  }, [hasLiveMatches])
 
-  // Automatically restore sponsor ad after 10 seconds if dismissed and still no matches on court
+  // Automatically restore sponsor ad slideshow after 20 seconds if user dismissed to inspect scoreboard/upcoming
   useEffect(() => {
-    if (isStandbyDismissed && !hasAnyMatches && visualAds.length > 0) {
+    if (isStandbyDismissed && !hasLiveMatches && visualAds.length > 0) {
       const resumeTimer = setTimeout(() => {
         setIsStandbyDismissed(false)
-      }, 10000)
+      }, 20000)
       return () => clearTimeout(resumeTimer)
     }
-  }, [isStandbyDismissed, hasAnyMatches, visualAds.length])
+  }, [isStandbyDismissed, hasLiveMatches, visualAds.length])
 
-  // Continuous rotation in Standby mode (when no matches)
+  // Continuous 10-second slide rotation in Standby mode (when no live matches are active)
   useEffect(() => {
     if (!isStandbyShowcaseActive || visualAds.length <= 1) return
-    const curAd = visualAds[fullScreenAdIndex] || visualAds[0]
-    const durSec = Number(curAd?.displayDuration) || Number(adSettings?.fullScreenDurationSeconds) || 10
-    const timer = setTimeout(() => {
+    const slideDurationMs = 10000 // 10 seconds per slide as requested
+    const timer = setInterval(() => {
       setFullScreenAdIndex((prev) => (prev + 1) % visualAds.length)
-    }, Math.max(3000, durSec * 1000))
-    return () => clearTimeout(timer)
-  }, [isStandbyShowcaseActive, visualAds, fullScreenAdIndex, adSettings?.fullScreenDurationSeconds])
+    }, slideDurationMs)
+    return () => clearInterval(timer)
+  }, [isStandbyShowcaseActive, visualAds.length])
 
-  // 2. Interval mode: Trigger full-screen showcase during matches on configured interval
+  // 2. Interval mode: Trigger full-screen showcase during LIVE matches on configured interval
   useEffect(() => {
-    if (!hasAnyMatches) {
+    if (!hasLiveMatches) {
       setIsIntervalAdVisible(false)
       return
     }
@@ -702,7 +701,7 @@ export const StadiumTvLiveCast = ({
     const intervalMins = Number(adSettings?.fullScreenIntervalMinutes) || 1
     if (intervalMins <= 0 || visualAds.length === 0) return
 
-    const intervalMs = Math.max(15000, intervalMins * 60 * 1000)
+    const intervalMs = Math.max(10000, intervalMins * 60 * 1000)
     const intervalTimer = setInterval(() => {
       setFullScreenAdIndex((prev) => (prev + 1) % visualAds.length)
       const durSec = Number(adSettings?.fullScreenDurationSeconds) || 10
@@ -711,9 +710,9 @@ export const StadiumTvLiveCast = ({
     }, intervalMs)
 
     return () => clearInterval(intervalTimer)
-  }, [hasAnyMatches, adSettings?.fullScreenIntervalMinutes, adSettings?.fullScreenDurationSeconds, visualAds.length])
+  }, [hasLiveMatches, adSettings?.fullScreenIntervalMinutes, adSettings?.fullScreenDurationSeconds, visualAds.length])
 
-  // Countdown timer for Interval mode
+  // Countdown timer for Interval mode during live matches
   useEffect(() => {
     if (!isIntervalAdVisible) return
     const timer = setInterval(() => {
@@ -1040,32 +1039,9 @@ export const StadiumTvLiveCast = ({
             <h3 style={{ fontSize: '20px', fontWeight: '900', color: '#f8fafc', marginBottom: '8px' }}>
               No Matches Currently In Progress
             </h3>
-            <p style={{ color: '#94a3b8', fontSize: '13.5px', maxWidth: '420px', margin: '0 auto 16px', lineHeight: '1.5' }}>
+            <p style={{ color: '#94a3b8', fontSize: '13.5px', maxWidth: '420px', margin: '0 auto', lineHeight: '1.5' }}>
               Waiting for tournament matches to be scheduled or assigned to court.
             </p>
-            {visualAds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsStandbyDismissed(false)}
-                className="stadium-tv-btn"
-                style={{
-                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                  border: '1.5px solid #38bdf8',
-                  color: '#ffffff',
-                  fontWeight: '800',
-                  padding: '9px 20px',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 15px rgba(2, 132, 199, 0.4)',
-                }}
-              >
-                <span>⭐</span>
-                <span>Show Sponsors</span>
-              </button>
-            )}
           </div>
         ) : (
           <>
@@ -1526,7 +1502,7 @@ export const StadiumTvLiveCast = ({
                   <span style={{ fontSize: '13px', fontWeight: '900', color: activeFullScreenAd.accentColor || '#38bdf8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                     ⭐ OFFICIAL TOURNAMENT SPONSOR
                   </span>
-                  {isIntervalAdVisible && (
+                  {isIntervalAdVisible ? (
                     <span
                       style={{
                         background: 'rgba(56, 189, 248, 0.15)',
@@ -1538,7 +1514,21 @@ export const StadiumTvLiveCast = ({
                         fontWeight: '800',
                       }}
                     >
-                      ⏳ Returning in {countdownRemaining}s
+                      ⏳ Returning to Live in {countdownRemaining}s
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        background: 'rgba(56, 189, 248, 0.15)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        color: '#38bdf8',
+                        padding: '3px 12px',
+                        borderRadius: '999px',
+                        fontSize: '11.5px',
+                        fontWeight: '800',
+                      }}
+                    >
+                      🔄 10s Auto-Slideshow
                     </span>
                   )}
                 </div>
@@ -1548,7 +1538,34 @@ export const StadiumTvLiveCast = ({
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {/* Slide Dots / Indicator */}
+              {visualAds.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 14px', borderRadius: '999px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
+                  {visualAds.map((ad, idx) => (
+                    <button
+                      key={ad.id || idx}
+                      type="button"
+                      onClick={() => setFullScreenAdIndex(idx)}
+                      style={{
+                        width: idx === fullScreenAdIndex ? '24px' : '8px',
+                        height: '8px',
+                        borderRadius: '4px',
+                        backgroundColor: idx === fullScreenAdIndex ? (activeFullScreenAd.accentColor || '#38bdf8') : 'rgba(255, 255, 255, 0.3)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        transition: 'all 0.3s ease',
+                      }}
+                      title={`Slide ${idx + 1}: ${ad.sponsorName}`}
+                    />
+                  ))}
+                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', marginLeft: '6px' }}>
+                    {fullScreenAdIndex + 1} / {visualAds.length}
+                  </span>
+                </div>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -1578,6 +1595,7 @@ export const StadiumTvLiveCast = ({
 
           {/* Center High-Impact Visual Area */}
           <div
+            key={activeFullScreenAd.id || fullScreenAdIndex}
             style={{
               flex: 1,
               width: '100%',
@@ -1591,6 +1609,7 @@ export const StadiumTvLiveCast = ({
               boxShadow: `0 20px 60px rgba(0,0,0,0.8), 0 0 50px ${activeFullScreenAd.accentColor || '#38bdf8'}25`,
               border: `2px solid ${activeFullScreenAd.accentColor || '#38bdf8'}60`,
               background: '#030712',
+              animation: 'fadeIn 0.4s ease-out',
             }}
           >
             {activeFullScreenAd.mediaType === 'video' || activeFullScreenAd.videoUrl ? (
@@ -1642,6 +1661,7 @@ export const StadiumTvLiveCast = ({
 
           {/* Bottom Headline & Call To Action Banner */}
           <div
+            key={`bottom-${activeFullScreenAd.id || fullScreenAdIndex}`}
             style={{
               width: '100%',
               background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
@@ -1652,6 +1672,7 @@ export const StadiumTvLiveCast = ({
               justifyContent: 'space-between',
               alignItems: 'center',
               zIndex: 10,
+              animation: 'fadeIn 0.35s ease-out',
             }}
           >
             <div style={{ maxWidth: '75%' }}>
