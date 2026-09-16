@@ -1139,17 +1139,30 @@ export const BadmintonFixturesManager = ({
   }, [])
 
   const publishedCategoryList = (categories || []).filter(
-    (cat) => Boolean(publishedStatusMap[`${selectedMatch?.id}-${cat}`] || tournamentDraws[`${selectedMatch?.id}-${cat}`])
+    (cat) => Boolean(
+      publishedStatusMap[`${selectedMatch?.id}-${cat}`] ||
+      tournamentDraws[`${selectedMatch?.id}-${cat}`]?.isPublished ||
+      tournamentDraws[`${selectedMatch?.id}-${cat}`]?.published
+    )
   )
-  const visibleCategories = isPublicView ? (publishedCategoryList.length > 0 ? publishedCategoryList : categories || []) : (categories || [])
+  const visibleCategories = categories || []
 
-  // In spectator/public view, auto-select first published category if current category has no draw
+  // In spectator/public view, auto-select first published category if current category is not published
   useEffect(() => {
     if (isPublicView && selectedMatch) {
       const pubCats = (categories || []).filter(
-        (cat) => Boolean(publishedStatusMap[`${selectedMatch.id}-${cat}`] || tournamentDraws[`${selectedMatch.id}-${cat}`])
+        (cat) => Boolean(
+          publishedStatusMap[`${selectedMatch.id}-${cat}`] ||
+          tournamentDraws[`${selectedMatch.id}-${cat}`]?.isPublished ||
+          tournamentDraws[`${selectedMatch.id}-${cat}`]?.published
+        )
       )
-      if (pubCats.length > 0 && !pubCats.includes(selectedCategory)) {
+      const isCurrentPub = Boolean(
+        publishedStatusMap[`${selectedMatch.id}-${selectedCategory}`] ||
+        tournamentDraws[`${selectedMatch.id}-${selectedCategory}`]?.isPublished ||
+        tournamentDraws[`${selectedMatch.id}-${selectedCategory}`]?.published
+      )
+      if (pubCats.length > 0 && (!selectedCategory || !isCurrentPub)) {
         setSelectedCategory(pubCats[0])
       }
     }
@@ -3129,79 +3142,164 @@ export const BadmintonFixturesManager = ({
       {/* Top Bar for Public View vs Admin View */}
       {isPublicView ? (
         <>
-          <div className="public-fixtures-topbar">
+          <div className="public-fixtures-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', gap: '10px', flexWrap: 'wrap' }}>
             {onBackToPublicFeed && (
               <button
                 type="button"
                 onClick={onBackToPublicFeed}
                 className="public-fixtures-back-btn"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(30, 41, 59, 0.85)',
+                  border: '1px solid rgba(148, 163, 184, 0.25)',
+                  color: '#e2e8f0',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                }}
               >
                 <span style={{ fontSize: '14px' }}>←</span>
                 <span>Back to Tournaments</span>
               </button>
             )}
 
-            {/* Theme Toggle Button on Right: Light Mode / Dark Mode */}
+            {/* Theme Toggle Button on Right */}
             <div className="public-fixtures-right-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <button
                 type="button"
                 onClick={() => setSheetTheme(sheetTheme === 'white' ? 'dark' : 'white')}
                 className="public-sheet-theme-btn"
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(30, 41, 59, 0.85)',
+                  border: '1px solid rgba(148, 163, 184, 0.25)',
+                  color: '#38bdf8',
+                  fontWeight: '800',
+                  fontSize: '12.5px',
+                  cursor: 'pointer',
+                }}
               >
                 {sheetTheme === 'white' ? '🌙 Dark Mode' : '☀️ Light Mode'}
               </button>
             </div>
           </div>
 
-          {/* Dedicated Category Selector Bar below Topbar */}
+          {/* Dedicated Categories Section Heading & Responsive Grid */}
           <div
-            className="public-fixtures-category-bar"
+            className="public-fixtures-categories-container"
             style={{
-              marginBottom: '16px',
-              padding: '12px 18px',
-              background: 'linear-gradient(135deg, rgba(13, 22, 39, 0.95) 0%, rgba(20, 32, 54, 0.92) 100%)',
-              border: '1px solid rgba(56, 189, 248, 0.25)',
-              borderRadius: '16px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              flexWrap: 'wrap',
-              boxShadow: '0 4px 18px rgba(0, 0, 0, 0.25)',
+              marginBottom: '20px',
+              padding: '16px 18px',
+              background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.9) 100%)',
+              border: '1.5px solid rgba(56, 189, 248, 0.25)',
+              borderRadius: '18px',
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '15px' }}>🏸</span>
-              <span style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: '800' }}>
-                Category:
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '18px' }}>🏸</span>
+                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '900', color: '#ffffff', letterSpacing: '0.02em' }}>
+                  Categories
+                </h3>
+                <span style={{ fontSize: '11px', fontWeight: '800', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '2px 8px', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.3)' }}>
+                  {categories.length} Total
+                </span>
+              </div>
+              <span style={{ fontSize: '11.5px', color: '#94a3b8', fontWeight: '600' }}>
+                {publishedCategoryList.length} of {categories.length} Published
               </span>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', flex: 1 }}>
-              {publishedCategoryList.length > 0 ? (
-                publishedCategoryList.map((cat) => {
-                  const isCompact = publishedCategoryList.length > 4
-                  const isVeryCompact = publishedCategoryList.length > 7
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`public-fixtures-cat-pill ${selectedCategory === cat ? 'active' : ''} ${isVeryCompact ? 'pill-xs' : isCompact ? 'pill-sm' : ''}`}
-                    >
-                      <span className="cat-pill-dot" />
-                      <span>{cat}</span>
-                    </button>
-                  )
-                })
-              ) : (
-                <span style={{ fontSize: '12px', color: '#fca5a5', fontWeight: '700' }}>
-                  📢 No categories published yet.
-                </span>
-              )}
+            {/* Responsive Categories Grid */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+                gap: '10px',
+              }}
+            >
+              {categories.map((cat) => {
+                const isCatPub = Boolean(
+                  publishedStatusMap[`${selectedMatch?.id}-${cat}`] ||
+                  tournamentDraws[`${selectedMatch?.id}-${cat}`]?.isPublished ||
+                  tournamentDraws[`${selectedMatch?.id}-${cat}`]?.published
+                )
+                const isSelected = selectedCategory === cat
+
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => {
+                      if (isCatPub) {
+                        setSelectedCategory(cat)
+                      } else {
+                        setSwapToast(`🔒 The official draw for "${cat}" has not been published yet.`)
+                        setTimeout(() => setSwapToast(null), 3500)
+                      }
+                    }}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '12px',
+                      background: isSelected
+                        ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                        : isCatPub
+                          ? 'rgba(15, 23, 42, 0.75)'
+                          : 'rgba(15, 23, 42, 0.45)',
+                      border: isSelected
+                        ? '2px solid #38bdf8'
+                        : isCatPub
+                          ? '1px solid rgba(56, 189, 248, 0.3)'
+                          : '1px dashed rgba(148, 163, 184, 0.25)',
+                      color: isSelected
+                        ? '#ffffff'
+                        : isCatPub
+                          ? '#e2e8f0'
+                          : '#64748b',
+                      cursor: isCatPub ? 'pointer' : 'not-allowed',
+                      opacity: isCatPub ? 1 : 0.65,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: '4px',
+                      textAlign: 'left',
+                      transition: 'all 0.15s ease',
+                      boxShadow: isSelected ? '0 0 16px rgba(56, 189, 248, 0.4)' : 'none',
+                    }}
+                    title={isCatPub ? `View ${cat} Official Draw` : `${cat} Draw is not published yet`}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                      <span style={{ fontSize: '12.5px', fontWeight: '800', lineHeight: 1.2 }}>
+                        {cat}
+                      </span>
+                      {isSelected && <span style={{ fontSize: '12px', color: '#ffffff', fontWeight: '900' }}>✓</span>}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                      {isCatPub ? (
+                        <span style={{ fontSize: '9.5px', fontWeight: '800', color: isSelected ? '#e0f2fe' : '#34d399', background: isSelected ? 'rgba(255, 255, 255, 0.2)' : 'rgba(16, 185, 129, 0.15)', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: isSelected ? '#ffffff' : '#34d399', display: 'inline-block' }} />
+                          <span>Live Draw</span>
+                        </span>
+                      ) : (
+                        <span style={{ fontSize: '9.5px', fontWeight: '700', color: '#94a3b8', background: 'rgba(148, 163, 184, 0.1)', padding: '1px 6px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          <span>🔒</span>
+                          <span>Unpublished</span>
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
-        </>
-      ) : (
+        </>) : (
             <>
               {/* Breadcrumb & Navigation Bar */}
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: '14px' }}>
@@ -3471,39 +3569,41 @@ export const BadmintonFixturesManager = ({
             </div>
           )}
 
-          {/* 2. View Mode Tabs Bar (Official Draw, Diagram, Schedule, Players) */}
-          <div className="fixtures-selectors-card" style={{ marginBottom: '18px' }}>
-            <div className="view-mode-tabs" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              <button
-                type="button"
-                className={`tab-btn ${viewMode === 'official' ? 'active' : ''}`}
-                onClick={() => setViewMode('official')}
-              >
-                📄 Official Draw Sheet (with Byes)
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${viewMode === 'diagram' ? 'active' : ''}`}
-                onClick={() => setViewMode('diagram')}
-              >
-                🎯 Card Tree Diagram
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${viewMode === 'schedule' ? 'active' : ''}`}
-                onClick={() => setViewMode('schedule')}
-              >
-                📋 Match Schedule
-              </button>
-              <button
-                type="button"
-                className={`tab-btn ${viewMode === 'players' ? 'active' : ''}`}
-                onClick={() => setViewMode('players')}
-              >
-                👥 Players ({categoryPlayers.length})
-              </button>
+          {/* 2. View Mode Tabs Bar (Admin View only - Hidden for Public View) */}
+          {!isPublicView && (
+            <div className="fixtures-selectors-card" style={{ marginBottom: '18px' }}>
+              <div className="view-mode-tabs" style={{ width: '100%', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                <button
+                  type="button"
+                  className={`tab-btn ${viewMode === 'official' ? 'active' : ''}`}
+                  onClick={() => setViewMode('official')}
+                >
+                  📄 Official Draw Sheet (with Byes)
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn ${viewMode === 'diagram' ? 'active' : ''}`}
+                  onClick={() => setViewMode('diagram')}
+                >
+                  🎯 Card Tree Diagram
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn ${viewMode === 'schedule' ? 'active' : ''}`}
+                  onClick={() => setViewMode('schedule')}
+                >
+                  📋 Match Schedule
+                </button>
+                <button
+                  type="button"
+                  className={`tab-btn ${viewMode === 'players' ? 'active' : ''}`}
+                  onClick={() => setViewMode('players')}
+                >
+                  👥 Players ({categoryPlayers.length})
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
 
       {/* Champion Banner if Final Completed */}
@@ -3520,12 +3620,12 @@ export const BadmintonFixturesManager = ({
       )}
 
       {/* Content Area according to viewMode */}
-      {isPublicView && !publishedStatusMap[drawKey] && !tournamentDraws[drawKey] ? (
-        <div className="empty-draw-card" style={{ border: '1.5px dashed rgba(239, 68, 68, 0.4)', background: 'rgba(15, 23, 42, 0.85)', padding: '40px 20px', textAlign: 'center' }}>
+      {isPublicView && !publishedStatusMap[drawKey] && !tournamentDraws[drawKey]?.isPublished && !tournamentDraws[drawKey]?.published ? (
+        <div className="empty-draw-card" style={{ border: '1.5px dashed rgba(239, 68, 68, 0.4)', background: 'rgba(15, 23, 42, 0.85)', padding: '40px 20px', textAlign: 'center', borderRadius: '16px', margin: '20px 0' }}>
           <div style={{ fontSize: '42px', marginBottom: '12px' }}>🔒</div>
-          <h3 style={{ color: '#f8fafc', margin: '0 0 8px 0' }}>Fixtures Not Published Yet</h3>
-          <p style={{ color: '#94a3b8', margin: 0, fontSize: '13px' }}>
-            The official draw for {selectedCategory} has not been published yet. Only published fixtures are available to spectators.
+          <h3 style={{ color: '#f8fafc', margin: '0 0 8px 0', fontSize: '18px', fontWeight: '900' }}>Fixtures Not Published Yet</h3>
+          <p style={{ color: '#94a3b8', margin: 0, fontSize: '13.5px', maxWidth: '440px', margin: '0 auto' }}>
+            The official draw for <strong>{selectedCategory}</strong> has not been published yet. Please select one of the published categories above to view the live draw sheet.
           </p>
         </div>
       ) : !currentDraw ? (
@@ -3553,7 +3653,7 @@ export const BadmintonFixturesManager = ({
           {/* =========================================================
               1. OFFICIAL TOURNAMENT LINE DRAW SHEET (EXACT PHOTO STYLE)
              ========================================================= */}
-          {viewMode === 'official' && (() => {
+          {(isPublicView || viewMode === 'official') && (() => {
             const drawSize = currentDraw.drawSize || 16
             const totalRounds = currentDraw.totalRounds || Math.round(Math.log2(drawSize)) || 4
             const round1Matches = matchesByRound[1] || []
@@ -4326,7 +4426,7 @@ export const BadmintonFixturesManager = ({
           {/* =========================================================
               2. LINE-BRANCHED DIAGRAM TREE (EXACT PHOTO STYLE)
              ========================================================= */}
-          {viewMode === 'diagram' && (() => {
+          {!isPublicView && viewMode === 'diagram' && (() => {
             const totalRounds = currentDraw.totalRounds
             const r1Matches = matchesByRound[1] || []
             const r1Count = r1Matches.length || Math.pow(2, totalRounds - 1)
@@ -4585,7 +4685,7 @@ export const BadmintonFixturesManager = ({
           {/* =========================================================
               3. PROFESSIONAL FULL SCOREBOARD VIEW (BWF Live Broadcast Style)
              ========================================================= */}
-          {viewMode === 'bracket' && (
+          {!isPublicView && viewMode === 'bracket' && (
             <div className="pro-scoreboard-wrapper">
               {/* Championship Stats Overview Bar */}
               {(() => {
@@ -5172,7 +5272,7 @@ export const BadmintonFixturesManager = ({
           {/* =========================================================
               4. PROFESSIONAL ENHANCED SCHEDULE LIST VIEW (REBUILT CLEAN)
              ========================================================= */}
-          {viewMode === 'schedule' && (
+          {!isPublicView && viewMode === 'schedule' && (
             <div className="fixtures-schedule-container">
               {/* 1. Top Hero Progress Banner */}
               <div className="schedule-hero-banner">
@@ -6230,7 +6330,7 @@ export const BadmintonFixturesManager = ({
           {/* =========================================================
               5. PLAYERS TAB & DESK REPORTING VIEW
              ========================================================= */}
-          {viewMode === 'players' && (
+          {!isPublicView && viewMode === 'players' && (
             <div className="fixtures-players-container">
               {/* 1. Players Hero & Reporting Summary Header */}
               <div className="players-hero-card">
