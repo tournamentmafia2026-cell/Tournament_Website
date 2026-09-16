@@ -63,7 +63,9 @@ export const DEFAULT_AD_SETTINGS = {
   fullScreenIntervalMinutes: 1, // Repeat every 1 minute during live matches
   fullScreenDurationSeconds: 10, // Display duration in seconds (10s) during live matches
   standbySlideDurationSeconds: 10, // Continuous rotation speed (10s) when no matches are active
-  tickerSpeed: 'slow', // 'ultra-slow' | 'slow' | 'normal' | 'fast' | 'ultra-fast'
+  tickerSpeed: 'normal', // 'ultra-slow' | 'slow' | 'normal' | 'fast' | 'ultra-fast'
+  topTickerSpeed: 'normal',
+  bottomTickerSpeed: 'normal',
   topScrollingText: '',
   bottomScrollingText: '',
   videoMuted: true,

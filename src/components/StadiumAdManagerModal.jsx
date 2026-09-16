@@ -145,14 +145,18 @@ export const StadiumAdManagerModal = ({
   }
 
   // Update Ad Settings with instant localStorage and cross-tab sync
-  const handleUpdateSetting = (key, value) => {
-    const next = { ...localSettings, [key]: value }
-    setLocalSettings(next)
-    try {
-      localStorage.setItem('badminton-ad-settings', JSON.stringify(next))
-      window.dispatchEvent(new Event('storage'))
-    } catch {}
-    if (onSaveSettings) onSaveSettings(next)
+  const handleUpdateSetting = (keyOrObject, value) => {
+    setLocalSettings((prev) => {
+      const next = typeof keyOrObject === 'object' && keyOrObject !== null
+        ? { ...prev, ...keyOrObject }
+        : { ...prev, [keyOrObject]: value }
+      try {
+        localStorage.setItem('badminton-ad-settings', JSON.stringify(next))
+        window.dispatchEvent(new Event('storage'))
+      } catch {}
+      if (onSaveSettings) onSaveSettings(next)
+      return next
+    })
   }
 
   // Reset to Defaults
@@ -1056,8 +1060,7 @@ export const StadiumAdManagerModal = ({
                         key={opt.value}
                         type="button"
                         onClick={() => {
-                          handleUpdateSetting('topTickerSpeed', opt.value)
-                          handleUpdateSetting('tickerSpeed', opt.value)
+                          handleUpdateSetting({ topTickerSpeed: opt.value, tickerSpeed: opt.value })
                         }}
                         style={{
                           background: isSelected ? '#0284c7' : '#0f172a',
@@ -1092,8 +1095,7 @@ export const StadiumAdManagerModal = ({
                       }
                       onChange={(e) => {
                         const val = Math.max(4, Number(e.target.value) || 22)
-                        handleUpdateSetting('topTickerSpeed', val)
-                        handleUpdateSetting('tickerSpeed', val)
+                        handleUpdateSetting({ topTickerSpeed: val, tickerSpeed: val })
                       }}
                       style={{
                         width: '55px',
@@ -1167,8 +1169,7 @@ export const StadiumAdManagerModal = ({
                         key={opt.value}
                         type="button"
                         onClick={() => {
-                          handleUpdateSetting('bottomTickerSpeed', opt.value)
-                          handleUpdateSetting('tickerSpeed', opt.value)
+                          handleUpdateSetting({ bottomTickerSpeed: opt.value, tickerSpeed: opt.value })
                         }}
                         style={{
                           background: isSelected ? '#059669' : '#0f172a',
@@ -1203,8 +1204,7 @@ export const StadiumAdManagerModal = ({
                       }
                       onChange={(e) => {
                         const val = Math.max(4, Number(e.target.value) || 22)
-                        handleUpdateSetting('bottomTickerSpeed', val)
-                        handleUpdateSetting('tickerSpeed', val)
+                        handleUpdateSetting({ bottomTickerSpeed: val, tickerSpeed: val })
                       }}
                       style={{
                         width: '55px',
