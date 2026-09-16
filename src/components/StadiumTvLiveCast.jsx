@@ -584,43 +584,14 @@ export const StadiumTvLiveCast = ({
       const isLiveMatch = m.status === 'live' || (m.isLive === true && m.status !== 'completed')
 
       if (isLiveMatch) {
-        if (!isLiveUmpireMode) {
-          upcomingQueue.push({
-            ...m,
-            assignedCourtName: m.court || null,
-            isLiveDisplay: false,
-          })
-          return
-        }
-
-        const currentSet = m.liveScore?.currentSet || 1
-        const p1Pts = m.liveScore?.pointsA ?? m[`scoreSet${currentSet}A`] ?? 0
-        const p2Pts = m.liveScore?.pointsB ?? m[`scoreSet${currentSet}B`] ?? 0
-        const hasPoints = (
-          (p1Pts !== undefined && p1Pts !== '' && Number(p1Pts) > 0) ||
-          (p2Pts !== undefined && p2Pts !== '' && Number(p2Pts) > 0) ||
-          (m.scoreSet1A !== undefined && m.scoreSet1A !== '' && Number(m.scoreSet1A) > 0) ||
-          (m.scoreSet1B !== undefined && m.scoreSet1B !== '' && Number(m.scoreSet1B) > 0) ||
-          (m.scoreSet2A !== undefined && m.scoreSet2A !== '' && Number(m.scoreSet2A) > 0) ||
-          (m.scoreSet2B !== undefined && m.scoreSet2B !== '' && Number(m.scoreSet2B) > 0)
-        )
-        const isUmpireStarted = m.liveScore?.isStarted === true || Boolean(m.liveScore?.startedAt) || hasPoints
-
-        if (isUmpireStarted) {
-          activeLive.push({
-            ...m,
-            assignedCourtName: m.court || null,
-            isLiveDisplay: true,
-          })
-        } else {
-          upcomingQueue.push({
-            ...m,
-            assignedCourtName: m.court || null,
-            isLiveDisplay: false,
-          })
-        }
-      } else {
-        // Scheduled or queued match for Upcoming Matches
+        // ALWAYS display as Live Match on Court
+        activeLive.push({
+          ...m,
+          assignedCourtName: m.court || null,
+          isLiveDisplay: true,
+        })
+      } else if (m.status === 'upcoming' || m.isNextOnCourt === true) {
+        // ONLY matches that are explicitly marked as 'upcoming' or queued for next on court
         upcomingQueue.push({
           ...m,
           assignedCourtName: m.court || null,
@@ -629,12 +600,16 @@ export const StadiumTvLiveCast = ({
       }
     })
 
-    // Sort upcoming matches: Live-ready first, then by round and match number
+    // Sort live matches by Court Name / Match Number
+    activeLive.sort((a, b) => {
+      const cA = a.court || a.assignedCourtName || ''
+      const cB = b.court || b.assignedCourtName || ''
+      if (cA && cB) return cA.localeCompare(cB, undefined, { numeric: true })
+      return (a.matchNumber || 0) - (b.matchNumber || 0)
+    })
+
+    // Sort upcoming matches by round and match number
     upcomingQueue.sort((a, b) => {
-      const aIsLiveFlag = a.status === 'live' || a.isLive === true
-      const bIsLiveFlag = b.status === 'live' || b.isLive === true
-      if (aIsLiveFlag && !bIsLiveFlag) return -1
-      if (!aIsLiveFlag && bIsLiveFlag) return 1
       if (a.round !== b.round) return (a.round || 1) - (b.round || 1)
       return (a.matchNumber || 0) - (b.matchNumber || 0)
     })
@@ -645,7 +620,7 @@ export const StadiumTvLiveCast = ({
     }
     prevPartitionRef.current = result
     return result
-  }, [activePool, isLiveUmpireMode])
+  }, [activePool])
 
   // Score change watcher for international TV point flash burst
   useEffect(() => {
@@ -914,7 +889,7 @@ export const StadiumTvLiveCast = ({
               onChange={(e) => setSelectedCategory(e.target.value)}
               className="stadium-tv-select"
             >
-              <option value="all">⚡ All Categories ({allCategoryMatches.length} Matches)</option>
+              <option value="all">⚡ All Categories ({displayLiveMatches.length} Live)</option>
               {tournamentCategories.map((c) => (
                 <option key={c} value={c}>
                   {formatCategoryName(c)}
