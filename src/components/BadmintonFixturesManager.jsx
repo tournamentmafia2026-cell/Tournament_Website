@@ -2672,128 +2672,33 @@ export const BadmintonFixturesManager = ({
                       ⚡ Manage Fixtures →
                     </button>
 
-                    {(() => {
-                      const isThisMatchLive = isStreamActive && String(activeLiveMatchId) === String(match.id)
-
-                      if (isThisMatchLive) {
-                        return (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', width: '100%' }}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (onStartLiveStream) {
-                                  onStartLiveStream(match)
-                                } else {
-                                  handleLaunchLiveTv(match.id)
-                                }
-                              }}
-                              style={{
-                                padding: '9px 10px',
-                                fontSize: '11.5px',
-                                fontWeight: '800',
-                                borderRadius: '9px',
-                                cursor: 'pointer',
-                                background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
-                                border: '1.5px solid #ef4444',
-                                color: '#ffffff',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                boxShadow: 'none',
-                                transition: 'all 0.15s ease',
-                              }}
-                              title={`TV Live Stream is Active. Click to view/reopen for "${formatTournamentName(match.matchName)}"`}
-                            >
-                              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#ffffff' }} />
-                              <span>🔴 Live: ON</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (onStopLiveStream) {
-                                  onStopLiveStream()
-                                } else {
-                                  try {
-                                    localStorage.setItem('badminton-live-stream-active', 'false')
-                                    localStorage.removeItem('badminton-live-stream-match-id')
-                                    window.dispatchEvent(new Event('storage'))
-                                  } catch (err) {}
-                                }
-                                setIsStreamActive(false)
-                                setActiveLiveMatchId('')
-                                setSwapToast('⚪ Live Stream is now turned OFF.')
-                                setTimeout(() => setSwapToast(null), 3000)
-                              }}
-                              style={{
-                                padding: '9px 10px',
-                                fontSize: '11.5px',
-                                fontWeight: '800',
-                                borderRadius: '9px',
-                                cursor: 'pointer',
-                                background: 'rgba(30, 41, 59, 0.9)',
-                                border: '1.5px solid rgba(239, 68, 68, 0.4)',
-                                color: '#fca5a5',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                transition: 'all 0.15s ease',
-                              }}
-                              title="Turn OFF Live Stream Broadcast"
-                            >
-                              <span>⏹️ Turn OFF</span>
-                            </button>
-                          </div>
-                        )
-                      }
-
-                      // DEFAULT STATE: OFF (Clean Neutral, zero blinking, solid)
-                      return (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (onStartLiveStream) {
-                              onStartLiveStream(match)
-                            } else {
-                              handleLaunchLiveTv(match.id)
-                              try {
-                                localStorage.setItem('badminton-live-stream-active', 'true')
-                                localStorage.setItem('badminton-live-stream-match-id', String(match.id))
-                                window.dispatchEvent(new Event('storage'))
-                              } catch (err) {}
-                            }
-                            setIsStreamActive(true)
-                            setActiveLiveMatchId(String(match.id))
-                          }}
-                          style={{
-                            padding: '9px 14px',
-                            fontSize: '11.5px',
-                            fontWeight: '800',
-                            borderRadius: '9px',
-                            cursor: 'pointer',
-                            background: 'rgba(30, 41, 59, 0.75)',
-                            border: '1.5px solid rgba(148, 163, 184, 0.3)',
-                            color: '#cbd5e1',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px',
-                            width: '100%',
-                            boxShadow: 'none',
-                            transition: 'all 0.15s ease',
-                          }}
-                          title={`Live Stream is OFF. Click to start TV Live Stream in new tab for "${formatTournamentName(match.matchName)}"`}
-                        >
-                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#94a3b8' }} />
-                          <span>⚪ Live Stream: OFF</span>
-                        </button>
-                      )
-                    })()}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleLaunchLiveTv(match.id)
+                      }}
+                      style={{
+                        padding: '10px 14px',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                        color: '#ffffff',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        width: '100%',
+                        boxShadow: '0 4px 12px rgba(2, 132, 199, 0.35)',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title={`Open Dedicated TV Live Screen in New Tab for "${formatTournamentName(match.matchName)}"`}
+                    >
+                      <span>📺 TV Live Cast</span>
+                    </button>
 
                     {(() => {
                       const isTourTimingsActive = matchCats.some(
@@ -4775,69 +4680,47 @@ export const BadmintonFixturesManager = ({
                               {/* Card Bottom Actions */}
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
                                 {!isByeMatch && p1 && p2 && (
-                                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                                    {!isPublicView ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => setEditingScoreMatchId(isEditing ? null : m.id)}
-                                        style={{
-                                          background: isEditing ? 'rgba(56, 189, 248, 0.25)' : 'rgba(59, 130, 246, 0.15)',
-                                          border: '1px solid rgba(56, 189, 248, 0.4)',
-                                          borderRadius: '8px',
-                                          color: '#93c5fd',
-                                          padding: '5px 10px',
-                                          fontSize: '11px',
-                                          fontWeight: '800',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '4px',
-                                        }}
-                                      >
-                                        {isEditing ? '✕ Close Score Editor' : '⚡ Enter Sets Score (Auto Winner)'}
-                                      </button>
-                                    ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => setViewingMatchDetails(m)}
-                                        style={{
-                                          background: 'rgba(59, 130, 246, 0.18)',
-                                          border: '1px solid rgba(96, 165, 250, 0.4)',
-                                          borderRadius: '8px',
-                                          color: '#bfdbfe',
-                                          padding: '5px 12px',
-                                          fontSize: '11.5px',
-                                          fontWeight: '800',
-                                          cursor: 'pointer',
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '5px',
-                                        }}
-                                      >
-                                        📊 View Scorecard
-                                      </button>
-                                    )}
+                                  !isPublicView ? (
                                     <button
                                       type="button"
-                                      onClick={() => handleLaunchLiveTv(m.tournamentId || selectedMatchId)}
+                                      onClick={() => setEditingScoreMatchId(isEditing ? null : m.id)}
                                       style={{
-                                        background: 'rgba(2, 132, 199, 0.2)',
+                                        background: isEditing ? 'rgba(56, 189, 248, 0.25)' : 'rgba(59, 130, 246, 0.15)',
                                         border: '1px solid rgba(56, 189, 248, 0.4)',
                                         borderRadius: '8px',
-                                        color: '#38bdf8',
-                                        padding: '5px 8px',
+                                        color: '#93c5fd',
+                                        padding: '5px 10px',
                                         fontSize: '11px',
                                         fontWeight: '800',
                                         cursor: 'pointer',
                                         display: 'inline-flex',
                                         alignItems: 'center',
-                                        gap: '3px',
+                                        gap: '4px',
                                       }}
-                                      title="Open Dedicated TV Live Broadcast in New Tab (Drag to HDMI / Second Screen)"
                                     >
-                                      📺 TV Live
+                                      {isEditing ? '✕ Close Score Editor' : '⚡ Enter Sets Score (Auto Winner)'}
                                     </button>
-                                  </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setViewingMatchDetails(m)}
+                                      style={{
+                                        background: 'rgba(59, 130, 246, 0.18)',
+                                        border: '1px solid rgba(96, 165, 250, 0.4)',
+                                        borderRadius: '8px',
+                                        color: '#bfdbfe',
+                                        padding: '5px 12px',
+                                        fontSize: '11.5px',
+                                        fontWeight: '800',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px',
+                                      }}
+                                    >
+                                      📊 View Scorecard
+                                    </button>
+                                  )
                                 )}
                                 {isByeMatch && (
                                   <span style={{ fontSize: '11px', color: '#4ade80', fontWeight: '700' }}>
@@ -5758,23 +5641,7 @@ export const BadmintonFixturesManager = ({
                             </>
                           )}
 
-                          <button
-                            type="button"
-                            className="btn-schedule-status-toggle"
-                            onClick={() => handleLaunchLiveTv(m.tournamentId || selectedMatchId)}
-                            title="Open Dedicated TV Live Screen in New Tab (Drag to HDMI / Second Screen)"
-                            style={{
-                              background: 'rgba(2, 132, 199, 0.2)',
-                              borderColor: 'rgba(56, 189, 248, 0.5)',
-                              color: '#38bdf8',
-                              fontWeight: '800',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                            }}
-                          >
-                            📺 TV Live
-                          </button>
+                          
 
                           <button
                             type="button"
@@ -6034,27 +5901,6 @@ export const BadmintonFixturesManager = ({
                                   )}
                                   <button
                                     type="button"
-                                    onClick={() => handleLaunchLiveTv(m.tournamentId || selectedMatchId)}
-                                    title="Open Dedicated TV Live Screen in New Tab"
-                                    style={{
-                                      background: 'rgba(2, 132, 199, 0.22)',
-                                      color: '#38bdf8',
-                                      border: '1px solid rgba(56, 189, 248, 0.45)',
-                                      borderRadius: '4px',
-                                      padding: '5px 8px',
-                                      fontSize: '11px',
-                                      fontWeight: '800',
-                                      cursor: 'pointer',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: '3px',
-                                      whiteSpace: 'nowrap',
-                                    }}
-                                  >
-                                    📺 TV Live
-                                  </button>
-                                  <button
-                                    type="button"
                                     onClick={() => setViewingMatchDetails(m)}
                                     title="View Match Details & Scorecard"
                                     style={{
@@ -6267,28 +6113,7 @@ export const BadmintonFixturesManager = ({
                         >
                           Close
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleLaunchLiveTv(m.tournamentId || selectedMatchId)
-                          }}
-                          style={{
-                            background: 'rgba(2, 132, 199, 0.2)',
-                            color: '#38bdf8',
-                            border: '1px solid rgba(56, 189, 248, 0.45)',
-                            borderRadius: '8px',
-                            padding: '9px 14px',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                          }}
-                          title="Open Dedicated TV Live Screen in New Tab"
-                        >
-                          📺 TV Live
-                        </button>
+                        
                         {!isLiveUmpireMode && (
                           <button
                             type="button"
@@ -8073,29 +7898,7 @@ export const BadmintonFixturesManager = ({
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleLaunchLiveTv(liveMatch.tournamentId || selectedMatchId)
-                  }}
-                  style={{
-                    padding: '10px 16px',
-                    borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                    border: '1px solid rgba(56, 189, 248, 0.4)',
-                    color: '#ffffff',
-                    fontWeight: '800',
-                    fontSize: '12.5px',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)',
-                  }}
-                  title="Open Dedicated TV Live Screen in New Tab (Drag to HDMI / Second Screen)"
-                >
-                  <span>📺 TV Live Cast (HDMI)</span>
-                </button>
+                
 
                 <button
                   type="button"
