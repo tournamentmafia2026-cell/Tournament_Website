@@ -1342,56 +1342,62 @@ export const StadiumTvLiveCast = ({
           </div>
         </div>
 
-        {/* ROW 2: BOTTOM SCROLLING OFFICIAL SPONSORS & OFFERS */}
-        <div className="stadium-ticker-row row-bottom">
-          <div className="stadium-ticker-content">
-            <div className="stadium-ticker-marquee" style={{ animationDuration: tickerAnimationDuration }}>
-              {/* Official Sponsor Title Tag */}
-              <span className="ticker-item highlight-text-bottom" style={{ fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
-                🏷️ OFFICIAL SPONSORS
-              </span>
+        {/* ROW 2: BOTTOM SCROLLING OFFICIAL SPONSORS & OFFERS (Only when text or active sponsors exist) */}
+        {(Boolean(adSettings.bottomScrollingText?.trim()) || (adSettings.showInTicker !== false && activeAds.length > 0)) && (
+          <div className="stadium-ticker-row row-bottom">
+            <div className="stadium-ticker-content">
+              <div className="stadium-ticker-marquee" style={{ animationDuration: tickerAnimationDuration }}>
+                {/* Official Sponsor Title Tag */}
+                {activeAds.length > 0 && (
+                  <span className="ticker-item highlight-text-bottom" style={{ fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+                    🏷️ OFFICIAL SPONSORS
+                  </span>
+                )}
 
-              {/* User Configured Bottom Scrolling Text */}
-              {adSettings.bottomScrollingText && (
-                <span className="ticker-item highlight-text-bottom">
-                  ⭐ {adSettings.bottomScrollingText}
-                </span>
-              )}
+                {/* User Configured Bottom Scrolling Text */}
+                {Boolean(adSettings.bottomScrollingText?.trim()) && (
+                  <span className="ticker-item highlight-text-bottom">
+                    ⭐ {adSettings.bottomScrollingText.trim()}
+                  </span>
+                )}
 
-              {/* Active Sponsor Highlights */}
-              {adSettings.showInTicker && activeAds.map((ad, idx) => (
-                <span
-                  key={`ad-tick-1-${ad.id || idx}`}
-                  className="ticker-item sponsor-ticker-item"
-                  style={{ color: ad.accentColor || (ad.mediaType === 'video' ? '#34d399' : ad.mediaType === 'image' ? '#38bdf8' : '#fbbf24') }}
-                >
-                  {ad.mediaType === 'video' ? '🎬' : ad.mediaType === 'image' ? '🖼️' : '📢'} <strong>{ad.sponsorName}</strong>: {ad.tagline} {ad.phoneOrLink ? `[${ad.phoneOrLink}]` : ''}
-                </span>
-              ))}
+                {/* Active Sponsor Highlights */}
+                {adSettings.showInTicker !== false && activeAds.map((ad, idx) => (
+                  <span
+                    key={`ad-tick-1-${ad.id || idx}`}
+                    className="ticker-item sponsor-ticker-item"
+                    style={{ color: ad.accentColor || (ad.mediaType === 'video' ? '#34d399' : ad.mediaType === 'image' ? '#38bdf8' : '#fbbf24') }}
+                  >
+                    {ad.mediaType === 'video' ? '🎬' : ad.mediaType === 'image' ? '🖼️' : '📢'} <strong>{ad.sponsorName}</strong>: {ad.tagline} {ad.phoneOrLink ? `[${ad.phoneOrLink}]` : ''}
+                  </span>
+                ))}
 
-              {/* Seamless Repeat of Official Sponsor Tag & Sponsors */}
-              <span className="ticker-item highlight-text-bottom" style={{ fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
-                🏷️ OFFICIAL SPONSORS
-              </span>
+                {/* Seamless Repeat of Official Sponsor Tag & Text */}
+                {activeAds.length > 0 && (
+                  <span className="ticker-item highlight-text-bottom" style={{ fontWeight: '900', color: '#fbbf24', background: 'rgba(251, 191, 36, 0.15)', padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(251, 191, 36, 0.3)' }}>
+                    🏷️ OFFICIAL SPONSORS
+                  </span>
+                )}
 
-              {adSettings.bottomScrollingText && (
-                <span className="ticker-item highlight-text-bottom">
-                  ⭐ {adSettings.bottomScrollingText}
-                </span>
-              )}
+                {Boolean(adSettings.bottomScrollingText?.trim()) && (
+                  <span className="ticker-item highlight-text-bottom">
+                    ⭐ {adSettings.bottomScrollingText.trim()}
+                  </span>
+                )}
 
-              {adSettings.showInTicker && activeAds.map((ad, idx) => (
-                <span
-                  key={`ad-tick-2-${ad.id || idx}`}
-                  className="ticker-item sponsor-ticker-item"
-                  style={{ color: ad.accentColor || (ad.mediaType === 'video' ? '#34d399' : ad.mediaType === 'image' ? '#38bdf8' : '#fbbf24') }}
-                >
-                  {ad.mediaType === 'video' ? '🎬' : ad.mediaType === 'image' ? '🖼️' : '📢'} <strong>{ad.sponsorName}</strong>: {ad.tagline} {ad.phoneOrLink ? `[${ad.phoneOrLink}]` : ''}
-                </span>
-              ))}
+                {adSettings.showInTicker !== false && activeAds.map((ad, idx) => (
+                  <span
+                    key={`ad-tick-2-${ad.id || idx}`}
+                    className="ticker-item sponsor-ticker-item"
+                    style={{ color: ad.accentColor || (ad.mediaType === 'video' ? '#34d399' : ad.mediaType === 'image' ? '#38bdf8' : '#fbbf24') }}
+                  >
+                    {ad.mediaType === 'video' ? '🎬' : ad.mediaType === 'image' ? '🖼️' : '📢'} <strong>{ad.sponsorName}</strong>: {ad.tagline} {ad.phoneOrLink ? `[${ad.phoneOrLink}]` : ''}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </footer>
 
       {/* Tab Only Cast Guide Modal */}

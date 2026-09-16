@@ -64,8 +64,8 @@ export const DEFAULT_AD_SETTINGS = {
   fullScreenDurationSeconds: 10, // Display duration in seconds (10s) during live matches
   standbySlideDurationSeconds: 10, // Continuous rotation speed (10s) when no matches are active
   tickerSpeed: 'slow', // 'ultra-slow' | 'slow' | 'normal' | 'fast' | 'ultra-fast'
-  topScrollingText: '🏆 Welcome to the Championship • Please report to your assigned court 10 minutes before match time.',
-  bottomScrollingText: '⭐ Special Tournament Offer: Flat 20% off on all pro badminton gear at Arena Lobby Stall #1!',
+  topScrollingText: '',
+  bottomScrollingText: '',
   videoMuted: true,
   autoLoopVideo: true,
   rotationInterval: 10,
