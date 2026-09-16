@@ -1286,7 +1286,16 @@ export const printOfficialFixturesA4 = ({
   iframeDoc.close()
 
   setTimeout(() => {
-    iframe.contentWindow.focus()
-    iframe.contentWindow.print()
+    try {
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.focus()
+        iframe.contentWindow.print()
+      } else {
+        window.print()
+      }
+    } catch (err) {
+      console.warn('Iframe print failed, falling back to window.print:', err)
+      window.print()
+    }
   }, 250)
 }

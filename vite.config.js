@@ -84,6 +84,21 @@ function saveDbData(data) {
         return
       }
 
+      if (key === 'credential') {
+        const cred = data.credential
+        if (cred) {
+          const list = Array.isArray(merged.temporaryCredentials) ? [...merged.temporaryCredentials] : []
+          const index = list.findIndex((c) => c && (c.id === cred.id || c.username === cred.username))
+          if (index >= 0) {
+            list[index] = cred
+          } else {
+            list.push(cred)
+          }
+          merged.temporaryCredentials = list
+        }
+        return
+      }
+
       if (key === 'publishedStatus' || key === 'publishedStatusMap') {
         if (data[key] && typeof data[key] === 'object') {
           merged.publishedStatus = data[key]
@@ -249,10 +264,15 @@ export default defineConfig({
               const gmailUser = user || DEFAULT_GMAIL_USER
               const gmailPass = (pass || DEFAULT_GMAIL_PASS).replace(/\s+/g, '')
 
+              if (!gmailPass) {
+                res.statusCode = 500
+                res.setHeader('Content-Type', 'application/json')
+                res.end(JSON.stringify({ success: false, error: 'GMAIL_APP_PASSWORD is not configured on the server.' }))
+                return
+              }
+
               const transporter = nodemailer.createTransport({
-                host: 'smtp.gmail.com',
-                port: 465,
-                secure: true,
+                service: 'gmail',
                 auth: {
                   user: gmailUser,
                   pass: gmailPass,

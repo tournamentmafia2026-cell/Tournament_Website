@@ -327,8 +327,11 @@ export const getMatchStatus = (match) => {
 
   // Check which categories have concluded with a crowned champion
   const completedCategories = categories.filter((cat) => {
-    // 1. Explicit winner updated in match.categoryWinners
-    if (catWinners[cat] && typeof catWinners[cat] === 'string' && catWinners[cat].trim().length > 0) {
+    // 1. Explicit winner updated in match.categoryWinners or single-category match.winner
+    if (
+      (catWinners[cat] && typeof catWinners[cat] === 'string' && catWinners[cat].trim().length > 0) ||
+      (categories.length === 1 && match.winner && typeof match.winner === 'string' && match.winner.trim().length > 0)
+    ) {
       return true
     }
     // 2. Winner in final match of draw
@@ -510,9 +513,15 @@ export const getMatchEndTimestamp = (match) => {
  * Considers completion timestamp (completedAt), end date, and start date.
  */
 export const compareTournamentsRecentCompleted = (a, b) => {
-  // 1. If explicit completedAt timestamps exist
-  const compTimeA = Number(a?.completedAt) || 0
-  const compTimeB = Number(b?.completedAt) || 0
+  // 1. If explicit completedAt timestamps exist (handles ISO strings, date strings, and numeric timestamps)
+  const parseCompletedTimestamp = (val) => {
+    if (!val) return 0
+    if (typeof val === 'number') return isNaN(val) ? 0 : val
+    const parsed = Date.parse(val)
+    return isNaN(parsed) ? 0 : parsed
+  }
+  const compTimeA = parseCompletedTimestamp(a?.completedAt)
+  const compTimeB = parseCompletedTimestamp(b?.completedAt)
   if (compTimeA > 0 && compTimeB > 0 && compTimeA !== compTimeB) {
     return compTimeB - compTimeA // higher timestamp = more recent
   }

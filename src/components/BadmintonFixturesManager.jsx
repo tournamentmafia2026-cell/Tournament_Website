@@ -3547,8 +3547,11 @@ export const BadmintonFixturesManager = ({
                               e.preventDefault()
                               setDragOverSlotKey(null)
                               try {
-                                const source = JSON.parse(e.dataTransfer.getData('text/plain'))
-                                handleSwapPlayers(source, { matchId: m.id, slotKey: 'player1', lineNum: lineNum1 })
+                                const raw = e.dataTransfer.getData('text/plain')
+                                if (raw) {
+                                  const source = JSON.parse(raw)
+                                  handleSwapPlayers(source, { matchId: m.id, slotKey: 'player1', lineNum: lineNum1 })
+                                }
                               } catch (err) {
                                 console.error('Drop error', err)
                               }
@@ -3630,8 +3633,11 @@ export const BadmintonFixturesManager = ({
                               e.preventDefault()
                               setDragOverSlotKey(null)
                               try {
-                                const source = JSON.parse(e.dataTransfer.getData('text/plain'))
-                                handleSwapPlayers(source, { matchId: m.id, slotKey: 'player2', lineNum: lineNum2 })
+                                const raw = e.dataTransfer.getData('text/plain')
+                                if (raw) {
+                                  const source = JSON.parse(raw)
+                                  handleSwapPlayers(source, { matchId: m.id, slotKey: 'player2', lineNum: lineNum2 })
+                                }
                               } catch (err) {
                                 console.error('Drop error', err)
                               }
@@ -4558,8 +4564,11 @@ export const BadmintonFixturesManager = ({
                                       e.preventDefault()
                                       setDragOverSlotKey(null)
                                       try {
-                                        const source = JSON.parse(e.dataTransfer.getData('text/plain'))
-                                        handleSwapPlayers(source, { matchId: m.id, slotKey: 'player1', lineNum: m.line1 })
+                                        const raw = e.dataTransfer.getData('text/plain')
+                                        if (raw) {
+                                          const source = JSON.parse(raw)
+                                          handleSwapPlayers(source, { matchId: m.id, slotKey: 'player1', lineNum: m.line1 })
+                                        }
                                       } catch (err) {
                                         console.error('Drop error', err)
                                       }
@@ -4653,8 +4662,11 @@ export const BadmintonFixturesManager = ({
                                       e.preventDefault()
                                       setDragOverSlotKey(null)
                                       try {
-                                        const source = JSON.parse(e.dataTransfer.getData('text/plain'))
-                                        handleSwapPlayers(source, { matchId: m.id, slotKey: 'player2', lineNum: m.line2 })
+                                        const raw = e.dataTransfer.getData('text/plain')
+                                        if (raw) {
+                                          const source = JSON.parse(raw)
+                                          handleSwapPlayers(source, { matchId: m.id, slotKey: 'player2', lineNum: m.line2 })
+                                        }
                                       } catch (err) {
                                         console.error('Drop error', err)
                                       }

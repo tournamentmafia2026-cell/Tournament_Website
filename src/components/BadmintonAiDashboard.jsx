@@ -108,9 +108,13 @@ export function BadmintonAiDashboard({
 
       // Monthly aggregation
       const startMonth = m.startDate ? m.startDate.slice(0, 7) : currentMonthStr
-      const monthLabel = m.startDate
-        ? new Date(`${m.startDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-        : 'Active Season'
+      let monthLabel = 'Active Season'
+      if (m.startDate) {
+        const d = new Date(`${m.startDate}T00:00:00`)
+        if (!isNaN(d.getTime())) {
+          monthLabel = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+        }
+      }
 
       if (startMonth === currentMonthStr) {
         thisMonthTournaments++

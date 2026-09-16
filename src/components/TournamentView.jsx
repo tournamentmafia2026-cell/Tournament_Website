@@ -1,14 +1,15 @@
-import { useParams, useNavigate } from 'react-router-dom'
 import { useTournament } from '../contexts/TournamentContext'
 import { SingleEliminationBracket } from './brackets/SingleEliminationBracket'
 import { DoubleEliminationBracket } from './brackets/DoubleEliminationBracket'
 import { RoundRobinFormat } from './brackets/RoundRobinFormat'
 import { LeagueFormat } from './brackets/LeagueFormat'
 
-export const TournamentView = () => {
-  const { id } = useParams()
-  const navigate = useNavigate()
+export const TournamentView = ({ tournamentId }) => {
   const { getTournament } = useTournament()
+  const id = tournamentId || (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('id') : '')
+  const navigate = (path) => {
+    if (typeof window !== 'undefined') window.location.href = path
+  }
 
   const tournament = getTournament(id)
 

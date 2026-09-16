@@ -204,8 +204,17 @@ export const TournamentResultsModal = ({
     doc.close()
 
     setTimeout(() => {
-      iframe.contentWindow.focus()
-      iframe.contentWindow.print()
+      try {
+        if (iframe && iframe.contentWindow) {
+          iframe.contentWindow.focus()
+          iframe.contentWindow.print()
+        } else {
+          window.print()
+        }
+      } catch (err) {
+        console.warn('Iframe print failed, falling back to window.print:', err)
+        window.print()
+      }
       setTimeout(() => {
         if (document.body.contains(iframe)) document.body.removeChild(iframe)
       }, 2000)
