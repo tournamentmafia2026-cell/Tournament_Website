@@ -746,7 +746,14 @@ export const BadmintonFixturesManager = ({
 
   const isPlayerReported = (playerOrId, targetCategory = null) => {
     if (!playerOrId) return false
-    if (typeof playerOrId === 'object' && playerOrId.isBye) return false
+    if (typeof playerOrId === 'object') {
+      if (playerOrId.isBye) return false
+      const name = String(playerOrId.name || '').trim().toUpperCase()
+      if (name === 'BYE' || name === 'TBD') return false
+    } else {
+      const str = String(playerOrId).trim().toUpperCase()
+      if (str === 'BYE' || str === 'TBD') return false
+    }
 
     const tournId = selectedMatch?.id || 1
     const category = targetCategory || (typeof playerOrId === 'object' && playerOrId.category ? playerOrId.category : null) || selectedCategory
@@ -775,6 +782,9 @@ export const BadmintonFixturesManager = ({
   const isMatchBothReported = (m) => {
     if (!m || !m.player1 || !m.player2) return false
     if (m.player1.isBye || m.player2.isBye) return false
+    const p1Name = String(m.player1.name || '').trim()
+    const p2Name = String(m.player2.name || '').trim()
+    if (!p1Name || !p2Name || p1Name.toUpperCase() === 'TBD' || p2Name.toUpperCase() === 'TBD' || p1Name.toUpperCase() === 'BYE' || p2Name.toUpperCase() === 'BYE') return false
     const cat = m.categoryName || m.category || selectedCategory
     return isPlayerReported(m.player1, cat) && isPlayerReported(m.player2, cat)
   }
