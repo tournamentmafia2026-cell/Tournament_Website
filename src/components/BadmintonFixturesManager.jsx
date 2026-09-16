@@ -65,6 +65,39 @@ export const BadmintonFixturesManager = ({
     return 'tournaments'
   })
 
+  const [fixturesStatusFilter, setFixturesStatusFilter] = useState('all') // 'all' | 'ongoing' | 'upcoming' | 'completed'
+
+  const fixturesStatusCounts = useMemo(() => {
+    const counts = { all: publishedMatches.length, ongoing: 0, upcoming: 0, completed: 0 }
+    publishedMatches.forEach((m) => {
+      const st = getMatchStatus(m)
+      if (st === 'ongoing') counts.ongoing++
+      else if (st === 'completed') counts.completed++
+      else counts.upcoming++
+    })
+    return counts
+  }, [publishedMatches])
+
+  const filteredPublishedMatches = useMemo(() => {
+    const sorted = [...publishedMatches].sort((a, b) => {
+      const statusA = getMatchStatus(a)
+      const statusB = getMatchStatus(b)
+      if (statusA === 'ongoing' && statusB !== 'ongoing') return -1
+      if (statusB === 'ongoing' && statusA !== 'ongoing') return 1
+      if (statusA === 'completed' && statusB === 'completed') {
+        return compareTournamentsRecentCompleted(a, b)
+      }
+      if (statusA === 'upcoming' && statusB === 'completed') return -1
+      if (statusB === 'upcoming' && statusA === 'completed') return 1
+      return compareTournamentsChronological(a, b)
+    })
+
+    if (fixturesStatusFilter === 'all') {
+      return sorted
+    }
+    return sorted.filter((m) => getMatchStatus(m) === fixturesStatusFilter)
+  }, [publishedMatches, fixturesStatusFilter])
+
   const [selectedMatchId, setSelectedMatchId] = useState(() => {
     return initialSelectedMatch?.id || (publishedMatches[0]?.id ?? 1)
   })
@@ -2551,20 +2584,74 @@ export const BadmintonFixturesManager = ({
           </div>
         </div>
 
-        {publishedMatches.length > 0 ? (
+        {/* Status Categorization Tab Bar */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            marginBottom: '20px',
+            overflowX: 'auto',
+            paddingBottom: '4px',
+          }}
+        >
+          {[
+            { id: 'all', label: 'All Tournaments', count: fixturesStatusCounts.all, icon: '🏸' },
+            { id: 'ongoing', label: 'Live / Ongoing', count: fixturesStatusCounts.ongoing, icon: '🔴', isLive: true },
+            { id: 'upcoming', label: 'Upcoming', count: fixturesStatusCounts.upcoming, icon: '📅' },
+            { id: 'completed', label: 'Completed', count: fixturesStatusCounts.completed, icon: '🏆' },
+          ].map((tab) => {
+            const isActive = fixturesStatusFilter === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFixturesStatusFilter(tab.id)}
+                style={{
+                  padding: '9px 16px',
+                  borderRadius: '12px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s ease',
+                  background: isActive
+                    ? (tab.isLive
+                      ? 'linear-gradient(135deg, rgba(220, 38, 38, 0.25) 0%, rgba(185, 28, 28, 0.35) 100%)'
+                      : 'linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(3, 105, 161, 0.35) 100%)')
+                    : 'rgba(30, 41, 59, 0.6)',
+                  border: isActive
+                    ? (tab.isLive ? '1.5px solid #ef4444' : '1.5px solid #38bdf8')
+                    : '1px solid rgba(148, 163, 184, 0.2)',
+                  color: isActive ? '#ffffff' : '#94a3b8',
+                  boxShadow: isActive ? (tab.isLive ? '0 4px 14px rgba(239, 68, 68, 0.25)' : '0 4px 14px rgba(56, 189, 248, 0.25)') : 'none',
+                }}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+                <span
+                  style={{
+                    padding: '2px 7px',
+                    borderRadius: '999px',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    background: isActive ? (tab.isLive ? '#ef4444' : '#0284c7') : 'rgba(255, 255, 255, 0.1)',
+                    color: '#ffffff',
+                  }}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {filteredPublishedMatches.length > 0 ? (
           <div className="fixtures-tournaments-list">
-            {[...publishedMatches].sort((a, b) => {
-              const statusA = getMatchStatus(a)
-              const statusB = getMatchStatus(b)
-              if (statusA === 'ongoing' && statusB !== 'ongoing') return -1
-              if (statusB === 'ongoing' && statusA !== 'ongoing') return 1
-              if (statusA === 'completed' && statusB === 'completed') {
-                return compareTournamentsRecentCompleted(a, b)
-              }
-              if (statusA === 'upcoming' && statusB === 'completed') return -1
-              if (statusB === 'upcoming' && statusA === 'completed') return 1
-              return compareTournamentsChronological(a, b)
-            }).map((match) => {
+            {filteredPublishedMatches.map((match) => {
               const status = getMatchStatus(match)
               const statusLabel = status.charAt(0).toUpperCase() + status.slice(1)
               const matchCats = match.categories || DEFAULT_CATEGORIES
@@ -2854,9 +2941,23 @@ export const BadmintonFixturesManager = ({
           </div>
         ) : (
           <div className="empty-draw-card">
-            <div className="empty-icon">🏸</div>
-            <h3>No Published Tournaments Found</h3>
-            <p>Please create or publish a tournament in Match Management first.</p>
+            <div className="empty-icon" style={{ fontSize: '36px', marginBottom: '8px' }}>
+              {fixturesStatusFilter === 'ongoing' ? '🔴' : fixturesStatusFilter === 'upcoming' ? '📅' : fixturesStatusFilter === 'completed' ? '🏆' : '🏸'}
+            </div>
+            <h3>
+              {fixturesStatusFilter === 'ongoing'
+                ? 'No Live / Ongoing Tournaments'
+                : fixturesStatusFilter === 'upcoming'
+                ? 'No Upcoming Tournaments'
+                : fixturesStatusFilter === 'completed'
+                ? 'No Completed Tournaments'
+                : 'No Published Tournaments Found'}
+            </h3>
+            <p>
+              {publishedMatches.length === 0
+                ? 'Please create or publish a tournament in Match Management first.'
+                : 'Try selecting "All Tournaments" tab to view available tournaments.'}
+            </p>
           </div>
         )}
 

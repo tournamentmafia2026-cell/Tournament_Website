@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   formatTournamentName,
   formatCourtName,
@@ -9,6 +9,8 @@ import {
   getMatchStatus,
   splitDoublesNames,
   joinDoublesNames,
+  compareTournamentsChronological,
+  compareTournamentsRecentCompleted,
 } from '../utils/textFormatters'
 import {
   getMatchCategories,
@@ -34,22 +36,21 @@ export function MatchManagementView({
   authenticators = {},
   activeCategory,
   setActiveCategory,
-  participantForm,
-  setParticipantForm,
-  editingParticipantId,
-  setEditingParticipantId,
-  onAddParticipant,
-  onResetParticipantForm,
-  onOpenModifyModal,
-  onRemoveParticipant,
-  onOpenEditMatchModal,
+  authSession,
+  onOpenNewMatch,
   onDeleteMatch,
+  onTogglePublishStatus,
+  publishedStatusMap = {},
+  onAddParticipant,
+  onUpdateParticipant,
+  onDeleteParticipant,
+  onNavigateToFixtures,
   onStartLiveStream,
   onStopLiveStream,
-  authSession,
   successToast,
 }) {
   const [playerFilterSearch, setPlayerFilterSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'ongoing' | 'upcoming' | 'completed'
   const [activeLiveMatchId, setActiveLiveMatchId] = useState(() => {
     try {
       const active = localStorage.getItem('badminton-live-stream-active') === 'true'
@@ -81,6 +82,37 @@ export function MatchManagementView({
 
   const isChief = isChiefOrganizerSession(authSession)
   const selectedMatchCategories = selectedMatch ? getMatchCategories(selectedMatch) : []
+
+  const statusCounts = useMemo(() => {
+    const counts = { all: effectivePublishedMatches.length, ongoing: 0, upcoming: 0, completed: 0 }
+    effectivePublishedMatches.forEach((m) => {
+      const st = getMatchStatus(m)
+      if (st === 'ongoing') counts.ongoing++
+      else if (st === 'completed') counts.completed++
+      else counts.upcoming++
+    })
+    return counts
+  }, [effectivePublishedMatches])
+
+  const sortedAndFilteredMatches = useMemo(() => {
+    const sorted = [...effectivePublishedMatches].sort((a, b) => {
+      const statusA = getMatchStatus(a)
+      const statusB = getMatchStatus(b)
+      if (statusA === 'ongoing' && statusB !== 'ongoing') return -1
+      if (statusB === 'ongoing' && statusA !== 'ongoing') return 1
+      if (statusA === 'completed' && statusB === 'completed') {
+        return compareTournamentsRecentCompleted(a, b)
+      }
+      if (statusA === 'upcoming' && statusB === 'completed') return -1
+      if (statusB === 'upcoming' && statusA === 'completed') return 1
+      return compareTournamentsChronological(a, b)
+    })
+
+    if (statusFilter === 'all') {
+      return sorted
+    }
+    return sorted.filter((m) => getMatchStatus(m) === statusFilter)
+  }, [effectivePublishedMatches, statusFilter])
 
   const handleSelectMatch = (match) => {
     if (!isChief && authSession?.assignedMatchId) {
@@ -132,9 +164,74 @@ export function MatchManagementView({
 
       {!selectedMatch ? (
         <div className="management-list" style={{ overflowX: 'auto' }}>
-          {effectivePublishedMatches.length > 0 ? (
+          {/* Status Categorization Tab Bar */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              marginBottom: '16px',
+              overflowX: 'auto',
+              paddingBottom: '4px',
+            }}
+          >
+            {[
+              { id: 'all', label: 'All Tournaments', count: statusCounts.all, icon: '🏸' },
+              { id: 'ongoing', label: 'Live / Ongoing', count: statusCounts.ongoing, icon: '🔴', isLive: true },
+              { id: 'upcoming', label: 'Upcoming', count: statusCounts.upcoming, icon: '📅' },
+              { id: 'completed', label: 'Completed', count: statusCounts.completed, icon: '🏆' },
+            ].map((tab) => {
+              const isActive = statusFilter === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.id)}
+                  style={{
+                    padding: '8px 14px',
+                    borderRadius: '10px',
+                    fontSize: '12.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '7px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.2s ease',
+                    background: isActive
+                      ? (tab.isLive
+                        ? 'linear-gradient(135deg, rgba(220, 38, 38, 0.25) 0%, rgba(185, 28, 28, 0.35) 100%)'
+                        : 'linear-gradient(135deg, rgba(2, 132, 199, 0.25) 0%, rgba(3, 105, 161, 0.35) 100%)')
+                      : 'rgba(30, 41, 59, 0.6)',
+                    border: isActive
+                      ? (tab.isLive ? '1.5px solid #ef4444' : '1.5px solid #38bdf8')
+                      : '1px solid rgba(148, 163, 184, 0.2)',
+                    color: isActive ? '#ffffff' : '#94a3b8',
+                    boxShadow: isActive ? (tab.isLive ? '0 4px 14px rgba(239, 68, 68, 0.25)' : '0 4px 14px rgba(56, 189, 248, 0.25)') : 'none',
+                  }}
+                >
+                  <span>{tab.icon}</span>
+                  <span>{tab.label}</span>
+                  <span
+                    style={{
+                      padding: '2px 7px',
+                      borderRadius: '999px',
+                      fontSize: '11px',
+                      fontWeight: '800',
+                      background: isActive ? (tab.isLive ? '#ef4444' : '#0284c7') : 'rgba(255, 255, 255, 0.1)',
+                      color: '#ffffff',
+                    }}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
+          {sortedAndFilteredMatches.length > 0 ? (
             <div style={{ display: 'grid', gap: '14px' }}>
-              {effectivePublishedMatches.map((match) => {
+              {sortedAndFilteredMatches.map((match) => {
                 const status = getMatchStatus(match)
                 const statusLabel = status.charAt(0).toUpperCase() + status.slice(1)
 
@@ -358,9 +455,24 @@ export function MatchManagementView({
               })}
             </div>
           ) : (
-            <div className="list-item" style={{ padding: '16px', backgroundColor: 'rgba(30, 41, 59, 0.4)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-              <span style={{ color: '#94a3b8' }}>No Matches Published</span>
-              <strong style={{ color: '#cbd5e1' }}>Publish a match to view it here.</strong>
+            <div className="list-item" style={{ padding: '24px', backgroundColor: 'rgba(30, 41, 59, 0.4)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)', textAlign: 'center' }}>
+              <div style={{ fontSize: '28px', marginBottom: '8px' }}>
+                {statusFilter === 'ongoing' ? '🔴' : statusFilter === 'upcoming' ? '📅' : statusFilter === 'completed' ? '🏆' : '🏸'}
+              </div>
+              <strong style={{ color: '#f8fafc', fontSize: '15px', display: 'block', marginBottom: '4px' }}>
+                {statusFilter === 'ongoing'
+                  ? 'No Live / Ongoing Tournaments'
+                  : statusFilter === 'upcoming'
+                  ? 'No Upcoming Tournaments'
+                  : statusFilter === 'completed'
+                  ? 'No Completed Tournaments'
+                  : 'No Matches Published'}
+              </strong>
+              <span style={{ color: '#94a3b8', fontSize: '13px' }}>
+                {effectivePublishedMatches.length === 0
+                  ? 'Create or publish a new tournament to get started.'
+                  : 'Switch to "All Tournaments" tab to view all created matches.'}
+              </span>
             </div>
           )}
         </div>
