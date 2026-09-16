@@ -1373,7 +1373,7 @@ export const StadiumTvLiveCast = ({
                   <span style={{ fontSize: '13px', fontWeight: '900', color: activeFullScreenAd.accentColor || '#38bdf8', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                     ⭐ OFFICIAL TOURNAMENT SPONSOR
                   </span>
-                  {isIntervalAdVisible ? (
+                  {isIntervalAdVisible && (
                     <span
                       style={{
                         background: 'rgba(56, 189, 248, 0.15)',
@@ -1387,20 +1387,6 @@ export const StadiumTvLiveCast = ({
                     >
                       ⏳ Returning to Live in {countdownRemaining}s
                     </span>
-                  ) : (
-                    <span
-                      style={{
-                        background: 'rgba(56, 189, 248, 0.15)',
-                        border: '1px solid rgba(56, 189, 248, 0.35)',
-                        color: '#38bdf8',
-                        padding: '3px 12px',
-                        borderRadius: '999px',
-                        fontSize: '11.5px',
-                        fontWeight: '800',
-                      }}
-                    >
-                      🔄 10s Auto-Slideshow
-                    </span>
                   )}
                 </div>
                 <h1 style={{ margin: '4px 0 0', fontSize: '30px', fontWeight: '900', color: '#ffffff', letterSpacing: '-0.02em' }}>
@@ -1409,34 +1395,7 @@ export const StadiumTvLiveCast = ({
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {/* Slide Dots / Indicator */}
-              {visualAds.length > 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(15, 23, 42, 0.8)', padding: '6px 14px', borderRadius: '999px', border: '1px solid rgba(255, 255, 255, 0.15)' }}>
-                  {visualAds.map((ad, idx) => (
-                    <button
-                      key={ad.id || idx}
-                      type="button"
-                      onClick={() => setFullScreenAdIndex(idx)}
-                      style={{
-                        width: idx === fullScreenAdIndex ? '24px' : '8px',
-                        height: '8px',
-                        borderRadius: '4px',
-                        backgroundColor: idx === fullScreenAdIndex ? (activeFullScreenAd.accentColor || '#38bdf8') : 'rgba(255, 255, 255, 0.3)',
-                        border: 'none',
-                        cursor: 'pointer',
-                        padding: 0,
-                        transition: 'all 0.3s ease',
-                      }}
-                      title={`Slide ${idx + 1}: ${ad.sponsorName}`}
-                    />
-                  ))}
-                  <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: '800', marginLeft: '6px' }}>
-                    {fullScreenAdIndex + 1} / {visualAds.length}
-                  </span>
-                </div>
-              )}
-
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button
                 type="button"
                 onClick={() => {
