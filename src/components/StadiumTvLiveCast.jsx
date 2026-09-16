@@ -5,6 +5,7 @@ import { DEFAULT_SPONSOR_ADS, DEFAULT_AD_SETTINGS } from './stadiumAdConstants'
 import { getSavedCourtConfig, saveCourtConfig, generateCourtsList } from '../utils/courtConfig'
 import { fastDeepEqual } from '../utils/fastDeepEqual'
 import { CourtConfigModal } from './CourtConfigModal'
+import { SupabaseService } from '../utils/supabaseDb'
 
 export const StadiumTvLiveCast = ({
   tournament,
@@ -268,11 +269,37 @@ export const StadiumTvLiveCast = ({
     return () => clearInterval(timer)
   }, [])
 
-  // Auto-reload tournament draws and scores with real-time storage events & fast 1.5s interval from server DB & localStorage
+  // Auto-reload tournament draws and scores with Supabase real-time + local storage sync
   useEffect(() => {
     let isMounted = true
+
     const syncDraws = async () => {
-      // 1. Fetch from shared server DB for cross-device & cross-origin sync
+      // 1. Fetch from Supabase (Instant source for all active & already-live matches)
+      try {
+        const supaDraws = await SupabaseService.getAllTournamentDraws()
+        if (supaDraws && Array.isArray(supaDraws) && isMounted) {
+          const mappedDraws = {}
+          supaDraws.forEach((row) => {
+            if (row.id && row.draw_data) {
+              mappedDraws[row.id] = row.draw_data
+            }
+          })
+          if (Object.keys(mappedDraws).length > 0) {
+            setTournamentDraws((prev) => {
+              const merged = { ...prev, ...mappedDraws }
+              if (fastDeepEqual(prev, merged)) return prev
+              try {
+                localStorage.setItem('badminton-tournament-draws', JSON.stringify(merged))
+              } catch {}
+              return merged
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase syncDraws notice in TV Live Cast:', err)
+      }
+
+      // 2. Fetch from shared server DB
       try {
         const res = await fetch('/api/tournaments')
         if (res.ok) {
@@ -291,11 +318,10 @@ export const StadiumTvLiveCast = ({
           if (data?.liveUmpireMode !== undefined) {
             setIsLiveUmpireMode((prev) => (prev === data.liveUmpireMode ? prev : data.liveUmpireMode))
           }
-          return
         }
       } catch {}
 
-      // 2. Fallback to localStorage
+      // 3. Fallback to localStorage
       try {
         const saved = localStorage.getItem('badminton-tournament-draws')
         if (saved && isMounted) {
@@ -306,10 +332,15 @@ export const StadiumTvLiveCast = ({
     }
 
     syncDraws()
+    const unsubscribe = SupabaseService.subscribeToTournamentDraws(() => {
+      syncDraws()
+    })
     window.addEventListener('storage', syncDraws)
     const syncInterval = setInterval(syncDraws, 2000)
+
     return () => {
       isMounted = false
+      if (typeof unsubscribe === 'function') unsubscribe()
       window.removeEventListener('storage', syncDraws)
       clearInterval(syncInterval)
     }
@@ -458,6 +489,27 @@ export const StadiumTvLiveCast = ({
   useEffect(() => {
     let isMounted = true
     const syncTournaments = async () => {
+      // 1. Direct fetch from Supabase
+      try {
+        const supaTournaments = await SupabaseService.getTournaments()
+        if (supaTournaments && Array.isArray(supaTournaments) && isMounted) {
+          const mapped = supaTournaments.map((t) => ({
+            id: t.id,
+            matchName: t.match_name || t.matchName,
+            matchAddress: t.match_address || t.matchAddress,
+            courtName: t.court_name || t.courtName,
+            categories: t.categories || ['Men Singles'],
+            startDate: t.start_date || t.startDate,
+            endDate: t.end_date || t.endDate,
+            winner: t.winner || '',
+          }))
+          if (mapped.length > 0) {
+            setLiveTournaments((prev) => (fastDeepEqual(prev, mapped) ? prev : mapped))
+          }
+        }
+      } catch {}
+
+      // 2. Fetch from shared server DB
       try {
         const res = await fetch('/api/tournaments')
         if (res.ok) {
@@ -469,6 +521,7 @@ export const StadiumTvLiveCast = ({
         }
       } catch {}
 
+      // 3. Fallback to localStorage
       try {
         const saved = localStorage.getItem('badminton-published-matches')
         if (saved && isMounted) {
@@ -479,10 +532,14 @@ export const StadiumTvLiveCast = ({
     }
 
     syncTournaments()
+    const unsubscribeTour = SupabaseService.subscribeToTournaments(() => {
+      syncTournaments()
+    })
     window.addEventListener('storage', syncTournaments)
     const interval = setInterval(syncTournaments, 4000)
     return () => {
       isMounted = false
+      if (typeof unsubscribeTour === 'function') unsubscribeTour()
       window.removeEventListener('storage', syncTournaments)
       clearInterval(interval)
     }
@@ -606,10 +663,23 @@ export const StadiumTvLiveCast = ({
       // If BYE match, skip
       if (m.player1?.isBye || m.player2?.isBye) return
 
-      if (m.status === 'live' || m.isLive) {
+      const isLiveMatch =
+        m.status === 'live' ||
+        m.isLive === true ||
+        m.isLive === 'true' ||
+        m.status === 'ongoing' ||
+        m.status === 'in_progress' ||
+        Boolean(
+          (m.court || m.assignedCourt) &&
+          !m.winner &&
+          m.status !== 'completed' &&
+          (m.liveScore?.pointsA > 0 || m.liveScore?.pointsB > 0 || m.scoreSet1A > 0 || m.scoreSet1B > 0 || m.assignedUmpireUsername || m.isLive)
+        )
+
+      if (isLiveMatch) {
         activeLive.push({
           ...m,
-          assignedCourtName: m.court || null,
+          assignedCourtName: m.court || m.assignedCourt || null,
           isLiveDisplay: true,
         })
       }
