@@ -446,16 +446,49 @@ export function PublicPortal({
                         </div>
                       )}
 
-                      <div className="pro-categories-wrap">
-                        {publishedCategories.map((category) => (
-                          <span
-                            key={`${match.id}-${category}`}
-                            className="pro-cat-pill"
-                          >
-                            <span className="pro-cat-dot" />
-                            <span>🏸 {category}</span>
-                          </span>
-                        ))}
+                      <div className="pro-categories-wrap" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '8px 0' }}>
+                        {getMatchCategories(match).map((category) => {
+                          const isPub = Boolean(publishedStatusMap[`${match.id}-${category}`])
+                          return (
+                            <span
+                              key={`${match.id}-${category}`}
+                              onClick={(e) => {
+                                if (isPub) {
+                                  e.stopPropagation()
+                                  onOpenFixtures(match, category)
+                                }
+                              }}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '4px 10px',
+                                borderRadius: '8px',
+                                fontSize: '11.5px',
+                                fontWeight: '800',
+                                cursor: isPub ? 'pointer' : 'default',
+                                background: isPub
+                                  ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.25) 100%)'
+                                  : 'rgba(30, 41, 59, 0.6)',
+                                color: isPub ? '#34d399' : '#94a3b8',
+                                border: isPub
+                                  ? '1.5px solid rgba(16, 185, 129, 0.5)'
+                                  : '1px solid rgba(148, 163, 184, 0.2)',
+                                boxShadow: isPub ? '0 0 10px rgba(16, 185, 129, 0.25)' : 'none',
+                                transition: 'all 0.15s ease',
+                              }}
+                              title={isPub ? `Click to view ${category} Official Draw Sheet` : `${category} Draw is pending / unpublished`}
+                            >
+                              <span>{isPub ? '🟢' : '🔒'}</span>
+                              <span>{category}</span>
+                              {isPub && (
+                                <span style={{ fontSize: '9.5px', background: 'rgba(16, 185, 129, 0.3)', color: '#a7f3d0', padding: '1px 5px', borderRadius: '4px' }}>
+                                  Draw Live
+                                </span>
+                              )}
+                            </span>
+                          )
+                        })}
                       </div>
 
                       <div className="pro-card-footer mt-2">
