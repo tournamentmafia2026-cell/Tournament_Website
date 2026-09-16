@@ -5968,27 +5968,13 @@ export const BadmintonFixturesManager = ({
                           </div>
                         </div>
 
-                        {/* Sets Score Breakdown & Live Points - Shown whenever match is live or has recorded scores */}
-                        {(setPills.length > 0 || m.status === 'live') && (
+                        {/* Sets Score Breakdown - Shown only when recorded scores exist */}
+                        {setPills.length > 0 && (
                           <div className="schedule-score-breakdown">
-                            <span style={{ color: m.status === 'live' ? '#f87171' : '#94a3b8', fontWeight: '800' }}>
-                              {m.status === 'live' ? '🔴 Live Score:' : 'Sets Score:'}
+                            <span style={{ color: '#94a3b8', fontWeight: '800' }}>
+                              Sets Score:
                             </span>
                             <div className="schedule-score-pills">
-                              {m.status === 'live' && (
-                                <span
-                                  className="schedule-set-pill live"
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.2)',
-                                    borderColor: '#ef4444',
-                                    color: '#fca5a5',
-                                    fontWeight: '800',
-                                  }}
-                                >
-                                  <span className="live-pulse-dot" style={{ width: '6px', height: '6px', display: 'inline-block', marginRight: '4px', background: '#ef4444' }} />
-                                  Set {m.liveScore?.currentSet || 1}: {m.liveScore ? (m.liveScore[`set${m.liveScore.currentSet || 1}`]?.p1 ?? m.scoreSet1A ?? 0) : (m.scoreSet1A || 0)} - {m.liveScore ? (m.liveScore[`set${m.liveScore.currentSet || 1}`]?.p2 ?? m.scoreSet1B ?? 0) : (m.scoreSet1B || 0)} 🏸
-                                </span>
-                              )}
                               {setPills.map((pill) => (
                                 <span
                                   key={pill.setNum}
@@ -6202,14 +6188,7 @@ export const BadmintonFixturesManager = ({
                                 </div>
                               </td>
                               <td>
-                                {m.status === 'live' ? (
-                                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                    <span className="schedule-set-pill live" style={{ background: 'rgba(239, 68, 68, 0.2)', borderColor: '#ef4444', color: '#fca5a5', fontWeight: '800' }}>
-                                      <span className="live-pulse-dot" style={{ width: '6px', height: '6px', display: 'inline-block', marginRight: '4px', background: '#ef4444' }} />
-                                      Set {m.liveScore?.currentSet || 1}: {m.liveScore ? (m.liveScore[`set${m.liveScore.currentSet || 1}`]?.p1 ?? m.scoreSet1A ?? 0) : (m.scoreSet1A || 0)}-{m.liveScore ? (m.liveScore[`set${m.liveScore.currentSet || 1}`]?.p2 ?? m.scoreSet1B ?? 0) : (m.scoreSet1B || 0)} 🏸
-                                    </span>
-                                  </div>
-                                ) : (m.scoreSet1A !== undefined && m.scoreSet1A !== '' && m.scoreSet1B !== undefined && m.scoreSet1B !== '') ? (
+                                {(m.scoreSet1A !== undefined && m.scoreSet1A !== '' && m.scoreSet1B !== undefined && m.scoreSet1B !== '') ? (
                                   <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
                                     {[1, 2, 3, 4, 5].map((sNum) => {
                                       const sA = m[`scoreSet${sNum}A`]
