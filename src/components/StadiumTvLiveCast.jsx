@@ -158,7 +158,7 @@ export const StadiumTvLiveCast = ({
       }
     }
     window.addEventListener('storage', syncAds)
-    const interval = setInterval(syncAds, 8000)
+    const interval = setInterval(syncAds, 1500)
     return () => {
       window.removeEventListener('storage', syncAds)
       clearInterval(interval)
@@ -761,56 +761,92 @@ export const StadiumTvLiveCast = ({
     }
   }, [isStandbyDismissed, hasLiveMatches, visualAds.length])
 
-  // Continuous slide rotation in Standby mode (when no live matches are active)
-  useEffect(() => {
-    if (!isStandbyShowcaseActive || visualAds.length <= 1) return
-    const slideSec = Number(adSettings?.standbySlideDurationSeconds) || 10
-    const slideDurationMs = Math.max(3000, slideSec * 1000)
-    const timer = setInterval(() => {
-      setFullScreenAdIndex((prev) => (prev + 1) % visualAds.length)
-    }, slideDurationMs)
-    return () => clearInterval(timer)
-  }, [isStandbyShowcaseActive, visualAds.length, adSettings?.standbySlideDurationSeconds])
+  // Continuous timestamp-based precision timing engine for Standby & Live Interval Ads
+  const visualAdsRef = React.useRef(visualAds)
+  visualAdsRef.current = visualAds
 
-  // 2. Interval mode: Trigger full-screen showcase during LIVE matches on configured interval
+  const adSettingsRef = React.useRef(adSettings)
+  adSettingsRef.current = adSettings
+
+  const hasLiveMatchesRef = React.useRef(hasLiveMatches)
+  hasLiveMatchesRef.current = hasLiveMatches
+
+  const isStandbyDismissedRef = React.useRef(isStandbyDismissed)
+  isStandbyDismissedRef.current = isStandbyDismissed
+
+  const isIntervalAdVisibleRef = React.useRef(isIntervalAdVisible)
+  isIntervalAdVisibleRef.current = isIntervalAdVisible
+
+  const lastIntervalAdTriggerTimeRef = React.useRef(Date.now())
+  const lastStandbyRotateTimeRef = React.useRef(Date.now())
+
+  // Reset interval countdown when matches transition into live
+  const prevHasLiveMatchesRef = React.useRef(hasLiveMatches)
   useEffect(() => {
-    if (!hasLiveMatches) {
-      setIsIntervalAdVisible(false)
-      return
+    if (hasLiveMatches && !prevHasLiveMatchesRef.current) {
+      lastIntervalAdTriggerTimeRef.current = Date.now()
     }
+    prevHasLiveMatchesRef.current = hasLiveMatches
+  }, [hasLiveMatches])
 
-    const intervalMins = Number(adSettings?.fullScreenIntervalMinutes) || 1
-    if (intervalMins <= 0 || visualAds.length === 0) return
-
-    const intervalMs = Math.max(10000, intervalMins * 60 * 1000)
-    const intervalTimer = setInterval(() => {
-      setFullScreenAdIndex((prev) => {
-        const nextIdx = (prev + 1) % visualAds.length
-        const nextAd = visualAds[nextIdx]
-        const durSec = Number(adSettings?.fullScreenDurationSeconds) || Number(nextAd?.displayDuration) || 10
-        setCountdownRemaining(durSec)
-        return nextIdx
-      })
-      setIsIntervalAdVisible(true)
-    }, intervalMs)
-
-    return () => clearInterval(intervalTimer)
-  }, [hasLiveMatches, adSettings?.fullScreenIntervalMinutes, adSettings?.fullScreenDurationSeconds, visualAds])
-
-  // Countdown timer for Interval mode during live matches
+  // Precision 1-second Master Tick (immune to component re-renders)
   useEffect(() => {
-    if (!isIntervalAdVisible) return
-    const timer = setInterval(() => {
-      setCountdownRemaining((prev) => {
-        if (prev <= 1) {
-          setIsIntervalAdVisible(false)
-          return 0
+    const masterTimer = setInterval(() => {
+      const now = Date.now()
+      const currentVisualAds = visualAdsRef.current || []
+      const currentSettings = adSettingsRef.current || {}
+      const isLive = hasLiveMatchesRef.current
+
+      // Case 1: Interval Ad is CURRENTLY displaying on screen during a live match
+      if (isIntervalAdVisibleRef.current) {
+        setCountdownRemaining((prev) => {
+          if (prev <= 1) {
+            setIsIntervalAdVisible(false)
+            // When ad finishes, start next interval from this moment
+            lastIntervalAdTriggerTimeRef.current = Date.now()
+            return 0
+          }
+          return prev - 1
+        })
+        return
+      }
+
+      // Case 2: Live matches ARE active -> Wait for configured interval (e.g. 1 min, 2 mins, 5 mins)
+      if (isLive && currentVisualAds.length > 0) {
+        const intervalMins = Math.max(0.2, Number(currentSettings.fullScreenIntervalMinutes) || 1)
+        const intervalMs = intervalMins * 60 * 1000
+        const elapsedSinceLastAd = now - lastIntervalAdTriggerTimeRef.current
+
+        if (elapsedSinceLastAd >= intervalMs) {
+          // Trigger the next sponsor ad popup
+          setFullScreenAdIndex((prev) => {
+            const nextIdx = (prev + 1) % currentVisualAds.length
+            const nextAd = currentVisualAds[nextIdx]
+            const durSec = Math.max(3, Number(currentSettings.fullScreenDurationSeconds) || Number(nextAd?.displayDuration) || 10)
+            setCountdownRemaining(durSec)
+            return nextIdx
+          })
+          setIsIntervalAdVisible(true)
+          lastIntervalAdTriggerTimeRef.current = now
         }
-        return prev - 1
-      })
+        return
+      }
+
+      // Case 3: Standby mode -> NO live matches in progress -> Rotate continuously
+      if (!isLive && currentVisualAds.length > 0 && !isStandbyDismissedRef.current) {
+        const rotateSec = Math.max(3, Number(currentSettings.standbySlideDurationSeconds) || 10)
+        const rotateMs = rotateSec * 1000
+        const elapsedStandby = now - lastStandbyRotateTimeRef.current
+
+        if (elapsedStandby >= rotateMs) {
+          setFullScreenAdIndex((prev) => (prev + 1) % currentVisualAds.length)
+          lastStandbyRotateTimeRef.current = now
+        }
+      }
     }, 1000)
-    return () => clearInterval(timer)
-  }, [isIntervalAdVisible])
+
+    return () => clearInterval(masterTimer)
+  }, [])
 
   const activeFullScreenAd = visualAds[fullScreenAdIndex] || visualAds[0] || null
   const shouldRenderFullScreenAd = (isStandbyShowcaseActive || isIntervalAdVisible) && Boolean(activeFullScreenAd)

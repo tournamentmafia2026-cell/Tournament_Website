@@ -144,10 +144,14 @@ export const StadiumAdManagerModal = ({
     setDeleteConfirmAd(null)
   }
 
-  // Update Ad Settings
+  // Update Ad Settings with instant localStorage and cross-tab sync
   const handleUpdateSetting = (key, value) => {
     const next = { ...localSettings, [key]: value }
     setLocalSettings(next)
+    try {
+      localStorage.setItem('badminton-ad-settings', JSON.stringify(next))
+      window.dispatchEvent(new Event('storage'))
+    } catch {}
     if (onSaveSettings) onSaveSettings(next)
   }
 
