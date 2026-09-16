@@ -64,7 +64,9 @@ export function PublicPortal({
 
   const filteredPublicMatches = useMemo(() => {
     const list = [...sortedMatches].filter((match) => {
-      if (publicFilter === 'all') return true
+      if (publicFilter === 'all') {
+        return getMatchStatus(match) !== 'completed'
+      }
       return getMatchStatus(match) === publicFilter
     })
     if (publicFilter === 'completed') {

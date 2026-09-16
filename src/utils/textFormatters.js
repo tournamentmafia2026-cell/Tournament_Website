@@ -305,13 +305,45 @@ export const sanitizeParticipant = (participant) => {
 }
 
 /**
+ * Normalizes any date value to YYYY-MM-DD string format
+ */
+export const normalizeDateToIso = (dateVal) => {
+  if (!dateVal) return ''
+  const str = String(dateVal).trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str
+  }
+  if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(str)) {
+    const sep = str.includes('/') ? '/' : '-'
+    const [day, mon, yr] = str.split(sep).map(Number)
+    return `${yr}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+  const parsed = new Date(str)
+  if (!Number.isNaN(parsed.getTime())) {
+    const y = parsed.getFullYear()
+    const m = String(parsed.getMonth() + 1).padStart(2, '0')
+    const d = String(parsed.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  return ''
+}
+
+/**
  * Computes tournament / match status:
- * - 'completed': ONLY when ALL categories have crowned champions / winners concluded!
- * - 'ongoing': if some categories are finished but others remain, or matches in progress, or today is within dates
- * - 'upcoming': if start date is in future and no matches started
+ * - 'completed': 
+ *    1. If explicit winners crowned for all categories, OR
+ *    2. If match.completedAt or match.status === 'completed', OR
+ *    3. If the tournament given date (endDate / startDate) has passed (completed date).
+ * - 'ongoing': if today is within tournament dates (startDate <= today <= endDate)
+ * - 'upcoming': if start date is in the future (today < startDate)
  */
 export const getMatchStatus = (match) => {
   if (!match) return 'upcoming'
+
+  // Explicit completed flag / timestamp
+  if (match.completedAt || match.status === 'completed') {
+    return 'completed'
+  }
 
   const categories = Array.isArray(match.categories) && match.categories.length > 0
     ? match.categories
@@ -347,15 +379,13 @@ export const getMatchStatus = (match) => {
     return false
   })
 
-  // RULE 2: ONLY AFTER ALL CATEGORIES' WINNERS ARE UPDATED CAN IT BE COMPLETED!
+  // 1. If ALL categories have winners crowned -> completed!
   const areAllCategoriesCompleted = categories.length > 0 && completedCategories.length === categories.length
   if (areAllCategoriesCompleted) {
     return 'completed'
   }
 
-  // RULE 1: UPCOMING LA DATE IRUKUM, ANTHA DATE VANTHA MATTUM THA ONGOING KU PONUM, ILLANA UPCOMING LA THA IRUKANUM!
-  if (!match.startDate) return 'upcoming'
-
+  // Current today string YYYY-MM-DD
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const y = today.getFullYear()
@@ -363,22 +393,36 @@ export const getMatchStatus = (match) => {
   const d = String(today.getDate()).padStart(2, '0')
   const todayStr = `${y}-${m}-${d}`
 
-  // Normalize match.startDate to YYYY-MM-DD for accurate comparison
-  let startStr = String(match.startDate).trim()
-  if (/^\d{1,2}[-/]\d{1,2}[-/]\d{4}$/.test(startStr)) {
-    const sep = startStr.includes('/') ? '/' : '-'
-    const [day, mon, yr] = startStr.split(sep).map(Number)
-    startStr = `${yr}-${String(mon).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const startStr = normalizeDateToIso(match.startDate || match.date)
+  let endStr = normalizeDateToIso(match.endDate || match.startDate || match.date)
+
+  // If endDate is missing but totalDays is given (> 1), calculate endStr
+  if (startStr && (!match.endDate || match.endDate === match.startDate) && match.totalDays && Number(match.totalDays) > 1) {
+    const [sYr, sMo, sDay] = startStr.split('-').map(Number)
+    const startDateObj = new Date(sYr, sMo - 1, sDay)
+    startDateObj.setDate(startDateObj.getDate() + (Number(match.totalDays) - 1))
+    const eYr = startDateObj.getFullYear()
+    const eMo = String(startDateObj.getMonth() + 1).padStart(2, '0')
+    const eDay = String(startDateObj.getDate()).padStart(2, '0')
+    endStr = `${eYr}-${eMo}-${eDay}`
   }
 
-  // If today has not arrived at the start date yet -> STRICTLY UPCOMING!
-  if (todayStr < startStr) {
+  // 2. If tournament date has passed (completed date) -> completed!
+  if (endStr && todayStr > endStr) {
+    return 'completed'
+  }
+
+  // 3. If today is before start date -> upcoming!
+  if (startStr && todayStr < startStr) {
     return 'upcoming'
   }
 
-  // If today >= startDate, the match has started and enters 'ongoing'.
-  // It MUST REMAIN 'ongoing' until ALL category winners are updated!
-  return 'ongoing'
+  // 4. If tournament date has arrived / ongoing
+  if (startStr) {
+    return 'ongoing'
+  }
+
+  return 'upcoming'
 }
 
 /**
