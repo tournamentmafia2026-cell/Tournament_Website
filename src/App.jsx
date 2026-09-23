@@ -227,6 +227,16 @@ export default function App() {
     }
   }, [isChiefOrganizer, assignedMatchId, publishedMatches, activePage])
 
+  // Keep selectedMatch in sync with publishedMatches updates
+  useEffect(() => {
+    if (selectedMatch?.id) {
+      const fresh = publishedMatches.find((m) => String(m.id) === String(selectedMatch.id))
+      if (fresh && fresh !== selectedMatch) {
+        setSelectedMatch(fresh)
+      }
+    }
+  }, [publishedMatches, selectedMatch?.id])
+
   // Set category winners when modal opens
   useEffect(() => {
     if (resultModalMatch) {
@@ -566,7 +576,7 @@ export default function App() {
     if (names.length === 0) return
 
     const newPlayers = names.map((pName, idx) => ({
-      id: Date.now() + idx,
+      id: Date.now() + idx + Math.floor(Math.random() * 10000),
       name: formatPersonName(pName),
       court: courtVal,
       place: placeVal,

@@ -1091,7 +1091,10 @@ export function MatchManagementView({
                       <input 
                         type="text"
                         value={participantForm?.court || ''}
-                        onChange={(e) => setParticipantForm({ ...participantForm, court: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setParticipantForm((prev) => ({ ...prev, court: val }))
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
@@ -1120,7 +1123,10 @@ export function MatchManagementView({
                       <input 
                         type="text"
                         value={participantForm?.place || ''}
-                        onChange={(e) => setParticipantForm({ ...participantForm, place: e.target.value })}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setParticipantForm((prev) => ({ ...prev, place: val }))
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
