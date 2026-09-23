@@ -1142,7 +1142,13 @@ export default function App() {
                       title: 'Delete Tournament?',
                       message: 'Are you sure you want to permanently delete this tournament? All match draws, categories, seedings, and registered players will be deleted.',
                       itemName: match.matchName,
-                      onConfirm: () => handleDeleteMatch(match.id),
+                      onConfirm: async () => {
+                        if (selectedMatch && String(selectedMatch.id) === String(match.id)) {
+                          setSelectedMatch(null)
+                        }
+                        await handleDeleteMatch(match.id)
+                        setSuccessToast(`✓ Tournament "${match.matchName}" deleted permanently.`)
+                      },
                     })
                   }}
                   onStartLiveStream={handleFixturesLiveStreamStart}

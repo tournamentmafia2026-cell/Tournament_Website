@@ -397,7 +397,7 @@ export function useTournamentData() {
   }, [])
 
   // Delete Tournament Action
-  const handleDeleteMatch = (matchId) => {
+  const handleDeleteMatch = async (matchId) => {
     const matchIdStr = String(matchId)
     const updated = publishedMatches.filter((m) => String(m.id) !== matchIdStr)
     setPublishedMatches(updated)
@@ -417,7 +417,11 @@ export function useTournamentData() {
     })
 
     syncServerData({ matches: updated })
-    SupabaseService.deleteTournament(matchId).catch(() => {})
+    try {
+      await SupabaseService.deleteTournament(matchId)
+    } catch (e) {
+      console.warn('Supabase tournament delete error:', e)
+    }
   }
 
   return {
