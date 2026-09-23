@@ -587,5 +587,34 @@ export const compareTournamentsRecentCompleted = (a, b) => {
   return (b.matchName || '').localeCompare(a.matchName || '')
 }
 
+/**
+ * Resolves the full list of participants for a tournament across all data sources
+ * (authenticators map, tournament.participants, tournament.authenticators).
+ * Eliminates JavaScript [] truthy shadowing bugs and merges unique players safely.
+ */
+export const getEffectiveParticipants = (tournament, authenticatorsMap = {}) => {
+  if (!tournament) return []
+  const k = tournament.id
+  const kStr = String(k)
+  const authList = (authenticatorsMap && (authenticatorsMap[k] || authenticatorsMap[kStr])) || []
+  const partsList = Array.isArray(tournament.participants) ? tournament.participants : []
+  const matchAuthList = Array.isArray(tournament.authenticators) ? tournament.authenticators : []
+
+  const playerMap = new Map()
+  partsList.forEach((p) => {
+    if (p && (p.id || p.name)) playerMap.set(String(p.id || p.name), p)
+  })
+  matchAuthList.forEach((p) => {
+    if (p && (p.id || p.name)) playerMap.set(String(p.id || p.name), p)
+  })
+  if (Array.isArray(authList)) {
+    authList.forEach((p) => {
+      if (p && (p.id || p.name)) playerMap.set(String(p.id || p.name), p)
+    })
+  }
+
+  return Array.from(playerMap.values())
+}
+
 
 

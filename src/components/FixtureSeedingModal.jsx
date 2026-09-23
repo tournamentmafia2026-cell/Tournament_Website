@@ -6,6 +6,7 @@ import {
   formatPersonName,
   formatPlaceOrClub,
   formatCategoryName,
+  getEffectiveParticipants,
 } from '../utils/textFormatters'
 import { sortBadmintonCategories } from '../utils/badmintonCategories'
 
@@ -56,14 +57,7 @@ const FixtureSeedingModalComponent = ({
 
   const rawUploadedPlayers = useMemo(() => {
     if (!match) return []
-    const matchKey = match.id
-    const allList = (matchKey !== undefined && matchKey !== null)
-      ? (
-          (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
-          (match.authenticators || match.participants) ||
-          []
-        )
-      : []
+    const allList = getEffectiveParticipants(match, authenticators)
     return allList.filter(
       (p) => String(p?.category || categories[0] || 'Men Singles').trim().toLowerCase() === String(selectedCategory || '').trim().toLowerCase()
     )
@@ -86,15 +80,7 @@ const FixtureSeedingModalComponent = ({
       
       setSelectedCategory(initialCat)
       
-      const matchKey = match.id
-      const allList = (matchKey !== undefined && matchKey !== null)
-        ? (
-            (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
-            (match.authenticators || match.participants) ||
-            []
-          )
-        : []
-
+      const allList = getEffectiveParticipants(match, authenticators)
       const players = (availablePlayers && availablePlayers.length > 0)
         ? availablePlayers
         : allList.filter((p) => String(p?.category || categories[0] || 'Men Singles').trim().toLowerCase() === String(initialCat || '').trim().toLowerCase())

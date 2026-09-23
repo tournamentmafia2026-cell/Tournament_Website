@@ -6,6 +6,7 @@ import {
   getMatchStatus,
   compareTournamentsChronological,
   compareTournamentsRecentCompleted,
+  getEffectiveParticipants,
 } from '../utils/textFormatters'
 import {
   getMatchCategories,
@@ -86,22 +87,16 @@ export function PublicPortal({
     }
   }, [selectedMatch?.id, selectedMatchCategories, activeCategory, setActiveCategory])
 
-  const groupedSelectedParticipants = selectedMatch
-    ? selectedMatchCategories.reduce((entries, category) => {
-        const matchKey = selectedMatch.id
-        const allList = (matchKey !== undefined && matchKey !== null)
-          ? (
-              (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
-              (selectedMatch && (selectedMatch.authenticators || selectedMatch.participants)) ||
-              []
-            )
-          : []
-        entries[category] = allList.filter(
-          (participant) => String(participant?.category || selectedMatchCategories[0] || 'Men Singles').trim().toLowerCase() === String(category).trim().toLowerCase()
-        )
-        return entries
-      }, {})
-    : {}
+  const groupedSelectedParticipants = useMemo(() => {
+    if (!selectedMatch) return {}
+    const allList = getEffectiveParticipants(selectedMatch, authenticators)
+    return selectedMatchCategories.reduce((entries, category) => {
+      entries[category] = allList.filter(
+        (participant) => String(participant?.category || selectedMatchCategories[0] || 'Men Singles').trim().toLowerCase() === String(category).trim().toLowerCase()
+      )
+      return entries
+    }, {})
+  }, [selectedMatch, authenticators, selectedMatchCategories])
 
   return (
     <div className="public-tournament-hub w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 py-4 md:py-8 space-y-6">

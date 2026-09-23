@@ -11,6 +11,7 @@ import {
   joinDoublesNames,
   compareTournamentsChronological,
   compareTournamentsRecentCompleted,
+  getEffectiveParticipants,
 } from '../utils/textFormatters'
 import {
   getMatchCategories,
@@ -92,6 +93,9 @@ export function MatchManagementView({
 
   const isChief = isChiefOrganizerSession(authSession)
   const selectedMatchCategories = selectedMatch ? getMatchCategories(selectedMatch) : []
+  const effectivePlayers = useMemo(() => {
+    return getEffectiveParticipants(selectedMatch, authenticators)
+  }, [selectedMatch, authenticators])
 
   const statusCounts = useMemo(() => {
     const counts = { all: effectivePublishedMatches.length, ongoing: 0, upcoming: 0, completed: 0 }
@@ -756,7 +760,7 @@ export function MatchManagementView({
                 🏸 Add Players to Match
               </h4>
               <span style={{ fontSize: '12px', color: '#93c5fd', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(96, 165, 250, 0.3)', padding: '4px 10px', borderRadius: '999px', fontWeight: '600' }}>
-                Total Registered: {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).length} Players
+                Total Registered: {effectivePlayers.length} Players
               </span>
             </div>
 
@@ -784,12 +788,12 @@ export function MatchManagementView({
               >
                 <span>🌐 All Categories</span>
                 <span style={{ background: 'rgba(255,255,255,0.2)', padding: '2px 6px', borderRadius: '999px', fontSize: '10px' }}>
-                  {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).length}
+                  {effectivePlayers.length}
                 </span>
               </button>
 
               {selectedMatchCategories.map((category) => {
-                const count = (authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).filter(
+                const count = effectivePlayers.filter(
                   (p) => String(p?.category || selectedMatchCategories[0]).trim().toLowerCase() === String(category).trim().toLowerCase()
                 ).length
                 const isCatActive = String(activeCategory || selectedMatchCategories[0]).trim().toLowerCase() === String(category).trim().toLowerCase()
@@ -1210,7 +1214,7 @@ export function MatchManagementView({
                   <span>📋</span>
                   <span>Registered Players</span>
                   <span style={{ background: 'rgba(56, 189, 248, 0.18)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.35)', padding: '2px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '800' }}>
-                    {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).filter((p) => {
+                    {effectivePlayers.filter((p) => {
                       if (!activeCategory || activeCategory === 'ALL') return true
                       return String(p?.category || selectedMatchCategories[0]).trim().toLowerCase() === String(activeCategory).trim().toLowerCase()
                     }).length}
@@ -1274,14 +1278,7 @@ export function MatchManagementView({
 
             {/* Table of Players */}
             {(() => {
-              const matchKey = selectedMatch?.id
-              const allList = (matchKey !== undefined && matchKey !== null)
-                ? (
-                    (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
-                    (selectedMatch && (selectedMatch.authenticators || selectedMatch.participants)) ||
-                    []
-                  )
-                : []
+              const allList = effectivePlayers
               const categoryOrderMap = {}
               selectedMatchCategories.forEach((cat, idx) => {
                 categoryOrderMap[cat] = idx
