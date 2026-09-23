@@ -343,7 +343,7 @@ export function useTournamentData() {
       if (debounceTimer) clearTimeout(debounceTimer)
       debounceTimer = setTimeout(() => {
         if (isMounted) syncAllData()
-      }, 1500)
+      }, 300)
     }
 
     const tourSub = SupabaseService.subscribeToTournaments(() => {
