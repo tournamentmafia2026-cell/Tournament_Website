@@ -100,47 +100,37 @@ export const sendAuthEmail = async ({ to_email, username, password, otp, action,
     </div>
   `
 
-  // Prefer the hosting provider API route, then fall back to Netlify locally.
-  const endpoints = ['/api/send-email', '/.netlify/functions/send-email']
-  const deliveryErrors = []
-  
-  for (const endpoint of endpoints) {
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: targetEmail,
-          subject,
-          html,
-          text: customMessage || `Username: ${username}\nPassword: ${password}\nOTP: ${otp}`,
-          otp,
-          user: config.gmailUser || 'tournamentmafia2026@gmail.com',
-          pass: 'ujzfbevesmqaohme',
-        }),
-      })
+  try {
+    const res = await fetch('/api/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        to: targetEmail,
+        subject,
+        html,
+        text: customMessage || `Username: ${username}\nPassword: ${password}\nOTP: ${otp}`,
+        otp,
+        user: config.gmailUser || 'tournamentmafia2026@gmail.com',
+        pass: 'ujzfbevesmqaohme',
+      }),
+    })
 
-      const contentType = res.headers.get('content-type') || ''
-      if (contentType.includes('application/json')) {
-        const json = await res.json().catch(() => ({}))
-        if (res.ok && json.success) {
-          return {
-            success: true,
-            isSimulated: false,
-            message: `✓ Real email delivered directly to ${targetEmail}!`,
-          }
+    const contentType = res.headers.get('content-type') || ''
+    if (contentType.includes('application/json')) {
+      const json = await res.json().catch(() => ({}))
+      if (res.ok && json.success) {
+        return {
+          success: true,
+          isSimulated: false,
+          message: `✓ Real email delivered directly to ${targetEmail}!`,
         }
-        deliveryErrors.push(json.error || `${endpoint} returned HTTP ${res.status}`)
-      } else {
-        deliveryErrors.push(`${endpoint} returned HTTP ${res.status}`)
       }
-    } catch (err) {
-      deliveryErrors.push(err?.message || `${endpoint} request failed`)
-      console.warn(`Endpoint ${endpoint} call error:`, err)
+      throw new Error(json.error || `HTTP ${res.status}`)
     }
+  } catch (err) {
+    console.warn('Endpoint /api/send-email call error:', err)
+    throw new Error(`OTP email could not be delivered to ${targetEmail}. ${err?.message || 'Check the server Gmail environment variables and try again.'}`)
   }
-
-  throw new Error(`OTP email could not be delivered to ${targetEmail}. ${deliveryErrors[0] || 'Check the server Gmail environment variables and try again.'}`)
 }
 
 export default sendAuthEmail

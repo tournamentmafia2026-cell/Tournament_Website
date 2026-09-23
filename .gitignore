@@ -21,5 +21,6 @@ recovery-codes.txt
 *.suo
 *.ntvs*
 *.njsproj
-*.sln
 *.sw?
+scratch/
+
