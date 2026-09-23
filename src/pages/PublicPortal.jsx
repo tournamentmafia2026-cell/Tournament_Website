@@ -88,8 +88,16 @@ export function PublicPortal({
 
   const groupedSelectedParticipants = selectedMatch
     ? selectedMatchCategories.reduce((entries, category) => {
-        entries[category] = (authenticators[selectedMatch.id] || []).filter(
-          (participant) => (participant.category || 'Men Singles') === category
+        const matchKey = selectedMatch.id
+        const allList = (matchKey !== undefined && matchKey !== null)
+          ? (
+              (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
+              (selectedMatch && (selectedMatch.authenticators || selectedMatch.participants)) ||
+              []
+            )
+          : []
+        entries[category] = allList.filter(
+          (participant) => String(participant?.category || selectedMatchCategories[0] || 'Men Singles').trim().toLowerCase() === String(category).trim().toLowerCase()
         )
         return entries
       }, {})

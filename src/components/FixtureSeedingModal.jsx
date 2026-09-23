@@ -55,10 +55,19 @@ const FixtureSeedingModalComponent = ({
   }, [])
 
   const rawUploadedPlayers = useMemo(() => {
-    return match ? (authenticators[match.id] || []).filter(
-      (p) => (p.category || 'Men Singles') === selectedCategory
-    ) : []
-  }, [match, authenticators, selectedCategory])
+    if (!match) return []
+    const matchKey = match.id
+    const allList = (matchKey !== undefined && matchKey !== null)
+      ? (
+          (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
+          (match.authenticators || match.participants) ||
+          []
+        )
+      : []
+    return allList.filter(
+      (p) => String(p?.category || categories[0] || 'Men Singles').trim().toLowerCase() === String(selectedCategory || '').trim().toLowerCase()
+    )
+  }, [match, authenticators, selectedCategory, categories])
 
   const uploadedCategoryPlayers = useMemo(() => {
     return availablePlayers && availablePlayers.length > 0
@@ -71,15 +80,24 @@ const FixtureSeedingModalComponent = ({
   useEffect(() => {
     if (isOpen && !wasOpenRef.current && match) {
       wasOpenRef.current = true
-      const initialCat = (initialCategory && categories.includes(initialCategory)) 
-        ? initialCategory 
+      const initialCat = (initialCategory && categories.some((c) => c.toLowerCase() === initialCategory.toLowerCase())) 
+        ? categories.find((c) => c.toLowerCase() === initialCategory.toLowerCase()) 
         : (categories[0] || 'Men Singles')
       
       setSelectedCategory(initialCat)
       
+      const matchKey = match.id
+      const allList = (matchKey !== undefined && matchKey !== null)
+        ? (
+            (authenticators && (authenticators[matchKey] || authenticators[String(matchKey)] || authenticators[Number(matchKey)])) ||
+            (match.authenticators || match.participants) ||
+            []
+          )
+        : []
+
       const players = (availablePlayers && availablePlayers.length > 0)
         ? availablePlayers
-        : (authenticators[match.id] || []).filter((p) => (p.category || 'Men Singles') === initialCat)
+        : allList.filter((p) => String(p?.category || categories[0] || 'Men Singles').trim().toLowerCase() === String(initialCat || '').trim().toLowerCase())
       
       const count = players.length
       if (existingDraw && existingDraw.drawSize) {
