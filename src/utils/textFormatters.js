@@ -601,16 +601,20 @@ export const getEffectiveParticipants = (tournament, authenticatorsMap = {}) => 
   const matchAuthList = Array.isArray(tournament.authenticators) ? tournament.authenticators : []
 
   const playerMap = new Map()
-  partsList.forEach((p) => {
-    if (p && (p.id || p.name)) playerMap.set(String(p.id || p.name), p)
-  })
-  matchAuthList.forEach((p) => {
-    if (p && (p.id || p.name)) playerMap.set(String(p.id || p.name), p)
-  })
+  const addPlayer = (p) => {
+    if (!p) return
+    const idKey = p.id ? String(p.id) : null
+    const fallbackKey = p.name ? `${String(p.name).trim().toLowerCase()}___${String(p.category || 'Standard').trim().toLowerCase()}` : null
+    const key = idKey || fallbackKey
+    if (key) {
+      playerMap.set(key, p)
+    }
+  }
+
+  partsList.forEach(addPlayer)
+  matchAuthList.forEach(addPlayer)
   if (Array.isArray(authList)) {
-    authList.forEach((p) => {
-      if (p && (p.id || p.name)) playerMap.set(String(p.id || p.name), p)
-    })
+    authList.forEach(addPlayer)
   }
 
   return Array.from(playerMap.values())

@@ -247,15 +247,14 @@ export function useTournamentData() {
             supaDraws.forEach((row) => {
               if (row.id && row.draw_data) {
                 if (!localDraws[row.id] || JSON.stringify(localDraws[row.id]) !== JSON.stringify(row.draw_data)) {
-                  if (!localDraws[row.id]) {
-                    nextDraws[row.id] = row.draw_data
-                    changed = true
-                  }
+                  nextDraws[row.id] = row.draw_data
+                  changed = true
                 }
               }
             })
             if (changed) {
               localStorage.setItem('badminton-tournament-draws', JSON.stringify(nextDraws))
+              window.dispatchEvent(new Event('storage'))
             }
           } catch (e) {}
         }
