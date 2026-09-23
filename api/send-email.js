@@ -31,11 +31,14 @@ export default async function handler(req, res) {
     const recipient = to || gmailUser
 
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
         user: gmailUser,
         pass: gmailPass,
       },
+      connectionTimeout: 10000,
     })
 
     const mailOptions = {
