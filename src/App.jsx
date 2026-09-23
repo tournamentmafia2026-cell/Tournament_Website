@@ -507,13 +507,15 @@ export default function App() {
   }
 
   // Add Participant Handler
-  const handleAddParticipant = () => {
+  const handleAddParticipant = async () => {
     if (!selectedMatch) return
     const cats = getMatchCategories(selectedMatch)
     const targetCategory =
-      (activeCategory && activeCategory !== 'ALL' && cats.includes(activeCategory))
-        ? activeCategory
-        : (participantForm.category && cats.includes(participantForm.category) ? participantForm.category : cats[0] || 'Men Singles')
+      (activeCategory && activeCategory !== 'ALL' && cats.some((c) => c.toLowerCase() === activeCategory.toLowerCase()))
+        ? cats.find((c) => c.toLowerCase() === activeCategory.toLowerCase())
+        : (participantForm.category && cats.some((c) => c.toLowerCase() === participantForm.category.toLowerCase())
+            ? cats.find((c) => c.toLowerCase() === participantForm.category.toLowerCase())
+            : cats[0] || 'Men Singles')
 
     const isDoubles = isDoublesCategory(targetCategory)
     let finalName = ''
@@ -565,7 +567,12 @@ export default function App() {
         } catch (err) {}
         return next
       })
-      SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
+      try {
+        await SupabaseService.upsertTournament(updatedMatchObj)
+        await SupabaseService.upsertAuthenticators(matchKey, updatedList)
+      } catch (err) {
+        console.warn('Supabase player update error:', err)
+      }
       setSuccessToast(`✓ Updated player "${formatPersonName(finalName)}" in ${targetCategory}!`)
       setParticipantForm({ name: '', name1: '', name2: '', court: '', place: '', category: targetCategory })
       setEditingParticipantId(null)
@@ -608,17 +615,23 @@ export default function App() {
       } catch (err) {}
       return next
     })
-    SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
+
+    try {
+      await SupabaseService.upsertTournament(updatedMatchObj)
+      await SupabaseService.upsertAuthenticators(matchKey, updatedPlayersList)
+    } catch (err) {
+      console.warn('Supabase add player error:', err)
+    }
 
     setSuccessToast(`✓ Successfully added to ${targetCategory}!`)
     setParticipantForm({ name: '', name1: '', name2: '', court: '', place: '', category: targetCategory })
   }
 
   // Remove Participant Handler
-  const handleRemoveParticipant = (matchId, participantId) => {
+  const handleRemoveParticipant = async (matchId, participantId) => {
     const matchIdStr = String(matchId)
     const targetMatch = publishedMatches.find((m) => String(m.id) === matchIdStr) || selectedMatch
-    const currentList = authenticators[matchId] || authenticators[matchIdStr] || targetMatch?.participants || []
+    const currentList = authenticators[matchId] || authenticators[matchIdStr] || targetMatch?.authenticators || targetMatch?.participants || []
     const filteredList = currentList.filter((p) => p && String(p.id) !== String(participantId))
 
     setAuthenticators((prev) => {
@@ -647,7 +660,13 @@ export default function App() {
       } catch (e) {}
       return next
     })
-    SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
+
+    try {
+      await SupabaseService.upsertTournament(updatedMatchObj)
+      await SupabaseService.upsertAuthenticators(matchId, filteredList)
+    } catch (err) {
+      console.warn('Supabase remove player error:', err)
+    }
     setSuccessToast(`✓ Player removed from tournament.`)
   }
 
@@ -667,7 +686,7 @@ export default function App() {
     })
   }
 
-  const handleSaveModifiedParticipant = (e) => {
+  const handleSaveModifiedParticipant = async (e) => {
     if (e && e.preventDefault) e.preventDefault()
     if (!modifyingParticipant || !selectedMatch) return
 
@@ -686,16 +705,18 @@ export default function App() {
     const placeVal = formatPlaceOrClub(modifyForm.place, '')
     const targetCategory = modifyForm.category
     const participantId = modifyingParticipant.id
+    const matchKey = selectedMatch.id
+    const matchKeyStr = String(matchKey)
+
+    const currentList = authenticators[matchKey] || authenticators[matchKeyStr] || selectedMatch.authenticators || selectedMatch.participants || []
+    const updatedList = currentList.map((p) =>
+      String(p.id) === String(participantId)
+        ? { ...p, name: finalName, court: courtVal, place: placeVal, category: targetCategory }
+        : p
+    )
 
     setAuthenticators((prev) => {
-      const matchKey = selectedMatch.id
-      const currentList = prev[matchKey] || prev[String(matchKey)] || []
-      const updatedList = currentList.map((p) =>
-        String(p.id) === String(participantId)
-          ? { ...p, name: finalName, court: courtVal, place: placeVal, category: targetCategory }
-          : p
-      )
-      const next = { ...prev, [matchKey]: updatedList, [String(matchKey)]: updatedList }
+      const next = { ...prev, [matchKey]: updatedList, [matchKeyStr]: updatedList }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
       } catch (err) {}
@@ -703,29 +724,28 @@ export default function App() {
       return next
     })
 
-    const matchKeyStr = String(selectedMatch.id)
+    const updatedMatchObj = {
+      ...selectedMatch,
+      participants: updatedList,
+      authenticators: updatedList,
+    }
+
+    setSelectedMatch(updatedMatchObj)
+
     setPublishedMatches((prev) => {
-      const next = prev.map((m) => {
-        if (String(m.id) === matchKeyStr) {
-          const parts = (m.participants || m.authenticators || []).map((p) =>
-            String(p.id) === String(participantId)
-              ? { ...p, name: finalName, court: courtVal, place: placeVal, category: targetCategory }
-              : p
-          )
-          const updatedM = { ...m, participants: parts, authenticators: parts }
-          if (selectedMatch && String(selectedMatch.id) === matchKeyStr) {
-            setSelectedMatch(updatedM)
-          }
-          SupabaseService.upsertTournament(updatedM).catch(() => {})
-          return updatedM
-        }
-        return m
-      })
+      const next = prev.map((m) => (String(m.id) === matchKeyStr ? updatedMatchObj : m))
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       } catch (e) {}
       return next
     })
+
+    try {
+      await SupabaseService.upsertTournament(updatedMatchObj)
+      await SupabaseService.upsertAuthenticators(matchKey, updatedList)
+    } catch (err) {
+      console.warn('Supabase modify player error:', err)
+    }
 
     setModifyingParticipant(null)
     setSuccessToast(`✓ Successfully modified "${finalName}"!`)
@@ -946,13 +966,14 @@ export default function App() {
                       }
                       setSelectedMatch(match)
                     }}
-                    onAddParticipant={(matchId, newParticipant) => {
+                    onAddParticipant={async (matchId, newParticipant) => {
                       const cleanParticipant = sanitizeParticipant(newParticipant)
                       const matchKeyStr = String(matchId)
-                      const newId = cleanParticipant.id || Date.now()
+                      const newId = cleanParticipant.id || (Date.now() + Math.floor(Math.random() * 10000))
                       const fullPlayer = { id: newId, ...cleanParticipant }
 
-                      const current = authenticators[matchId] || authenticators[matchKeyStr] || []
+                      const targetMatch = publishedMatches.find((m) => String(m.id) === matchKeyStr) || selectedMatch
+                      const current = authenticators[matchId] || authenticators[matchKeyStr] || targetMatch?.authenticators || targetMatch?.participants || []
                       const nextList = [...current, fullPlayer]
 
                       setAuthenticators((prev) => {
@@ -964,24 +985,35 @@ export default function App() {
                         return next
                       })
 
+                      const updatedM = {
+                        ...(targetMatch || selectedMatch),
+                        participants: nextList,
+                        authenticators: nextList,
+                      }
+
+                      if (selectedMatch && String(selectedMatch.id) === matchKeyStr) {
+                        setSelectedMatch(updatedM)
+                      }
+
                       setPublishedMatches((prev) => {
-                        const next = prev.map((m) => {
-                          if (String(m.id) === matchKeyStr) {
-                            const updatedM = { ...m, participants: nextList, authenticators: nextList }
-                            SupabaseService.upsertTournament(updatedM).catch(() => {})
-                            return updatedM
-                          }
-                          return m
-                        })
+                        const next = prev.map((m) => (String(m.id) === matchKeyStr ? updatedM : m))
                         try {
                           localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
                         } catch (e) {}
                         return next
                       })
+
+                      try {
+                        await SupabaseService.upsertTournament(updatedM)
+                        await SupabaseService.upsertAuthenticators(matchId, nextList)
+                      } catch (e) {
+                        console.warn('Supabase fixtures participant error:', e)
+                      }
                     }}
-                    onUpdateParticipant={(matchId, updatedParticipant) => {
+                    onUpdateParticipant={async (matchId, updatedParticipant) => {
                       const matchKeyStr = String(matchId)
-                      const current = authenticators[matchId] || authenticators[matchKeyStr] || []
+                      const targetMatch = publishedMatches.find((m) => String(m.id) === matchKeyStr) || selectedMatch
+                      const current = authenticators[matchId] || authenticators[matchKeyStr] || targetMatch?.authenticators || targetMatch?.participants || []
                       const nextList = current.map((p) =>
                         String(p.id) === String(updatedParticipant.id) ? { ...p, ...updatedParticipant } : p
                       )
@@ -995,20 +1027,30 @@ export default function App() {
                         return next
                       })
 
+                      const updatedM = {
+                        ...(targetMatch || selectedMatch),
+                        participants: nextList,
+                        authenticators: nextList,
+                      }
+
+                      if (selectedMatch && String(selectedMatch.id) === matchKeyStr) {
+                        setSelectedMatch(updatedM)
+                      }
+
                       setPublishedMatches((prev) => {
-                        const next = prev.map((m) => {
-                          if (String(m.id) === matchKeyStr) {
-                            const updatedM = { ...m, participants: nextList, authenticators: nextList }
-                            SupabaseService.upsertTournament(updatedM).catch(() => {})
-                            return updatedM
-                          }
-                          return m
-                        })
+                        const next = prev.map((m) => (String(m.id) === matchKeyStr ? updatedM : m))
                         try {
                           localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
                         } catch (e) {}
                         return next
                       })
+
+                      try {
+                        await SupabaseService.upsertTournament(updatedM)
+                        await SupabaseService.upsertAuthenticators(matchId, nextList)
+                      } catch (e) {
+                        console.warn('Supabase fixtures update error:', e)
+                      }
                     }}
                     onDeleteParticipant={(matchId, participantId) => {
                       handleRemoveParticipant(matchId, participantId)

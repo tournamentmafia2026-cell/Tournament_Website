@@ -173,7 +173,28 @@ export function useTournamentData() {
           })).map(sanitizeTournament)
 
           setPublishedMatches((prev) => {
-            const stableMapped = preserveTournamentReferences(prev, mapped)
+            const enrichedMapped = mapped.map((remoteTour) => {
+              const localTour = (prev || []).find((p) => String(p.id) === String(remoteTour.id))
+              if (!localTour) return remoteTour
+
+              const localParts = Array.isArray(localTour.participants) ? localTour.participants : (Array.isArray(localTour.authenticators) ? localTour.authenticators : [])
+              const remoteParts = Array.isArray(remoteTour.participants) ? remoteTour.participants : (Array.isArray(remoteTour.authenticators) ? remoteTour.authenticators : [])
+
+              if (localParts.length > remoteParts.length) {
+                const partMap = new Map()
+                remoteParts.forEach((p) => p?.id && partMap.set(String(p.id), p))
+                localParts.forEach((p) => p?.id && partMap.set(String(p.id), p))
+                const mergedParts = Array.from(partMap.values())
+                return {
+                  ...remoteTour,
+                  participants: mergedParts,
+                  authenticators: mergedParts,
+                }
+              }
+              return remoteTour
+            })
+
+            const stableMapped = preserveTournamentReferences(prev, enrichedMapped)
             if (prev.length === stableMapped.length && prev.every((item, index) => item === stableMapped[index])) return prev
             try {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(stableMapped))
@@ -192,12 +213,26 @@ export function useTournamentData() {
           })
 
           setAuthenticators((prev) => {
-            if (fastDeepEqual(prev, authMap)) return prev
+            const mergedAuth = { ...prev }
+            Object.keys(authMap).forEach((k) => {
+              const localList = Array.isArray(prev[k]) ? prev[k] : []
+              const remoteList = Array.isArray(authMap[k]) ? authMap[k] : []
+              if (localList.length > remoteList.length) {
+                const partMap = new Map()
+                remoteList.forEach((p) => p?.id && partMap.set(String(p.id), p))
+                localList.forEach((p) => p?.id && partMap.set(String(p.id), p))
+                mergedAuth[k] = Array.from(partMap.values())
+              } else {
+                mergedAuth[k] = remoteList
+              }
+            })
+
+            if (fastDeepEqual(prev, mergedAuth)) return prev
             try {
-              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authMap))
-              localStorage.setItem('badminton-match-authenticators', JSON.stringify(authMap))
+              localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(mergedAuth))
+              localStorage.setItem('badminton-match-authenticators', JSON.stringify(mergedAuth))
             } catch (e) {}
-            return authMap
+            return mergedAuth
           })
         }
 

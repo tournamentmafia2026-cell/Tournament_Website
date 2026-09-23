@@ -790,9 +790,9 @@ export function MatchManagementView({
 
               {selectedMatchCategories.map((category) => {
                 const count = (authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).filter(
-                  (p) => (p.category || selectedMatchCategories[0]) === category
+                  (p) => String(p?.category || selectedMatchCategories[0]).trim().toLowerCase() === String(category).trim().toLowerCase()
                 ).length
-                const isCatActive = (activeCategory || selectedMatchCategories[0]) === category
+                const isCatActive = String(activeCategory || selectedMatchCategories[0]).trim().toLowerCase() === String(category).trim().toLowerCase()
                 return (
                   <button
                     key={category}
@@ -1210,7 +1210,10 @@ export function MatchManagementView({
                   <span>📋</span>
                   <span>Registered Players</span>
                   <span style={{ background: 'rgba(56, 189, 248, 0.18)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.35)', padding: '2px 10px', borderRadius: '999px', fontSize: '12px', fontWeight: '800' }}>
-                    {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).filter((p) => activeCategory === 'ALL' || (p.category || selectedMatchCategories[0]) === (activeCategory || selectedMatchCategories[0])).length}
+                    {(authenticators[selectedMatch?.id] || authenticators[String(selectedMatch?.id)] || selectedMatch?.authenticators || selectedMatch?.participants || []).filter((p) => {
+                      if (!activeCategory || activeCategory === 'ALL') return true
+                      return String(p?.category || selectedMatchCategories[0]).trim().toLowerCase() === String(activeCategory).trim().toLowerCase()
+                    }).length}
                   </span>
                 </h4>
                 <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '3px' }}>
