@@ -374,13 +374,26 @@ export default function App() {
       authenticators: Array.isArray(formData.authenticators) ? formData.authenticators : [],
     }
     const cleanMatch = sanitizeTournament(rawMatch)
+    const existingMatch = publishedMatches.find((m) => String(m.id) === String(cleanMatch.id))
+    const isExisting = Boolean(existingMatch)
 
-    const isExisting = publishedMatches.some((m) => String(m.id) === String(cleanMatch.id))
+    const existingParts = (
+      (Array.isArray(formData.participants) && formData.participants.length > 0)
+        ? formData.participants
+        : (authenticators[cleanMatch.id] || authenticators[String(cleanMatch.id)] || existingMatch?.participants || existingMatch?.authenticators || [])
+    )
+
+    const fullCleanMatch = {
+      ...cleanMatch,
+      participants: existingParts,
+      authenticators: existingParts,
+    }
+
     let updatedMatches = []
     if (isExisting) {
-      updatedMatches = publishedMatches.map((m) => (String(m.id) === String(cleanMatch.id) ? cleanMatch : m))
+      updatedMatches = publishedMatches.map((m) => (String(m.id) === String(fullCleanMatch.id) ? fullCleanMatch : m))
     } else {
-      updatedMatches = [cleanMatch, ...publishedMatches]
+      updatedMatches = [fullCleanMatch, ...publishedMatches]
     }
 
     try {
@@ -389,9 +402,8 @@ export default function App() {
     setPublishedMatches(updatedMatches)
     syncServerData({ matches: updatedMatches })
 
-    const existingParts = cleanMatch.participants || []
     setAuthenticators((prev) => {
-      const updatedAuth = { ...prev, [cleanMatch.id]: existingParts, [String(cleanMatch.id)]: existingParts }
+      const updatedAuth = { ...prev, [fullCleanMatch.id]: existingParts, [String(fullCleanMatch.id)]: existingParts }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedAuth))
       } catch (e) {}
@@ -400,30 +412,43 @@ export default function App() {
     })
 
     try {
-      await SupabaseService.upsertTournament(cleanMatch)
-      await SupabaseService.upsertAuthenticators(cleanMatch.id, existingParts)
+      await SupabaseService.upsertTournament(fullCleanMatch)
+      await SupabaseService.upsertAuthenticators(fullCleanMatch.id, existingParts)
     } catch (err) {
       console.warn('Supabase tournament create error:', err)
     }
 
-    setSelectedMatch(cleanMatch)
-    setActiveCategory(cleanMatch.categories[0] || 'Men Singles')
+    setSelectedMatch(fullCleanMatch)
+    setActiveCategory(fullCleanMatch.categories[0] || 'Men Singles')
     setImagePreview('')
     setFormData(getInitialFormData())
-    setParticipantForm({ name: '', name1: '', name2: '', court: '', place: '', category: cleanMatch.categories[0] || 'Men Singles' })
+    setParticipantForm({ name: '', name1: '', name2: '', court: '', place: '', category: fullCleanMatch.categories[0] || 'Men Singles' })
 
     setActivePage('matchManagement')
     setSuccessToast(
       isExisting
-        ? `✓ Tournament "${cleanMatch.matchName}" updated successfully!`
-        : `🎉 New Tournament "${cleanMatch.matchName}" created & published successfully!`
+        ? `✓ Tournament "${fullCleanMatch.matchName}" updated successfully!`
+        : `🎉 New Tournament "${fullCleanMatch.matchName}" created & published successfully!`
     )
   }
 
   // Save Tournament Edit from MatchEditModal
   const handleSaveEditedMatch = async (updatedMatch) => {
     const cleanMatch = sanitizeTournament(updatedMatch)
-    const updated = publishedMatches.map((m) => (String(m.id) === String(cleanMatch.id) ? cleanMatch : m))
+    const existingMatch = publishedMatches.find((m) => String(m.id) === String(cleanMatch.id))
+    const existingParts = (
+      (Array.isArray(cleanMatch.participants) && cleanMatch.participants.length > 0)
+        ? cleanMatch.participants
+        : (authenticators[cleanMatch.id] || authenticators[String(cleanMatch.id)] || existingMatch?.participants || existingMatch?.authenticators || [])
+    )
+
+    const fullCleanMatch = {
+      ...cleanMatch,
+      participants: existingParts,
+      authenticators: existingParts,
+    }
+
+    const updated = publishedMatches.map((m) => (String(m.id) === String(fullCleanMatch.id) ? fullCleanMatch : m))
     setPublishedMatches(updated)
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(updated))
@@ -431,17 +456,25 @@ export default function App() {
 
     syncServerData({ matches: updated })
     try {
-      await SupabaseService.upsertTournament(cleanMatch)
-      await SupabaseService.upsertAuthenticators(cleanMatch.id, cleanMatch.participants || cleanMatch.authenticators || [])
+      await SupabaseService.upsertTournament(fullCleanMatch)
+      await SupabaseService.upsertAuthenticators(fullCleanMatch.id, existingParts)
     } catch (err) {
       console.warn('Supabase tournament edit error:', err)
     }
 
-    if (selectedMatch?.id === cleanMatch.id) {
-      setSelectedMatch(cleanMatch)
+    setAuthenticators((prev) => {
+      const next = { ...prev, [fullCleanMatch.id]: existingParts, [String(fullCleanMatch.id)]: existingParts }
+      try {
+        localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
+      } catch (e) {}
+      return next
+    })
+
+    if (selectedMatch && String(selectedMatch.id) === String(fullCleanMatch.id)) {
+      setSelectedMatch(fullCleanMatch)
     }
     setEditingMatch(null)
-    setSuccessToast(`✓ Tournament "${cleanMatch.matchName}" updated successfully!`)
+    setSuccessToast(`✓ Tournament "${fullCleanMatch.matchName}" updated successfully!`)
   }
 
   // Save Category Winners from TournamentResultsModal

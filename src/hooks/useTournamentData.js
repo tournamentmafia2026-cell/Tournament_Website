@@ -177,21 +177,22 @@ export function useTournamentData() {
               const localTour = (prev || []).find((p) => String(p.id) === String(remoteTour.id))
               if (!localTour) return remoteTour
 
-              const localParts = Array.isArray(localTour.participants) ? localTour.participants : (Array.isArray(localTour.authenticators) ? localTour.authenticators : [])
-              const remoteParts = Array.isArray(remoteTour.participants) ? remoteTour.participants : (Array.isArray(remoteTour.authenticators) ? remoteTour.authenticators : [])
+              const localParts = Array.isArray(localTour.participants) && localTour.participants.length > 0
+                ? localTour.participants
+                : (Array.isArray(localTour.authenticators) ? localTour.authenticators : [])
+              const remoteParts = Array.isArray(remoteTour.participants) && remoteTour.participants.length > 0
+                ? remoteTour.participants
+                : (Array.isArray(remoteTour.authenticators) ? remoteTour.authenticators : [])
 
-              if (localParts.length > remoteParts.length) {
-                const partMap = new Map()
-                remoteParts.forEach((p) => p?.id && partMap.set(String(p.id), p))
-                localParts.forEach((p) => p?.id && partMap.set(String(p.id), p))
-                const mergedParts = Array.from(partMap.values())
-                return {
-                  ...remoteTour,
-                  participants: mergedParts,
-                  authenticators: mergedParts,
-                }
+              const partMap = new Map()
+              remoteParts.forEach((p) => p?.id && partMap.set(String(p.id), p))
+              localParts.forEach((p) => p?.id && partMap.set(String(p.id), p))
+              const mergedParts = Array.from(partMap.values())
+              return {
+                ...remoteTour,
+                participants: mergedParts,
+                authenticators: mergedParts,
               }
-              return remoteTour
             })
 
             const stableMapped = preserveTournamentReferences(prev, enrichedMapped)
@@ -205,7 +206,7 @@ export function useTournamentData() {
           const authMap = {}
           supaTournaments.forEach((t) => {
             const tId = String(t.id)
-            const pList = Array.isArray(t.authenticators)
+            const pList = Array.isArray(t.authenticators) && t.authenticators.length > 0
               ? t.authenticators
               : (Array.isArray(t.participants) ? t.participants : [])
             authMap[tId] = pList
@@ -217,14 +218,10 @@ export function useTournamentData() {
             Object.keys(authMap).forEach((k) => {
               const localList = Array.isArray(prev[k]) ? prev[k] : []
               const remoteList = Array.isArray(authMap[k]) ? authMap[k] : []
-              if (localList.length > remoteList.length) {
-                const partMap = new Map()
-                remoteList.forEach((p) => p?.id && partMap.set(String(p.id), p))
-                localList.forEach((p) => p?.id && partMap.set(String(p.id), p))
-                mergedAuth[k] = Array.from(partMap.values())
-              } else {
-                mergedAuth[k] = remoteList
-              }
+              const partMap = new Map()
+              remoteList.forEach((p) => p?.id && partMap.set(String(p.id), p))
+              localList.forEach((p) => p?.id && partMap.set(String(p.id), p))
+              mergedAuth[k] = Array.from(partMap.values())
             })
 
             if (fastDeepEqual(prev, mergedAuth)) return prev
