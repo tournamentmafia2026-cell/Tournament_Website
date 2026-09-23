@@ -77,15 +77,7 @@ export function PublicPortal({
   }, [sortedMatches, publicFilter])
 
   const selectedMatchCategories = selectedMatch ? getMatchCategories(selectedMatch) : []
-  const currentCategory = (selectedMatchCategories.includes(activeCategory) ? activeCategory : selectedMatchCategories[0]) || null
-
-  React.useEffect(() => {
-    if (selectedMatch && selectedMatchCategories.length > 0) {
-      if (!selectedMatchCategories.includes(activeCategory)) {
-        setActiveCategory(selectedMatchCategories[0])
-      }
-    }
-  }, [selectedMatch?.id, selectedMatchCategories, activeCategory, setActiveCategory])
+  const currentCategory = (activeCategory && activeCategory !== 'ALL' && selectedMatchCategories.includes(activeCategory)) ? activeCategory : null
 
   const groupedSelectedParticipants = useMemo(() => {
     if (!selectedMatch) return {}
@@ -211,7 +203,13 @@ export function PublicPortal({
                   <button
                     key={category}
                     type="button"
-                    onClick={() => setActiveCategory(category)}
+                    onClick={() => {
+                      if (currentCategory === category) {
+                        setActiveCategory(null)
+                      } else {
+                        setActiveCategory(category)
+                      }
+                    }}
                     className={`pub-hub-cat-tab-btn ${isActive ? 'active' : ''}`}
                   >
                     <span className="tab-cat-name">{category}</span>
@@ -222,8 +220,28 @@ export function PublicPortal({
               })}
             </div>
 
-            {/* Active Category Details Panel */}
-            {currentCategory && (
+            {/* Active Category Details Panel OR Professional English Prompt */}
+            {!currentCategory ? (
+              <div 
+                style={{
+                  padding: '44px 20px',
+                  textAlign: 'center',
+                  background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.75) 0%, rgba(30, 41, 59, 0.5) 100%)',
+                  borderRadius: '16px',
+                  border: '1.5px dashed rgba(56, 189, 248, 0.35)',
+                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.25)',
+                  margin: '16px 0',
+                }}
+              >
+                <div style={{ fontSize: '38px', marginBottom: '12px' }}>👆</div>
+                <h3 style={{ fontSize: '18px', fontWeight: '800', color: '#f8fafc', margin: '0 0 8px 0', letterSpacing: '-0.01em' }}>
+                  Select a Tournament Category Above
+                </h3>
+                <p style={{ fontSize: '13.5px', color: '#94a3b8', maxWidth: '520px', margin: '0 auto', lineHeight: '1.6' }}>
+                  Click on any category tab above to view registered players, seeds, and official draw sheet for that specific category.
+                </p>
+              </div>
+            ) : (
               <div className="pub-hub-cat-detail-panel">
                 <div className="pub-cat-panel-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
                   <div className="pub-cat-title-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -382,8 +400,7 @@ export function PublicPortal({
                     style={{ '--card-index': idx, cursor: 'pointer' }}
                     onClick={() => {
                       setSelectedMatch(match)
-                      const firstCat = getMatchCategories(match)[0] || 'Men Singles'
-                      setActiveCategory(firstCat)
+                      setActiveCategory(null)
                     }}
                   >
                     <div className="pro-card-banner">
@@ -515,8 +532,7 @@ export function PublicPortal({
                             onClick={(e) => {
                               e.stopPropagation()
                               setSelectedMatch(match)
-                              const firstCat = getMatchCategories(match)[0] || 'Men Singles'
-                              setActiveCategory(firstCat)
+                              setActiveCategory(null)
                             }}
                             className="pro-btn-action btn-details flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 rounded-xl text-sm font-bold transition active:scale-95"
                           >
