@@ -350,7 +350,7 @@ export default function App() {
   }
 
   // Tournament Create & Update Handler
-  const handleSubmitNewMatch = (e) => {
+  const handleSubmitNewMatch = async (e) => {
     e.preventDefault()
 
     const sanitizedName = formatTournamentName(formData.matchName)
@@ -370,6 +370,8 @@ export default function App() {
         : ['Men Singles', 'Women Singles'],
       matchDuration: Number(formData.totalDays) || 3,
       image: formData.image || '',
+      participants: Array.isArray(formData.participants) ? formData.participants : [],
+      authenticators: Array.isArray(formData.authenticators) ? formData.authenticators : [],
     }
     const cleanMatch = sanitizeTournament(rawMatch)
 
@@ -386,17 +388,23 @@ export default function App() {
     } catch (e) {}
     setPublishedMatches(updatedMatches)
     syncServerData({ matches: updatedMatches })
-    SupabaseService.upsertTournament(cleanMatch).catch(() => {})
 
+    const existingParts = cleanMatch.participants || []
     setAuthenticators((prev) => {
-      if (prev[cleanMatch.id]) return prev
-      const updatedAuth = { ...prev, [cleanMatch.id]: [] }
+      const updatedAuth = { ...prev, [cleanMatch.id]: existingParts, [String(cleanMatch.id)]: existingParts }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updatedAuth))
       } catch (e) {}
       syncServerData({ authenticators: updatedAuth })
       return updatedAuth
     })
+
+    try {
+      await SupabaseService.upsertTournament(cleanMatch)
+      await SupabaseService.upsertAuthenticators(cleanMatch.id, existingParts)
+    } catch (err) {
+      console.warn('Supabase tournament create error:', err)
+    }
 
     setSelectedMatch(cleanMatch)
     setActiveCategory(cleanMatch.categories[0] || 'Men Singles')
@@ -413,7 +421,7 @@ export default function App() {
   }
 
   // Save Tournament Edit from MatchEditModal
-  const handleSaveEditedMatch = (updatedMatch) => {
+  const handleSaveEditedMatch = async (updatedMatch) => {
     const cleanMatch = sanitizeTournament(updatedMatch)
     const updated = publishedMatches.map((m) => (String(m.id) === String(cleanMatch.id) ? cleanMatch : m))
     setPublishedMatches(updated)
@@ -422,7 +430,12 @@ export default function App() {
     } catch (e) {}
 
     syncServerData({ matches: updated })
-    SupabaseService.upsertTournament(cleanMatch).catch(() => {})
+    try {
+      await SupabaseService.upsertTournament(cleanMatch)
+      await SupabaseService.upsertAuthenticators(cleanMatch.id, cleanMatch.participants || cleanMatch.authenticators || [])
+    } catch (err) {
+      console.warn('Supabase tournament edit error:', err)
+    }
 
     if (selectedMatch?.id === cleanMatch.id) {
       setSelectedMatch(cleanMatch)
