@@ -522,23 +522,40 @@ export default function App() {
     if (!finalName) return
     const courtVal = formatCourtName(participantForm.court, '')
     const placeVal = formatPlaceOrClub(participantForm.place, '')
+    const matchKey = selectedMatch.id
+    const matchKeyStr = String(matchKey)
+
+    const existingPlayers = authenticators[matchKey] || authenticators[matchKeyStr] || selectedMatch.authenticators || selectedMatch.participants || []
 
     if (editingParticipantId) {
+      const updatedList = existingPlayers.map((p) =>
+        String(p.id) === String(editingParticipantId)
+          ? { ...p, name: formatPersonName(finalName), court: courtVal, place: placeVal, category: targetCategory }
+          : p
+      )
       setAuthenticators((prev) => {
-        const matchKey = selectedMatch.id
-        const matchPlayers = prev[matchKey] || prev[String(matchKey)] || []
-        const updatedList = matchPlayers.map((p) =>
-          String(p.id) === String(editingParticipantId)
-            ? { ...p, name: formatPersonName(finalName), court: courtVal, place: placeVal, category: targetCategory }
-            : p
-        )
-        const next = { ...prev, [matchKey]: updatedList, [String(matchKey)]: updatedList }
+        const next = { ...prev, [matchKey]: updatedList, [matchKeyStr]: updatedList }
         try {
           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
         } catch (err) {}
         syncServerData({ authenticators: next })
         return next
       })
+
+      const updatedMatchObj = {
+        ...selectedMatch,
+        authenticators: updatedList,
+        participants: updatedList,
+      }
+      setSelectedMatch(updatedMatchObj)
+      setPublishedMatches((prev) => {
+        const next = prev.map((m) => (String(m.id) === matchKeyStr ? updatedMatchObj : m))
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+        } catch (err) {}
+        return next
+      })
+      SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
       setSuccessToast(`✓ Updated player "${formatPersonName(finalName)}" in ${targetCategory}!`)
       setParticipantForm({ name: '', name1: '', name2: '', court: '', place: '', category: targetCategory })
       setEditingParticipantId(null)
@@ -556,13 +573,9 @@ export default function App() {
       category: targetCategory,
     }))
 
-    const matchKey = selectedMatch.id
-    const matchKeyStr = String(matchKey)
-    let updatedPlayersList = []
+    const updatedPlayersList = [...existingPlayers, ...newPlayers]
 
     setAuthenticators((prev) => {
-      const matchPlayers = prev[matchKey] || prev[matchKeyStr] || selectedMatch.authenticators || selectedMatch.participants || []
-      updatedPlayersList = [...matchPlayers, ...newPlayers]
       const next = { ...prev, [matchKey]: updatedPlayersList, [matchKeyStr]: updatedPlayersList }
       try {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
@@ -578,9 +591,13 @@ export default function App() {
     }
 
     setSelectedMatch(updatedMatchObj)
-    setPublishedMatches((prev) =>
-      prev.map((m) => (String(m.id) === matchKeyStr ? updatedMatchObj : m))
-    )
+    setPublishedMatches((prev) => {
+      const next = prev.map((m) => (String(m.id) === matchKeyStr ? updatedMatchObj : m))
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      } catch (err) {}
+      return next
+    })
     SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
 
     setSuccessToast(`✓ Successfully added to ${targetCategory}!`)
@@ -613,9 +630,13 @@ export default function App() {
       setSelectedMatch(updatedMatchObj)
     }
 
-    setPublishedMatches((prev) =>
-      prev.map((m) => (String(m.id) === matchIdStr ? updatedMatchObj : m))
-    )
+    setPublishedMatches((prev) => {
+      const next = prev.map((m) => (String(m.id) === matchIdStr ? updatedMatchObj : m))
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+      } catch (e) {}
+      return next
+    })
     SupabaseService.upsertTournament(updatedMatchObj).catch(() => {})
     setSuccessToast(`✓ Player removed from tournament.`)
   }
@@ -921,9 +942,10 @@ export default function App() {
                       const newId = cleanParticipant.id || Date.now()
                       const fullPlayer = { id: newId, ...cleanParticipant }
 
+                      const current = authenticators[matchId] || authenticators[matchKeyStr] || []
+                      const nextList = [...current, fullPlayer]
+
                       setAuthenticators((prev) => {
-                        const current = prev[matchId] || prev[matchKeyStr] || []
-                        const nextList = [...current, fullPlayer]
                         const next = { ...prev, [matchId]: nextList, [matchKeyStr]: nextList }
                         try {
                           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
@@ -931,19 +953,50 @@ export default function App() {
                         syncServerData({ authenticators: next })
                         return next
                       })
+
+                      setPublishedMatches((prev) => {
+                        const next = prev.map((m) => {
+                          if (String(m.id) === matchKeyStr) {
+                            const updatedM = { ...m, participants: nextList, authenticators: nextList }
+                            SupabaseService.upsertTournament(updatedM).catch(() => {})
+                            return updatedM
+                          }
+                          return m
+                        })
+                        try {
+                          localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+                        } catch (e) {}
+                        return next
+                      })
                     }}
                     onUpdateParticipant={(matchId, updatedParticipant) => {
                       const matchKeyStr = String(matchId)
+                      const current = authenticators[matchId] || authenticators[matchKeyStr] || []
+                      const nextList = current.map((p) =>
+                        String(p.id) === String(updatedParticipant.id) ? { ...p, ...updatedParticipant } : p
+                      )
+
                       setAuthenticators((prev) => {
-                        const current = prev[matchId] || prev[matchKeyStr] || []
-                        const nextList = current.map((p) =>
-                          String(p.id) === String(updatedParticipant.id) ? { ...p, ...updatedParticipant } : p
-                        )
                         const next = { ...prev, [matchId]: nextList, [matchKeyStr]: nextList }
                         try {
                           localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next))
                         } catch (e) {}
                         syncServerData({ authenticators: next })
+                        return next
+                      })
+
+                      setPublishedMatches((prev) => {
+                        const next = prev.map((m) => {
+                          if (String(m.id) === matchKeyStr) {
+                            const updatedM = { ...m, participants: nextList, authenticators: nextList }
+                            SupabaseService.upsertTournament(updatedM).catch(() => {})
+                            return updatedM
+                          }
+                          return m
+                        })
+                        try {
+                          localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+                        } catch (e) {}
                         return next
                       })
                     }}
