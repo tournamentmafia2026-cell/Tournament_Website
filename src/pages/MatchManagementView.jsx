@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import {
   formatTournamentName,
   formatCourtName,
@@ -57,6 +57,8 @@ export function MatchManagementView({
   onStopLiveStream,
   successToast,
 }) {
+  const singlePlayerInputRef = useRef(null)
+  const doublesPlayer1InputRef = useRef(null)
   const [playerFilterSearch, setPlayerFilterSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'ongoing' | 'upcoming' | 'completed'
   const [activeLiveMatchId, setActiveLiveMatchId] = useState(() => {
@@ -872,6 +874,18 @@ export function MatchManagementView({
                 ? Boolean((String(participantForm?.name1 || '').trim() && String(participantForm?.name2 || '').trim()) || String(participantForm?.name || '').trim())
                 : Boolean(String(participantForm?.name || '').trim() || String(participantForm?.name1 || '').trim())
 
+              const handleAddAndRefocus = (e) => {
+                if (e && e.preventDefault) e.preventDefault()
+                onAddParticipant()
+                setTimeout(() => {
+                  if (isFormDoubles) {
+                    doublesPlayer1InputRef.current?.focus()
+                  } else {
+                    singlePlayerInputRef.current?.focus()
+                  }
+                }, 50)
+              }
+
               return (
                 <div style={{ background: 'rgba(15, 23, 42, 0.45)', padding: '16px', borderRadius: '12px', border: isFormDoubles ? '1.5px solid rgba(168, 85, 247, 0.35)' : '1px solid rgba(148, 163, 184, 0.15)', boxShadow: isFormDoubles ? '0 4px 20px rgba(168, 85, 247, 0.08)' : 'none' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
@@ -915,6 +929,7 @@ export function MatchManagementView({
                             👤 Player 1 Name <span style={{ color: '#f87171', fontSize: '14px' }} title="Mandatory">*</span>
                           </span>
                           <input 
+                            ref={doublesPlayer1InputRef}
                             type="text"
                             value={participantForm?.name1 || ''}
                             onChange={(e) => {
@@ -928,7 +943,7 @@ export function MatchManagementView({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault()
-                                onAddParticipant()
+                                handleAddAndRefocus(e)
                               }
                             }}
                             placeholder="e.g. Satwiksairaj (Player 1)"
@@ -964,7 +979,7 @@ export function MatchManagementView({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault()
-                                onAddParticipant()
+                                handleAddAndRefocus(e)
                               }
                             }}
                             placeholder="e.g. Chirag Shetty (Player 2)"
@@ -988,6 +1003,7 @@ export function MatchManagementView({
                           Player Name <span style={{ color: '#f87171', fontSize: '14px' }} title="Mandatory">*</span>
                         </span>
                         <input 
+                          ref={singlePlayerInputRef}
                           type="text"
                           value={participantForm?.name || ''}
                           onChange={(e) => {
@@ -1002,7 +1018,7 @@ export function MatchManagementView({
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
                               e.preventDefault()
-                              onAddParticipant()
+                              handleAddAndRefocus(e)
                             }
                           }}
                           placeholder="Enter player name (Mandatory)"
@@ -1079,7 +1095,7 @@ export function MatchManagementView({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                            onAddParticipant()
+                            handleAddAndRefocus(e)
                           }
                         }}
                         placeholder="Optional (e.g. Court 1)"
@@ -1108,7 +1124,7 @@ export function MatchManagementView({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault()
-                            onAddParticipant()
+                            handleAddAndRefocus(e)
                           }
                         }}
                         placeholder="Optional (e.g. Chennai)"
@@ -1129,7 +1145,7 @@ export function MatchManagementView({
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button
                         type="button"
-                        onClick={onAddParticipant}
+                        onClick={handleAddAndRefocus}
                         disabled={!isFormValid}
                         style={{
                           padding: '10px 20px',
